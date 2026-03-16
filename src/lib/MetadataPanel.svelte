@@ -1,18 +1,218 @@
 <script lang="ts">
     import { invoke } from "@tauri-apps/api/core";
-    import type { Metadata } from "./types";
+    import type { Metadata, ReadResult } from "./types";
 
-    // --- State ---
-    let filename      = $state("");
-    let title         = $state("");
-    let description   = $state("");
-    let keywordInput  = $state("");
-    let keywords      = $state<string[]>([]);
-    let categories    = $state("");
+    // ── Bindable props ─────────────────────────────────────────────────────
+
+    let {
+        isDirty = $bindable(false),
+        onPathChange,
+    }: {
+        isDirty?: boolean;
+        onPathChange?: (newPath: string) => void;
+    } = $props();
+
+    // ── Form state ─────────────────────────────────────────────────────────
+
+    let filepath     = $state("");          // full OS path (internal, not editable)
+    let filename     = $state("");          // stem only — shown and editable
+    let title        = $state("");
+    let description  = $state("");
+    let keywordInput = $state("");
+    let keywords     = $state<string[]>([]);
+    let categories   = $state("");
     let releaseFilename = $state("");
-    let autoSave      = $state(false);
+    let autoSave     = $state(false);
+    let saveAttempted = $state(false);
 
-    // --- Preset stock photo keywords grouped by topic ---
+    // ── Snapshot (dirty tracking) ──────────────────────────────────────────
+    // Purely in-memory: taken when a file is opened. No files are created.
+    // isDirty = current fields ≠ snapshot fields.
+
+    interface Snapshot {
+        filename: string;
+        title: string;
+        description: string;
+        keywords: string[];
+        categories: string;
+        releaseFilename: string;
+    }
+
+    let snapshot = $state<Snapshot | null>(null);
+
+    function captureSnapshot(): Snapshot {
+        return {
+            filename,
+            title,
+            description,
+            keywords: [...keywords],
+            categories,
+            releaseFilename,
+        };
+    }
+
+    const isDirtyComputed = $derived(
+        snapshot !== null && (
+            filename     !== snapshot.filename     ||
+            title        !== snapshot.title        ||
+            description  !== snapshot.description  ||
+            JSON.stringify(keywords) !== JSON.stringify(snapshot.keywords) ||
+            categories   !== snapshot.categories   ||
+            releaseFilename !== snapshot.releaseFilename
+        )
+    );
+
+    $effect(() => { isDirty = isDirtyComputed; });
+
+    // ── Auto-save ──────────────────────────────────────────────────────────
+
+    $effect(() => {
+        // Track all editable fields so the effect re-runs on every keystroke
+        filename; title; description; keywords; categories; releaseFilename;
+
+        if (!autoSave || !isDirtyComputed || hasErrors) return;
+
+        const timer = setTimeout(() => { doSave().catch(() => {}); }, 1000);
+        return () => clearTimeout(timer);
+    });
+
+    // ── File status ────────────────────────────────────────────────────────
+
+    const fileStatus = $derived(
+        snapshot === null ? 'none' :
+        isDirtyComputed  ? 'edit' :
+        'open'
+    );
+
+    // Display path below the status row
+    const displayPath = $derived(filepath);
+
+    // ── Validation ─────────────────────────────────────────────────────────
+
+    const validationErrors = $derived(
+        !filepath
+            ? ['No file selected']
+            : (
+                [
+                    !filename.trim()      && 'Filename is required',
+                    !title.trim()         && 'Title is required',
+                    !description.trim()   && 'Description is required',
+                    keywords.length === 0 && 'At least one keyword is required',
+                ] as (string | false)[]
+            ).filter((v): v is string => !!v)
+    );
+
+    const hasErrors = $derived(validationErrors.length > 0);
+
+    // ── Exported interface ─────────────────────────────────────────────────
+
+    /** Load a file: reset fields, read existing XMP, then take snapshot. */
+    export async function loadFile(path: string): Promise<void> {
+        filepath     = path;
+        filename     = extractStem(path);
+        title        = '';
+        description  = '';
+        keywordInput = '';
+        keywords     = [];
+        categories   = '';
+        releaseFilename = '';
+        saveAttempted = false;
+        snapshot = null; // clear dirty state immediately
+
+        try {
+            const meta = await invoke<ReadResult>('read_metadata', { path });
+            title           = meta.title;
+            description     = meta.description;
+            keywords        = meta.keywords;
+            categories      = meta.categories;
+            releaseFilename = meta.releaseFilename;
+        } catch (e) {
+            // File has no XMP yet — leave fields empty
+            console.warn('read_metadata failed:', e);
+        }
+
+        snapshot = captureSnapshot();
+    }
+
+    /** Clear everything — called when the open file is deleted or renamed externally. */
+    export function clear(): void {
+        filepath        = "";
+        filename        = "";
+        title           = "";
+        description     = "";
+        keywordInput    = "";
+        keywords        = [];
+        categories      = "";
+        releaseFilename = "";
+        snapshot        = null;
+        saveAttempted   = false;
+    }
+
+    /** Revert all fields to the last snapshot. */
+    export function reset(): void {
+        if (!snapshot) return;
+        filename        = snapshot.filename;
+        title           = snapshot.title;
+        description     = snapshot.description;
+        keywords        = [...snapshot.keywords];
+        categories      = snapshot.categories;
+        releaseFilename = snapshot.releaseFilename;
+        saveAttempted   = false;
+    }
+
+    /**
+     * Save metadata (and rename if filename changed).
+     * Throws if validation fails. Returns the final file path.
+     */
+    export async function save(): Promise<string> {
+        saveAttempted = true;
+        if (hasErrors) throw new Error('Validation failed');
+        return await doSave();
+    }
+
+    // ── Internal helpers ───────────────────────────────────────────────────
+
+    function extractStem(path: string): string {
+        const base = path.replace(/\\/g, '/').split('/').pop() ?? '';
+        const dot  = base.lastIndexOf('.');
+        return dot > 0 ? base.slice(0, dot) : base;
+    }
+
+    async function doSave(): Promise<string> {
+        const metadata: Metadata = {
+            filepath,
+            // Strip extension if user accidentally typed it
+            filename: filename.trim().replace(/\.[^/.]+$/, ''),
+            title,
+            description,
+            keywords,
+            categories,
+            releaseFilename,
+        };
+
+        const newPath = await invoke<string>('save_metadata', { metadata });
+
+        const prevFilepath = filepath;
+        filepath = newPath;
+        // Derive new stem from returned path in case Rust sanitized it
+        filename = extractStem(newPath);
+        snapshot = captureSnapshot();
+
+        if (newPath !== prevFilepath) {
+            onPathChange?.(newPath);
+        }
+
+        return newPath;
+    }
+
+    async function handleSave() {
+        saveAttempted = true;
+        if (hasErrors) return;
+        await doSave();
+    }
+
+    // ── Preset keywords ────────────────────────────────────────────────────
+
     const presets: Record<string, string[]> = {
         Nature: [
             "nature", "landscape", "sky", "water", "forest", "mountain",
@@ -38,12 +238,11 @@
         ],
     };
 
-    // --- Keyword logic ---
+    // ── Keyword logic ──────────────────────────────────────────────────────
+
     function addKeyword(word: string) {
         const trimmed = word.trim().toLowerCase();
-        if (trimmed && !keywords.includes(trimmed)) {
-            keywords = [...keywords, trimmed];
-        }
+        if (trimmed && !keywords.includes(trimmed)) keywords = [...keywords, trimmed];
     }
 
     function removeKeyword(word: string) {
@@ -51,35 +250,19 @@
     }
 
     function handleKeywordKeydown(e: KeyboardEvent) {
-        if (e.key === "Enter") {
+        if (e.key === 'Enter') {
             e.preventDefault();
             addKeyword(keywordInput);
-            keywordInput = "";
+            keywordInput = '';
         }
     }
 
     function handleKeywordInput() {
-        // Add keyword when user types ", " (comma + space)
-        if (keywordInput.includes(", ")) {
-            const parts = keywordInput.split(", ");
-            for (let i = 0; i < parts.length - 1; i++) {
-                addKeyword(parts[i]);
-            }
+        if (keywordInput.includes(', ')) {
+            const parts = keywordInput.split(', ');
+            for (let i = 0; i < parts.length - 1; i++) addKeyword(parts[i]);
             keywordInput = parts[parts.length - 1];
         }
-    }
-
-    // --- Save ---
-    async function saveMetadata() {
-        const metadata: Metadata = {
-            filename,
-            title,
-            description,
-            keywords,
-            categories,
-            releaseFilename,
-        };
-        await invoke("save_metadata", { metadata });
     }
 </script>
 
@@ -87,16 +270,34 @@
     <div class="panel-content">
         <h2 class="panel-title">Metadata</h2>
 
-        <!-- Required fields -->
+        <!-- ── File info ── -->
+        <div class="file-info">
+            <div class="file-status-row">
+                <span class="status-dot status-dot--{fileStatus}"></span>
+                <span class="status-label status-label--{fileStatus}">{fileStatus}</span>
+                {#if filename}
+                    <span class="file-basename">{filename}</span>
+                {/if}
+            </div>
+            {#if displayPath}
+                <span class="file-path">{displayPath}</span>
+            {/if}
+        </div>
+
+        <!-- ── Required fields ── -->
         <section class="field-group">
             <p class="group-label">Required</p>
 
             <label class="field">
-                <span class="field-label">Filename <span class="required">*</span></span>
+                <span class="field-label">
+                    Filename <span class="required">*</span>
+                    <span class="hint">— rename on save</span>
+                </span>
                 <input
                     class="input"
+                    class:input--invalid={saveAttempted && !filename.trim()}
                     type="text"
-                    placeholder="photo.jpg"
+                    placeholder="mountain_sunset"
                     bind:value={filename}
                 />
             </label>
@@ -105,6 +306,7 @@
                 <span class="field-label">Title <span class="required">*</span></span>
                 <input
                     class="input"
+                    class:input--invalid={saveAttempted && !title.trim()}
                     type="text"
                     placeholder="A stunning mountain sunset"
                     bind:value={title}
@@ -115,28 +317,27 @@
                 <span class="field-label">Description <span class="required">*</span></span>
                 <textarea
                     class="input textarea"
+                    class:input--invalid={saveAttempted && !description.trim()}
                     placeholder="Describe the image in detail..."
                     rows={4}
                     bind:value={description}
                 ></textarea>
             </label>
 
-            <!-- Keywords input -->
             <div class="field">
                 <span class="field-label">
                     Keywords <span class="required">*</span>
-                    <span class="hint">— press Enter or type ", " to add</span>
+                    <span class="hint">— Enter or ", " to add</span>
                 </span>
                 <input
                     class="input"
+                    class:input--invalid={saveAttempted && keywords.length === 0}
                     type="text"
                     placeholder="mountain, sunset, nature..."
                     bind:value={keywordInput}
                     onkeydown={handleKeywordKeydown}
                     oninput={handleKeywordInput}
                 />
-
-                <!-- Keyword chips -->
                 {#if keywords.length > 0}
                     <div class="keyword-chips">
                         {#each keywords as kw}
@@ -154,7 +355,7 @@
             </div>
         </section>
 
-        <!-- Preset keyword buttons -->
+        <!-- ── Preset keywords ── -->
         <section class="field-group presets">
             <p class="group-label">Stock Keywords</p>
             {#each Object.entries(presets) as [group, tags]}
@@ -173,7 +374,7 @@
             {/each}
         </section>
 
-        <!-- Optional fields (collapsible) -->
+        <!-- ── Optional fields ── -->
         <details class="optional-details">
             <summary class="optional-summary">
                 <span class="group-label" style="border: none; padding: 0;">Optional</span>
@@ -181,43 +382,105 @@
                     <path d="M4 6l4 4 4-4"/>
                 </svg>
             </summary>
-
             <div class="optional-body">
                 <label class="field">
                     <span class="field-label">Categories</span>
-                    <input
-                        class="input"
-                        type="text"
-                        placeholder="Travel, Landscape"
-                        bind:value={categories}
-                    />
+                    <input class="input" type="text" placeholder="Travel, Landscape" bind:value={categories} />
                 </label>
-
                 <label class="field">
                     <span class="field-label">Release Filename</span>
-                    <input
-                        class="input"
-                        type="text"
-                        placeholder="model_release.pdf"
-                        bind:value={releaseFilename}
-                    />
+                    <input class="input" type="text" placeholder="model_release.pdf" bind:value={releaseFilename} />
                 </label>
             </div>
         </details>
     </div>
 
-    <!-- Sticky footer: autosave + save button -->
+    <!-- ── Footer ── -->
     <footer class="panel-footer">
-        <label class="autosave-toggle">
-            <input type="checkbox" bind:checked={autoSave} />
-            <span>Auto-save</span>
-        </label>
-        <button class="btn-primary save-btn" onclick={saveMetadata}>Save Changes</button>
+        {#if saveAttempted && hasErrors}
+            <div class="footer-errors">
+                {validationErrors.join(' · ')}
+            </div>
+        {/if}
+        <div class="footer-controls">
+            <label class="autosave-toggle">
+                <input type="checkbox" bind:checked={autoSave} />
+                <span>Auto-save</span>
+            </label>
+            <button
+                class="btn-primary save-btn"
+                onclick={handleSave}
+                disabled={!filepath}
+            >Save Changes</button>
+        </div>
     </footer>
 </aside>
 
 <style lang="scss">
     @use '../styles/mixins' as *;
+
+    // ── File info ──
+    .file-info {
+        @include flex(column, flex-start, stretch);
+        gap: 4px;
+        padding: 10px 12px;
+        background: $bg-surface;
+        border: 1px solid $border;
+        border-radius: $radius-md;
+    }
+
+    .file-status-row {
+        @include flex(row, flex-start, center);
+        gap: 7px;
+        min-width: 0;
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+
+        &--none { background: $text-muted; }
+        &--open { background: #4ade80; box-shadow: 0 0 5px rgba(74, 222, 128, 0.4); }
+        &--edit { background: #fbbf24; box-shadow: 0 0 5px rgba(251, 191, 36, 0.4); }
+    }
+
+    .status-label {
+        font-size: $fs-footnote1;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        flex-shrink: 0;
+
+        &--none { color: $text-muted; }
+        &--open { color: #4ade80; }
+        &--edit { color: #fbbf24; }
+    }
+
+    .file-basename {
+        font-size: $fs-small;
+        font-weight: 500;
+        color: $text;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+    }
+
+    .file-path {
+        font-size: $fs-footnote2;
+        color: $text-muted;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        padding-left: 15px;
+    }
+
+    // ── Input validation ──
+    .input--invalid {
+        border-color: $required-color !important;
+    }
 
     // ── Preset keywords ──
     .presets { padding-bottom: 4px; }
@@ -249,23 +512,14 @@
         padding: 3px 8px;
         @include transition(background, color, border-color);
 
-        &:hover {
-            background: #2e2e2e;
-            color: $text;
-        }
-
-        &.active {
-            background: $chip-bg;
-            border-color: $chip-border;
-            color: $chip-text;
-        }
+        &:hover { background: #2e2e2e; color: $text; }
+        &.active { background: $chip-bg; border-color: $chip-border; color: $chip-text; }
     }
 
     // ── Optional spoiler ──
     .optional-details {
         border: 1px solid $border;
         border-radius: $radius-md;
-        // No overflow:hidden — it clips the expanded <details> content
     }
 
     .optional-summary {
@@ -282,9 +536,7 @@
         &:hover { background: #2a2a2a; }
     }
 
-    .optional-details[open] .optional-summary {
-        border-radius: $radius-md $radius-md 0 0;
-    }
+    .optional-details[open] .optional-summary { border-radius: $radius-md $radius-md 0 0; }
 
     .chevron {
         width: 14px;
@@ -294,9 +546,7 @@
         flex-shrink: 0;
     }
 
-    .optional-details[open] .chevron {
-        transform: rotate(180deg);
-    }
+    .optional-details[open] .chevron { transform: rotate(180deg); }
 
     .optional-body {
         @include flex(column, flex-start, stretch);
@@ -306,7 +556,33 @@
         border-radius: 0 0 $radius-md $radius-md;
     }
 
-    // ── Footer controls ──
+    // ── Footer ──
+    .panel-footer {
+        height: auto;
+        min-height: $footer-height;
+        border-top: 1px solid $border;
+        background: $bg-panel;
+        @include flex(column, flex-start, stretch);
+        padding: 0;
+    }
+
+    .footer-errors {
+        padding: 6px 16px;
+        font-size: $fs-footnote1;
+        color: $required-color;
+        border-bottom: 1px solid rgba($required-color, 0.2);
+        background: rgba($required-color, 0.06);
+        line-height: 1.5;
+    }
+
+    .footer-controls {
+        @include flex(row, flex-start, center);
+        gap: 12px;
+        padding: 0 16px;
+        flex: 1;
+        min-height: $footer-height;
+    }
+
     .autosave-toggle {
         @include flex(row, flex-start, center);
         gap: 6px;
@@ -315,11 +591,11 @@
         font-size: $fs-small;
         white-space: nowrap;
 
-        input[type="checkbox"] {
-            accent-color: $accent;
-            cursor: pointer;
-        }
+        input[type="checkbox"] { accent-color: $accent; cursor: pointer; }
     }
 
-    .save-btn { margin-left: auto; }
+    .save-btn {
+        margin-left: auto;
+        &:disabled { opacity: 0.4; cursor: not-allowed; }
+    }
 </style>

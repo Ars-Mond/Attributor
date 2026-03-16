@@ -1,12 +1,14 @@
 <script lang="ts">
+    import { convertFileSrc } from "@tauri-apps/api/core";
     import MetadataPanel from "$lib/MetadataPanel.svelte";
     import FilesPanel from "$lib/FilesPanel.svelte";
+    import UnsavedChangesDialog from "$lib/UnsavedChangesDialog.svelte";
 
     // --- Left panel resize ---
     const LEFT_MIN = 260;
     const LEFT_MAX = 700;
     let panelWidth = $state(380);
-    let resizing = $state(false);
+    let resizing   = $state(false);
 
     function startResize(e: MouseEvent) {
         e.preventDefault();
@@ -15,7 +17,6 @@
         function onMove(ev: MouseEvent) {
             panelWidth = Math.min(LEFT_MAX, Math.max(LEFT_MIN, ev.clientX));
         }
-
         function onUp() {
             resizing = false;
             window.removeEventListener("mousemove", onMove);
@@ -38,7 +39,6 @@
         function onMove(ev: MouseEvent) {
             rightPanelWidth = Math.min(RIGHT_MAX, Math.max(RIGHT_MIN, window.innerWidth - ev.clientX));
         }
-
         function onUp() {
             resizing = false;
             window.removeEventListener("mousemove", onMove);
@@ -52,18 +52,98 @@
     // --- Image viewer ---
     let imageSrc = $state<string | null>(null);
 
-    function handleFileSelect(path: string) {
-        // TODO: load image into viewer
+    // --- Panel bindings ---
+    let metaPanel:  any = $state(null);
+    let filesPanel: any = $state(null);
+    let isDirty = $state(false);
+
+    // --- Unsaved changes dialog ---
+    let showDialog  = $state(false);
+    let pendingPath = $state<string | null>(null);
+    let currentPath = $state<string | null>(null);
+
+    const currentBasename = $derived(
+        currentPath ? currentPath.replace(/\\/g, '/').split('/').pop() ?? currentPath : ''
+    );
+
+    // --- File-gone toast ---
+    let goneMessage   = $state<string | null>(null);
+    let goneTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function showGoneToast(name: string) {
+        if (goneTimer) clearTimeout(goneTimer);
+        goneMessage = name;
+        goneTimer = setTimeout(() => { goneMessage = null; }, 6000);
+    }
+
+    /** Called by FilesPanel when the open file disappears from the folder. */
+    function handleFileGone() {
+        const name = currentBasename;
+        metaPanel?.clear();
+        imageSrc    = null;
+        currentPath = null;
+        showDialog  = false;
+        pendingPath = null;
+        showGoneToast(name);
+    }
+
+    /** Update viewer when the file was renamed during save. */
+    function handlePathChange(newPath: string) {
+        currentPath = newPath;
+        imageSrc    = convertFileSrc(newPath);
+        filesPanel?.setSelectedPath(newPath);
+    }
+
+    /** Actually open a file: load into metadata panel + show in viewer. */
+    async function openFile(path: string) {
+        await metaPanel?.loadFile(path);
+        imageSrc    = convertFileSrc(path);
+        currentPath = path;
+        showDialog  = false;
+        pendingPath = null;
+    }
+
+    /** Called from FilesPanel when user clicks a file. */
+    async function handleFileSelect(path: string) {
+        if (isDirty) {
+            pendingPath = path;
+            showDialog  = true;
+        } else {
+            await openFile(path);
+        }
+    }
+
+    // --- Dialog actions ---
+
+    async function handleDialogDiscard() {
+        if (pendingPath) await openFile(pendingPath);
+    }
+
+    async function handleDialogSave() {
+        try {
+            await metaPanel?.save();
+            if (pendingPath) await openFile(pendingPath);
+        } catch {
+            // Validation failed — close dialog so the user can fill required fields
+            showDialog  = false;
+            pendingPath = null;
+        }
+    }
+
+    function handleDialogCancel() {
+        showDialog  = false;
+        pendingPath = null;
     }
 </script>
 
 <div class="app" class:resizing>
     <!-- ── Left: metadata panel ── -->
     <div class="panel-wrapper" style="width: {panelWidth}px;">
-        <MetadataPanel />
+        <MetadataPanel bind:this={metaPanel} bind:isDirty onPathChange={handlePathChange} />
     </div>
 
     <!-- ── Left resize handle ── -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
         class="resize-handle"
         onmousedown={startResize}
@@ -86,9 +166,23 @@
                 <p>No image open</p>
             </div>
         {/if}
+
+        <!-- ── File-gone toast ── -->
+        {#if goneMessage}
+            <div class="gone-toast" role="alert">
+                <svg class="gone-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+                </svg>
+                <span>
+                    <strong>{goneMessage}</strong> was moved or deleted externally.
+                </span>
+                <button class="gone-close" onclick={() => { goneMessage = null; }} aria-label="Dismiss">×</button>
+            </div>
+        {/if}
     </main>
 
     <!-- ── Right resize handle ── -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
         class="resize-handle"
         onmousedown={startRightResize}
@@ -99,14 +193,23 @@
 
     <!-- ── Right: files panel ── -->
     <div class="panel-wrapper" style="width: {rightPanelWidth}px;">
-        <FilesPanel onFileSelect={handleFileSelect} />
+        <FilesPanel bind:this={filesPanel} onFileSelect={handleFileSelect} onFileGone={handleFileGone} />
     </div>
 </div>
+
+<!-- ── Unsaved changes dialog ── -->
+{#if showDialog}
+    <UnsavedChangesDialog
+        filename={currentBasename}
+        onDiscard={handleDialogDiscard}
+        onSave={handleDialogSave}
+        onCancel={handleDialogCancel}
+    />
+{/if}
 
 <style lang="scss">
     @use '../styles/mixins' as *;
 
-    // ── Root layout ──
     .app {
         @include flex(row, flex-start, stretch);
         height: 100vh;
@@ -118,20 +221,18 @@
         }
     }
 
-    // Wrapper enforces width; child <aside> must fill it completely
     .panel-wrapper {
         @include flex(column, flex-start, stretch, null, 0);
         min-width: 0;
         overflow: hidden;
 
         :global(aside.panel) {
-            flex: 1;        // fill wrapper height
-            min-height: 0;  // allow inner scroll to work in a flex child
+            flex: 1;
+            min-height: 0;
             width: 100%;
         }
     }
 
-    // ── Resize handle ──
     .resize-handle {
         width: $handle-width;
         flex-shrink: 0;
@@ -141,7 +242,6 @@
         position: relative;
 
         &::after {
-            // Wider invisible hit area for easier grabbing
             content: '';
             position: absolute;
             inset: 0 -4px;
@@ -150,12 +250,12 @@
         &:hover { background: $accent; }
     }
 
-    // ── Image viewer ──
     .viewer {
         @include flex(row, center, center, 1);
         overflow: hidden;
         background: $bg-app;
         min-width: 0;
+        position: relative;
     }
 
     .image {
@@ -172,5 +272,53 @@
 
         svg { opacity: 0.4; }
         p   { font-size: $fs-regular; }
+    }
+
+    // ── File-gone toast ──
+    .gone-toast {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        @include flex(row, flex-start, center);
+        gap: 10px;
+        padding: 10px 14px;
+        background: #2a1f10;
+        border: 1px solid #92400e;
+        border-radius: $radius-md;
+        color: #fcd34d;
+        font-size: $fs-small;
+        max-width: 420px;
+        width: max-content;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        animation: toast-in 0.2s ease;
+
+        strong { color: #fde68a; }
+    }
+
+    .gone-icon {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+        color: #f59e0b;
+    }
+
+    .gone-close {
+        @include btn-reset;
+        margin-left: auto;
+        padding: 0 2px;
+        font-size: 18px;
+        line-height: 1;
+        color: #92400e;
+        opacity: 0.7;
+        flex-shrink: 0;
+        @include transition(opacity);
+
+        &:hover { opacity: 1; }
+    }
+
+    @keyframes toast-in {
+        from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+        to   { opacity: 1; transform: translateX(-50%) translateY(0); }
     }
 </style>

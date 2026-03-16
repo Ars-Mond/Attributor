@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { untrack } from "svelte";
+    import FileTree from "./FileTree.svelte";
     import type { FileNode } from "./types";
 
     let {
@@ -13,11 +15,13 @@
         onSelect: (path: string) => void;
     } = $props();
 
-    let expanded = $state(depth === 0);
+    // untrack: depth is a static prop per node instance; we only need its
+    // initial value to decide whether to start expanded.
+    let expanded = $state(untrack(() => depth === 0));
 
     const isImage = $derived(
         !node.is_dir &&
-        /\.(jpg|jpeg|png|gif|webp|tiff?|bmp|raw|cr2|nef|arw)$/i.test(node.name)
+        /\.(jpg|jpeg|png|webp)$/i.test(node.name)
     );
 </script>
 
@@ -40,7 +44,7 @@
 
         {#if expanded}
             {#each node.children as child (child.path)}
-                <svelte:self
+                <FileTree
                     node={child}
                     depth={depth + 1}
                     {selectedPath}

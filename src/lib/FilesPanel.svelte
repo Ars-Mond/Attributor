@@ -1,17 +1,67 @@
 <script lang="ts">
     import { invoke } from "@tauri-apps/api/core";
+    import { listen } from "@tauri-apps/api/event";
+    import { onMount, onDestroy } from "svelte";
     import FileTree from "./FileTree.svelte";
     import type { FileNode } from "./types";
 
     let {
         onFileSelect,
+        onFileGone,
     }: {
         onFileSelect: (path: string) => void;
+        onFileGone?: () => void;
     } = $props();
 
     // --- State ---
     let fileTree = $state<FileNode | null>(null);
     let selectedFilePath = $state("");
+
+    // ── Folder watching ──────────────────────────────────────────────────
+
+    let unlisten: (() => void) | null = null;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** Collect all non-directory paths from the tree recursively. */
+    function flatFilePaths(node: FileNode): Set<string> {
+        const set = new Set<string>();
+        function walk(n: FileNode) {
+            if (!n.is_dir) set.add(n.path);
+            for (const c of n.children) walk(c);
+        }
+        walk(node);
+        return set;
+    }
+
+    onMount(async () => {
+        unlisten = await listen<string>("folder-changed", () => {
+            // Debounce: rapid fs events (write + rename = 2 events) collapse into one refresh
+            if (refreshTimer) clearTimeout(refreshTimer);
+            refreshTimer = setTimeout(async () => {
+                if (fileTree) {
+                    try {
+                        const updated = await invoke<FileNode>("scan_folder", { path: fileTree.path });
+                        fileTree = updated;
+
+                        // Notify parent if the currently selected file disappeared
+                        if (selectedFilePath && !flatFilePaths(updated).has(selectedFilePath)) {
+                            selectedFilePath = "";
+                            onFileGone?.();
+                        }
+                    } catch (e) {
+                        console.error("scan_folder failed:", e);
+                    }
+                }
+            }, 400);
+        });
+    });
+
+    onDestroy(() => {
+        unlisten?.();
+        if (refreshTimer) clearTimeout(refreshTimer);
+    });
+
+    // ── Actions ──────────────────────────────────────────────────────────
 
     async function openFolder() {
         const result = await invoke<FileNode | null>("open_folder");
@@ -21,6 +71,11 @@
     function selectFile(path: string) {
         selectedFilePath = path;
         onFileSelect(path);
+    }
+
+    /** Called by parent after a file rename so the highlight stays correct. */
+    export function setSelectedPath(path: string) {
+        selectedFilePath = path;
     }
 </script>
 
