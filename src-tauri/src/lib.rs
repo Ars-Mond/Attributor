@@ -120,7 +120,13 @@ fn build_xmp(req: &SaveRequest) -> Bytes {
 /// Extract XMP fields from a raw XMP packet (UTF-8 XML bytes).
 fn parse_xmp(xmp_bytes: &[u8]) -> ReadResult {
     #[derive(Clone, Copy, PartialEq)]
-    enum Ctx { None, Title, Desc, Subject, Category }
+    enum Ctx {
+        None,
+        Title,
+        Desc,
+        Subject,
+        Category,
+    }
 
     let mut reader = Reader::from_reader(xmp_bytes);
     reader.config_mut().trim_text(true);
@@ -133,10 +139,10 @@ fn parse_xmp(xmp_bytes: &[u8]) -> ReadResult {
         buf.clear();
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => match e.local_name().as_ref() {
-                b"title"       => ctx = Ctx::Title,
+                b"title" => ctx = Ctx::Title,
                 b"description" => ctx = Ctx::Desc,
-                b"subject"     => ctx = Ctx::Subject,
-                b"Category"    => ctx = Ctx::Category,
+                b"subject" => ctx = Ctx::Subject,
+                b"Category" => ctx = Ctx::Category,
                 _ => {}
             },
             Ok(Event::End(ref e)) => match e.local_name().as_ref() {
@@ -148,10 +154,10 @@ fn parse_xmp(xmp_bytes: &[u8]) -> ReadResult {
                     let text = raw.trim().to_string();
                     if !text.is_empty() {
                         match ctx {
-                            Ctx::Title    if result.title.is_empty()       => result.title = text,
-                            Ctx::Desc     if result.description.is_empty() => result.description = text,
-                            Ctx::Subject                                   => result.keywords.push(text),
-                            Ctx::Category                                  => result.categories = text,
+                            Ctx::Title if result.title.is_empty() => result.title = text,
+                            Ctx::Desc if result.description.is_empty() => result.description = text,
+                            Ctx::Subject => result.keywords.push(text),
+                            Ctx::Category => result.categories = text,
                             _ => {}
                         }
                     }
@@ -170,9 +176,10 @@ fn parse_xmp(xmp_bytes: &[u8]) -> ReadResult {
 const JPEG_XMP_HEADER: &[u8] = b"http://ns.adobe.com/xap/1.0/\0";
 
 fn get_jpeg_xmp(jpeg: &Jpeg) -> Option<Bytes> {
-    jpeg.segments().iter().find(|seg| {
-        seg.marker() == markers::APP1 && seg.contents().starts_with(JPEG_XMP_HEADER)
-    }).map(|seg| seg.contents().slice(JPEG_XMP_HEADER.len()..))
+    jpeg.segments()
+        .iter()
+        .find(|seg| seg.marker() == markers::APP1 && seg.contents().starts_with(JPEG_XMP_HEADER))
+        .map(|seg| seg.contents().slice(JPEG_XMP_HEADER.len()..))
 }
 
 fn set_jpeg_xmp(jpeg: &mut Jpeg, xmp: Bytes) {
@@ -235,7 +242,7 @@ fn read_metadata(path: String) -> Result<ReadResult, String> {
 
     let xmp = match &image {
         DynImage::Jpeg(jpeg) => get_jpeg_xmp(jpeg),
-        DynImage::Png(png)   => get_png_xmp(png),
+        DynImage::Png(png) => get_png_xmp(png),
         DynImage::WebP(webp) => get_webp_xmp(webp),
     };
 
@@ -267,7 +274,7 @@ fn save_metadata(metadata: SaveRequest) -> Result<String, String> {
 
     match &mut image {
         DynImage::Jpeg(jpeg) => set_jpeg_xmp(jpeg, xmp),
-        DynImage::Png(png)   => set_png_xmp(png, xmp),
+        DynImage::Png(png) => set_png_xmp(png, xmp),
         DynImage::WebP(webp) => set_webp_xmp(webp, xmp),
     }
 

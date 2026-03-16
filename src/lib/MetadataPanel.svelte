@@ -14,16 +14,16 @@
 
     // ── Form state ─────────────────────────────────────────────────────────
 
-    let filepath     = $state("");          // full OS path (internal, not editable)
-    let filename     = $state("");          // stem only — shown and editable
-    let title        = $state("");
-    let description  = $state("");
-    let keywordInput = $state("");
-    let keywords     = $state<string[]>([]);
-    let categories   = $state("");
+    let filepath        = $state("");          // full OS path (internal, not editable)
+    let filename        = $state("");          // stem only — shown and editable
+    let title           = $state("");
+    let description     = $state("");
+    let keywordInput    = $state("");
+    let keywords        = $state<string[]>([]);
+    let categories      = $state("");
     let releaseFilename = $state("");
-    let autoSave     = $state(false);
-    let saveAttempted = $state(false);
+    let autoSave        = $state(false);
+    let saveAttempted   = $state(false);
 
     // ── Snapshot (dirty tracking) ──────────────────────────────────────────
     // Purely in-memory: taken when a file is opened. No files are created.
