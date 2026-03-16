@@ -15,10 +15,16 @@ jobs:
         include:
           - os: ubuntu-latest
             target: linux-x64
+            args: ''
           - os: windows-latest
             target: win-x64
+            args: ''
+          - os: macos-latest
+            target: osx-arm64
+            args: '--target aarch64-apple-darwin'
           - os: macos-latest
             target: osx-x64
+            args: '--target x86_64-apple-darwin'
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -40,6 +46,8 @@ jobs:
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -71,3 +79,5 @@ jobs:
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: false
           prerelease: false
+          uploadPlainBinary: true
+          args: ${{ matrix.args }}
