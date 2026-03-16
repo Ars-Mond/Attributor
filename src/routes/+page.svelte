@@ -1,15 +1,7 @@
 <script lang="ts">
     import { invoke } from "@tauri-apps/api/core";
-
-    // --- Types ---
-    interface Metadata {
-        filename: string;
-        title: string;
-        description: string;
-        keywords: string[];
-        categories: string;
-        releaseFilename: string;
-    }
+    import FileTree from "$lib/FileTree.svelte";
+    import type { FileNode, Metadata } from "$lib/types";
 
     // --- State ---
     let filename = $state("");
@@ -24,9 +16,23 @@
     // Placeholder image — replaced when a real file is opened
     let imageSrc = $state<string | null>(null);
 
-    // --- Panel resize ---
-    const PANEL_MIN = 260;
-    const PANEL_MAX = 700;
+    // --- File tree ---
+    let fileTree = $state<FileNode | null>(null);
+    let selectedFilePath = $state("");
+
+    async function openFolder() {
+        const result = await invoke<FileNode | null>("open_folder");
+        if (result) fileTree = result;
+    }
+
+    function selectFile(path: string) {
+        selectedFilePath = path;
+        // TODO: load image into viewer
+    }
+
+    // --- Left panel resize ---
+    const LEFT_MIN = 260;
+    const LEFT_MAX = 700;
     let panelWidth = $state(380);
     let resizing = $state(false);
 
@@ -35,7 +41,30 @@
         resizing = true;
 
         function onMove(ev: MouseEvent) {
-            panelWidth = Math.min(PANEL_MAX, Math.max(PANEL_MIN, ev.clientX));
+            panelWidth = Math.min(LEFT_MAX, Math.max(LEFT_MIN, ev.clientX));
+        }
+
+        function onUp() {
+            resizing = false;
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onUp);
+        }
+
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", onUp);
+    }
+
+    // --- Right panel resize ---
+    const RIGHT_MIN = 160;
+    const RIGHT_MAX = 500;
+    let rightPanelWidth = $state(240);
+
+    function startRightResize(e: MouseEvent) {
+        e.preventDefault();
+        resizing = true;
+
+        function onMove(ev: MouseEvent) {
+            rightPanelWidth = Math.min(RIGHT_MAX, Math.max(RIGHT_MIN, window.innerWidth - ev.clientX));
         }
 
         function onUp() {
@@ -263,7 +292,7 @@
         aria-orientation="vertical"
     ></div>
 
-    <!-- ── Right: image viewer ── -->
+    <!-- ── Center: image viewer ── -->
     <main class="viewer">
         {#if imageSrc}
             <img class="image" src={imageSrc} alt={title || "Preview"} />
@@ -278,6 +307,48 @@
             </div>
         {/if}
     </main>
+
+    <!-- ── Right resize handle ── -->
+    <div
+        class="resize-handle"
+        onmousedown={startRightResize}
+        role="separator"
+        aria-label="Resize file panel"
+        aria-orientation="vertical"
+    ></div>
+
+    <!-- ── Right panel: file hierarchy ── -->
+    <aside class="panel panel--files" style="width: {rightPanelWidth}px;">
+        <div class="files-header panel-title">
+            <span>Files</span>
+            <button class="btn-ghost btn--icon" onclick={openFolder} title="Open folder">
+                <svg viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.56 2.311 1.184C7.985 3.648 8.48 4 9 4h4.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9z"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="panel-content files-content">
+            {#if fileTree}
+                <!-- Skip root node, show its children directly -->
+                {#each fileTree.children as child (child.path)}
+                    <FileTree
+                        node={child}
+                        depth={0}
+                        selectedPath={selectedFilePath}
+                        onSelect={selectFile}
+                    />
+                {/each}
+            {:else}
+                <div class="files-empty">
+                    <svg width="36" height="36" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.56 2.311 1.184C7.985 3.648 8.48 4 9 4h4.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9z"/>
+                    </svg>
+                    <p>No folder open</p>
+                </div>
+            {/if}
+        </div>
+    </aside>
 </div>
 
 <style lang="scss">
@@ -418,6 +489,52 @@
 
     // Push save button to the right edge of the footer
     .save-btn { margin-left: auto; }
+
+    // ── Right panel ──
+    .panel--files {
+        border-left: 1px solid $border;
+        border-right: none;
+    }
+
+    .files-header {
+        @include flex(row, space-between, center);
+        padding: 10px 12px;
+        border-bottom: 1px solid $border;
+        flex-shrink: 0;
+        font-size: $fs-small;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: $text-secondary;
+        text-transform: uppercase;
+    }
+
+    .btn--icon {
+        @include flex(row, center, center);
+        padding: 4px;
+        border-radius: $radius-sm;
+
+        svg {
+            width: 14px;
+            height: 14px;
+            display: block;
+        }
+    }
+
+    .files-content {
+        padding: 6px 4px;
+        gap: 1px;
+    }
+
+    .files-empty {
+        @include flex(column, center, center);
+        gap: 10px;
+        padding: 40px 16px;
+        color: $text-muted;
+        opacity: 0.5;
+        text-align: center;
+
+        p { font-size: $fs-small; }
+    }
 
     // ── Image viewer ──
     .viewer {
