@@ -1,0 +1,227 @@
+@use 'mixins' as *;
+
+// ─────────────────────────────────────────────
+// Reset
+// ─────────────────────────────────────────────
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+// ─────────────────────────────────────────────
+// Base
+// ─────────────────────────────────────────────
+
+body {
+    background: $bg-app;
+    color: $text;
+    font-family: $font-base;
+    font-size: $fs-regular;
+    height: 100vh;
+    overflow: hidden;
+}
+
+// ─────────────────────────────────────────────
+// Headings
+// ─────────────────────────────────────────────
+
+h1 { font-size: $fs-h1; font-weight: 700; line-height: 1.15; }
+h2 { font-size: $fs-h2; font-weight: 700; line-height: 1.2;  }
+h3 { font-size: $fs-h3; font-weight: 600; line-height: 1.25; }
+h4 { font-size: $fs-h4; font-weight: 600; line-height: 1.3;  }
+h5 { font-size: $fs-h5; font-weight: 600; line-height: 1.35; }
+h6 { font-size: $fs-h6; font-weight: 500; line-height: 1.4;  }
+
+// ─────────────────────────────────────────────
+// Typography utilities
+// ─────────────────────────────────────────────
+
+.footnote-1 {
+    font-size: $fs-footnote1;
+    color: $text-muted;
+}
+
+.footnote-2 {
+    font-size: $fs-footnote2;
+    color: $text-muted;
+}
+
+.hint {
+    color: $text-muted;
+    font-weight: 400;
+    font-size: $fs-footnote1;
+}
+
+.required {
+    color: $required-color;
+    margin-left: 2px;
+}
+
+// ─────────────────────────────────────────────
+// Buttons
+// ─────────────────────────────────────────────
+
+.btn {
+    @include btn-reset;
+    border-radius: $radius-md;
+    font-size: $fs-regular;
+    font-weight: 500;
+    padding: 7px 16px;
+    @include transition(background, color, border-color);
+}
+
+.btn-primary {
+    @extend .btn;
+    background: $accent;
+    color: #fff;
+
+    &:hover  { background: $accent-hover; }
+    &:active { background: darken($accent, 10%); }
+}
+
+.btn-ghost {
+    @extend .btn;
+    background: transparent;
+    border: 1px solid $border;
+    color: $text-secondary;
+
+    &:hover {
+        background: $bg-surface;
+        color: $text;
+        border-color: $text-muted;
+    }
+}
+
+// ─────────────────────────────────────────────
+// Form
+// ─────────────────────────────────────────────
+
+.field-group {
+    @include flex(column, flex-start, stretch);
+    gap: 12px;
+}
+
+.group-label {
+    font-size: $fs-footnote1;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: $text-muted;
+    border-bottom: 1px solid $border;
+    padding-bottom: 6px;
+}
+
+.field {
+    @include flex(column, flex-start, stretch);
+    gap: 5px;
+}
+
+.field-label {
+    font-size: $fs-small;
+    color: $text-secondary;
+    font-weight: 500;
+}
+
+.input {
+    background: $bg-input;
+    border: 1px solid $border;
+    border-radius: $radius-md;
+    color: $text;
+    font-size: $fs-small;
+    font-family: $font-base;
+    padding: 7px 10px;
+    outline: none;
+    width: 100%;
+    @include transition(border-color, background);
+
+    &::placeholder { color: $text-muted; }
+
+    &:focus {
+        border-color: $border-focus;
+        background: $bg-input-focus;
+    }
+}
+
+.textarea {
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.5;
+}
+
+// ─────────────────────────────────────────────
+// Chips
+// ─────────────────────────────────────────────
+
+.keyword-chips {
+    @include flex(row, flex-start, flex-start);
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 4px;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: $chip-bg;
+    border: 1px solid $chip-border;
+    border-radius: $radius-sm;
+    padding: 3px 8px;
+    font-size: $fs-small;
+    color: $chip-text;
+}
+
+.chip-remove {
+    @include btn-reset;
+    color: $chip-text;
+    font-size: $fs-regular;
+    line-height: 1;
+    opacity: 0.6;
+    @include transition(opacity);
+
+    &:hover { opacity: 1; }
+}
+
+// ─────────────────────────────────────────────
+// Panel
+// ─────────────────────────────────────────────
+
+.panel {
+    @include flex(column, flex-start, stretch, null, 0);
+    background: $bg-panel;
+    overflow: hidden;
+}
+
+.panel-title {
+    // Overrides heading defaults for compact panel context
+    font-weight: 600;
+    color: $text;
+    letter-spacing: 0.02em;
+}
+
+.panel-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px;
+    @include flex(column, flex-start, stretch);
+    gap: 20px;
+
+    &::-webkit-scrollbar       { width: 6px; }
+    &::-webkit-scrollbar-track { background: transparent; }
+    &::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 6px; }
+}
+
+.panel-footer {
+    height: $footer-height;
+    min-height: $footer-height;
+    border-top: 1px solid $border;
+    padding: 0 16px;
+    @include flex(row, flex-start, center);
+    gap: 12px;
+    background: $bg-panel;
+}

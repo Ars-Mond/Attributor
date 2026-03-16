@@ -1,0 +1,94 @@
+@use 'sass:meta';
+
+// ─────────────────────────────────────────────
+// Variables
+// ─────────────────────────────────────────────
+
+$bg-app:         #171717;
+$bg-panel:       #1f1f1f;
+$bg-input:       #2a2a2a;
+$bg-input-focus: #303030;
+$bg-surface:     #252525;
+
+$border:         #333;
+$border-focus:   #5a8dee;
+
+$text:           #f0f0f0;
+$text-secondary: #aaa;
+$text-muted:     #6a6a6a;
+
+$accent:         #5a8dee;
+$accent-hover:   #7aaaf5;
+
+$required-color: #e05c5c;
+
+$chip-bg:        #1e3a5f;
+$chip-border:    #2e5a8f;
+$chip-text:      #8ec5fc;
+
+$footer-height:  60px;
+$handle-width:   5px;
+
+$radius-sm:      4px;
+$radius-md:      6px;
+
+$font-base:      'Geologica', system-ui, sans-serif;
+$font-mono:      'JetBrains Mono', monospace;
+
+// ── Typographic scale ──
+$fs-h1:          48px;
+$fs-h2:          38px;
+$fs-h3:          30px;
+$fs-h4:          24px;
+$fs-h5:          20px;
+$fs-h6:          18px;
+
+$fs-regular:     16px;
+$fs-small:       14px;
+$fs-footnote1:   12px;
+$fs-footnote2:   11px;
+
+// ─────────────────────────────────────────────
+// Mixins
+// ─────────────────────────────────────────────
+
+// Flex container
+@mixin flex($flex-direction, $flex-content, $flex-items, $flex-grow: null, $flex-shrink: null) {
+    display: flex;
+    flex-direction: $flex-direction;
+    justify-content: $flex-content;
+    align-items: $flex-items;
+
+    @if meta.type-of($flex-grow) == number {
+        flex-grow: $flex-grow;
+    }
+
+    @if meta.type-of($flex-shrink) == number {
+        flex-shrink: $flex-shrink;
+    }
+}
+
+// Custom thin scrollbar
+@mixin scrollbar($width: 6px, $thumb: #3a3a3a) {
+    &::-webkit-scrollbar       { width: $width; }
+    &::-webkit-scrollbar-track { background: transparent; }
+    &::-webkit-scrollbar-thumb { background: $thumb; border-radius: $width; }
+}
+
+// Strip browser button defaults
+@mixin btn-reset {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    padding: 0;
+}
+
+// Smooth property transition
+@mixin transition($props...) {
+    $result: ();
+    @each $p in $props {
+        $result: append($result, $p 0.15s, comma);
+    }
+    transition: $result;
+}
