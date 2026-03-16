@@ -1,4 +1,5 @@
 @use 'sass:meta';
+@use 'sass:list';
 
 // ─────────────────────────────────────────────
 // Variables
@@ -88,7 +89,7 @@ $fs-footnote2:   11px;
 @mixin transition($props...) {
     $result: ();
     @each $p in $props {
-        $result: append($result, $p 0.15s, comma);
+        $result: list.append($result, $p 0.15s, comma);
     }
     transition: $result;
 }
