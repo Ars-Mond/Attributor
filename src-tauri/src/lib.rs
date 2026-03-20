@@ -382,7 +382,7 @@ fn open_folder(app: tauri::AppHandle) -> Result<Option<FileNode>, String> {
         return Ok(None);
     };
 
-    let path = std::path::PathBuf::from(folder.to_string());
+    let path = folder.into_path().map_err(|e| e.to_string())?;
     info!("open_folder: {}", path.display());
     let node = scan_dir(&path).map_err(|e| {
         let msg = e.to_string();
