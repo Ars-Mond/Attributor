@@ -43,68 +43,68 @@ pub struct ReadResult {
 
 // ── XMP building ──────────────────────────────────────────────────────────
 
-fn build_xmp(req: &SaveRequest) -> Bytes {
+fn build_xmp(req: &SaveRequest) -> Result<Bytes, quick_xml::Error> {
     let mut w = Writer::new_with_indent(Cursor::new(Vec::<u8>::new()), b' ', 2);
 
     let mut xmpmeta = BytesStart::new("x:xmpmeta");
     xmpmeta.push_attribute(("xmlns:x", "adobe:ns:meta/"));
-    w.write_event(Event::Start(xmpmeta)).unwrap();
+    w.write_event(Event::Start(xmpmeta))?;
 
     let mut rdf = BytesStart::new("rdf:RDF");
     rdf.push_attribute(("xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"));
-    w.write_event(Event::Start(rdf)).unwrap();
+    w.write_event(Event::Start(rdf))?;
 
     let mut desc = BytesStart::new("rdf:Description");
     desc.push_attribute(("rdf:about", ""));
     desc.push_attribute(("xmlns:dc", "http://purl.org/dc/elements/1.1/"));
     desc.push_attribute(("xmlns:photoshop", "http://ns.adobe.com/photoshop/1.0/"));
-    w.write_event(Event::Start(desc)).unwrap();
+    w.write_event(Event::Start(desc))?;
 
     if !req.title.is_empty() {
-        w.write_event(Event::Start(BytesStart::new("dc:title"))).unwrap();
-        w.write_event(Event::Start(BytesStart::new("rdf:Alt"))).unwrap();
+        w.write_event(Event::Start(BytesStart::new("dc:title")))?;
+        w.write_event(Event::Start(BytesStart::new("rdf:Alt")))?;
         let mut li = BytesStart::new("rdf:li");
         li.push_attribute(("xml:lang", "x-default"));
-        w.write_event(Event::Start(li)).unwrap();
-        w.write_event(Event::Text(BytesText::new(&req.title))).unwrap();
-        w.write_event(Event::End(BytesEnd::new("rdf:li"))).unwrap();
-        w.write_event(Event::End(BytesEnd::new("rdf:Alt"))).unwrap();
-        w.write_event(Event::End(BytesEnd::new("dc:title"))).unwrap();
+        w.write_event(Event::Start(li))?;
+        w.write_event(Event::Text(BytesText::new(&req.title)))?;
+        w.write_event(Event::End(BytesEnd::new("rdf:li")))?;
+        w.write_event(Event::End(BytesEnd::new("rdf:Alt")))?;
+        w.write_event(Event::End(BytesEnd::new("dc:title")))?;
     }
 
     if !req.description.is_empty() {
-        w.write_event(Event::Start(BytesStart::new("dc:description"))).unwrap();
-        w.write_event(Event::Start(BytesStart::new("rdf:Alt"))).unwrap();
+        w.write_event(Event::Start(BytesStart::new("dc:description")))?;
+        w.write_event(Event::Start(BytesStart::new("rdf:Alt")))?;
         let mut li = BytesStart::new("rdf:li");
         li.push_attribute(("xml:lang", "x-default"));
-        w.write_event(Event::Start(li)).unwrap();
-        w.write_event(Event::Text(BytesText::new(&req.description))).unwrap();
-        w.write_event(Event::End(BytesEnd::new("rdf:li"))).unwrap();
-        w.write_event(Event::End(BytesEnd::new("rdf:Alt"))).unwrap();
-        w.write_event(Event::End(BytesEnd::new("dc:description"))).unwrap();
+        w.write_event(Event::Start(li))?;
+        w.write_event(Event::Text(BytesText::new(&req.description)))?;
+        w.write_event(Event::End(BytesEnd::new("rdf:li")))?;
+        w.write_event(Event::End(BytesEnd::new("rdf:Alt")))?;
+        w.write_event(Event::End(BytesEnd::new("dc:description")))?;
     }
 
     if !req.keywords.is_empty() {
-        w.write_event(Event::Start(BytesStart::new("dc:subject"))).unwrap();
-        w.write_event(Event::Start(BytesStart::new("rdf:Bag"))).unwrap();
+        w.write_event(Event::Start(BytesStart::new("dc:subject")))?;
+        w.write_event(Event::Start(BytesStart::new("rdf:Bag")))?;
         for kw in &req.keywords {
-            w.write_event(Event::Start(BytesStart::new("rdf:li"))).unwrap();
-            w.write_event(Event::Text(BytesText::new(kw))).unwrap();
-            w.write_event(Event::End(BytesEnd::new("rdf:li"))).unwrap();
+            w.write_event(Event::Start(BytesStart::new("rdf:li")))?;
+            w.write_event(Event::Text(BytesText::new(kw)))?;
+            w.write_event(Event::End(BytesEnd::new("rdf:li")))?;
         }
-        w.write_event(Event::End(BytesEnd::new("rdf:Bag"))).unwrap();
-        w.write_event(Event::End(BytesEnd::new("dc:subject"))).unwrap();
+        w.write_event(Event::End(BytesEnd::new("rdf:Bag")))?;
+        w.write_event(Event::End(BytesEnd::new("dc:subject")))?;
     }
 
     if !req.categories.is_empty() {
-        w.write_event(Event::Start(BytesStart::new("photoshop:Category"))).unwrap();
-        w.write_event(Event::Text(BytesText::new(&req.categories))).unwrap();
-        w.write_event(Event::End(BytesEnd::new("photoshop:Category"))).unwrap();
+        w.write_event(Event::Start(BytesStart::new("photoshop:Category")))?;
+        w.write_event(Event::Text(BytesText::new(&req.categories)))?;
+        w.write_event(Event::End(BytesEnd::new("photoshop:Category")))?;
     }
 
-    w.write_event(Event::End(BytesEnd::new("rdf:Description"))).unwrap();
-    w.write_event(Event::End(BytesEnd::new("rdf:RDF"))).unwrap();
-    w.write_event(Event::End(BytesEnd::new("x:xmpmeta"))).unwrap();
+    w.write_event(Event::End(BytesEnd::new("rdf:Description")))?;
+    w.write_event(Event::End(BytesEnd::new("rdf:RDF")))?;
+    w.write_event(Event::End(BytesEnd::new("x:xmpmeta")))?;
 
     let xml_body = w.into_inner().into_inner();
 
@@ -112,7 +112,7 @@ fn build_xmp(req: &SaveRequest) -> Bytes {
     packet.extend_from_slice(b"<?xpacket begin='\xef\xbb\xbf' id='W5M0MpCehiHzreSzNTczkc9d'?>\n");
     packet.extend_from_slice(&xml_body);
     packet.extend_from_slice(b"\n<?xpacket end='w'?>");
-    Bytes::from(packet)
+    Ok(Bytes::from(packet))
 }
 
 // ── XMP parsing ───────────────────────────────────────────────────────────
@@ -205,7 +205,10 @@ fn get_png_xmp(png: &Png) -> Option<Bytes> {
 }
 
 fn set_png_xmp(png: &mut Png, xmp: Bytes) {
-    png.remove_chunks_by_type(PNG_ITXT);
+    // Remove only the XMP iTXt chunk; other iTXt chunks (copyright, comments, etc.) are preserved.
+    png.chunks_mut().retain(|chunk| {
+        !(chunk.kind() == PNG_ITXT && chunk.contents().starts_with(PNG_XMP_KEYWORD))
+    });
     let mut contents = BytesMut::with_capacity(PNG_XMP_HEADER_LEN + xmp.len());
     contents.extend_from_slice(PNG_XMP_KEYWORD);
     contents.extend_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x00]);
@@ -269,7 +272,7 @@ fn save_metadata(metadata: SaveRequest) -> Result<String, String> {
             msg
         })?;
 
-    let xmp = build_xmp(&metadata);
+    let xmp = build_xmp(&metadata).map_err(|e| e.to_string())?;
     debug!("XMP packet size: {} bytes", xmp.len());
 
     match &mut image {
@@ -388,7 +391,7 @@ fn open_folder(app: tauri::AppHandle) -> Result<Option<FileNode>, String> {
             } else {
                 info!("Watching: {}", path.display());
                 let state = app.state::<WatcherState>();
-                *state.0.lock().unwrap() = Some(watcher);
+                *state.0.lock().unwrap_or_else(|e| e.into_inner()) = Some(watcher);
             }
         }
         Err(e) => error!("Failed to create watcher: {e}"),
