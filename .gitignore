@@ -36,3 +36,4 @@ src-tauri/gen/
 *.log
 npm-debug.log*
 pnpm-debug.log*
+TODO.md
