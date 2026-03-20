@@ -80,4 +80,5 @@ jobs:
           releaseDraft: false
           prerelease: false
           uploadPlainBinary: true
+          assetNamePattern: 'Attributor-[version]-[platform]-[arch][setup][ext]'
           args: ${{ matrix.args }}
