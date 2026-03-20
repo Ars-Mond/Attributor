@@ -4,7 +4,7 @@ use img_parts::png::{Png, PngChunk};
 use img_parts::riff::RiffContent;
 use img_parts::webp::{WebP, CHUNK_XMP};
 use img_parts::DynImage;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Reader;
@@ -304,11 +304,7 @@ fn save_metadata(metadata: SaveRequest) -> Result<String, String> {
         } else {
             format!("{}.{}", new_stem, ext)
         };
-        let candidate = orig_path.parent().unwrap_or(orig_path).join(&new_name);
-        if candidate.exists() {
-            return Err(format!("File already exists: {new_name}"));
-        }
-        candidate
+        orig_path.parent().unwrap_or(orig_path).join(&new_name)
     } else {
         orig_path.to_path_buf()
     };
@@ -316,18 +312,38 @@ fn save_metadata(metadata: SaveRequest) -> Result<String, String> {
     // ── Write image ──
     let mut buf = Cursor::new(Vec::new());
     image.encoder().write_to(&mut buf).map_err(|e| e.to_string())?;
-    std::fs::write(&final_path, buf.into_inner()).map_err(|e| {
-        let msg = e.to_string();
-        error!("Failed to write {}: {msg}", final_path.display());
-        msg
-    })?;
+    let image_bytes = buf.into_inner();
 
-    // ── Delete original if renamed ──
     if final_path != orig_path {
+        // create_new(true) → O_CREAT|O_EXCL: atomic check-and-create, eliminates TOCTOU.
+        use std::io::Write as _;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&final_path)
+            .and_then(|mut f| f.write_all(&image_bytes))
+            .map_err(|e| {
+                let msg = if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    format!(
+                        "File already exists: {}",
+                        final_path.file_name().unwrap_or_default().to_string_lossy()
+                    )
+                } else {
+                    e.to_string()
+                };
+                error!("Failed to write {}: {msg}", final_path.display());
+                msg
+            })?;
         if let Err(e) = std::fs::remove_file(orig_path) {
             error!("Failed to delete original {}: {e}", orig_path.display());
         }
         info!("renamed: {} → {}", orig_path.display(), final_path.display());
+    } else {
+        std::fs::write(&final_path, &image_bytes).map_err(|e| {
+            let msg = e.to_string();
+            error!("Failed to write {}: {msg}", final_path.display());
+            msg
+        })?;
     }
 
     info!("save_metadata: done → {}", final_path.display());
@@ -411,7 +427,13 @@ fn scan_dir(path: &std::path::Path) -> std::io::Result<FileNode> {
 
     if path.is_dir() {
         let mut entries: Vec<_> = std::fs::read_dir(path)?
-            .filter_map(|e| e.ok())
+            .filter_map(|e| match e {
+                Ok(entry) => Some(entry),
+                Err(err) => {
+                    warn!("scan_dir: skipping entry in {}: {err}", path.display());
+                    None
+                }
+            })
             .collect();
 
         entries.sort_by(|a, b| {
@@ -423,8 +445,9 @@ fn scan_dir(path: &std::path::Path) -> std::io::Result<FileNode> {
         for entry in entries {
             let child = entry.path();
             if child.is_dir() || is_supported_image(&child) {
-                if let Ok(node) = scan_dir(&child) {
-                    children.push(node);
+                match scan_dir(&child) {
+                    Ok(node) => children.push(node),
+                    Err(err) => warn!("scan_dir: skipping {}: {err}", child.display()),
                 }
             }
         }
@@ -456,7 +479,11 @@ pub fn run() {
         .manage(WatcherState(Mutex::new(None)))
         .plugin(
             tauri_plugin_log::Builder::new()
-                .level(log::LevelFilter::Debug)
+                .level(if cfg!(debug_assertions) {
+                    log::LevelFilter::Debug
+                } else {
+                    log::LevelFilter::Info
+                })
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
