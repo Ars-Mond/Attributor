@@ -138,6 +138,7 @@
     function handleDialogCancel() {
         showDialog = false;
         pendingPath = null;
+        filesPanel?.setSelectedPath(currentPath ?? '');  // revert highlight to actual open file
     }
 </script>
 
@@ -198,7 +199,7 @@
 
     <!-- ── Right: files panel ── -->
     <div class="panel-wrapper" style="width: {rightPanelWidth}px;">
-        <FilesPanel bind:this={filesPanel} onFileSelect={handleFileSelect} onFileGone={handleFileGone} onBusy={(b) => (isLoading = b)} />
+        <FilesPanel bind:this={filesPanel} onFileSelect={handleFileSelect} onFileGone={handleFileGone} onBusy={(b) => (isLoading = b)} disabled={showDialog} />
     </div>
 </div>
 

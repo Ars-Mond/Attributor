@@ -60,6 +60,7 @@
             class:selected={selectedPath === node.path}
             class:image={isImage}
             style="padding-left: {depth * 14 + 8}px"
+            data-path={node.path}
             onclick={() => onSelect(node.path)}
         >
             {#if isImage}

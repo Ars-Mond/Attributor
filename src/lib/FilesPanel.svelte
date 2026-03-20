@@ -9,15 +9,18 @@
         onFileSelect,
         onFileGone,
         onBusy,
+        disabled = false,
     }: {
         onFileSelect: (path: string) => void;
         onFileGone?: () => void;
         onBusy?: (busy: boolean) => void;
+        disabled?: boolean;
     } = $props();
 
     // --- State ---
     let fileTree = $state<FileNode | null>(null);
     let selectedFilePath = $state("");
+    let contentEl = $state<HTMLElement | null>(null);
 
     // ── Folder watching ──────────────────────────────────────────────────
 
@@ -35,7 +38,34 @@
         return set;
     }
 
+    function handleKeyDown(e: KeyboardEvent) {
+        if (disabled) return;
+        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+        if (!contentEl || !fileTree) return;
+
+        // Don't hijack keyboard when user is typing
+        const active = document.activeElement;
+        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
+
+        e.preventDefault();
+
+        const items = [...contentEl.querySelectorAll<HTMLElement>('[data-path]')];
+        if (items.length === 0) return;
+
+        const currentIdx = items.findIndex(el => el.dataset.path === selectedFilePath);
+        const nextIdx = e.key === 'ArrowDown'
+            ? (currentIdx === -1 ? 0 : Math.min(currentIdx + 1, items.length - 1))
+            : (currentIdx === -1 ? 0 : Math.max(currentIdx - 1, 0));
+
+        if (nextIdx !== currentIdx || currentIdx === -1) {
+            const path = items[nextIdx].dataset.path!;
+            selectFile(path);
+            items[nextIdx].scrollIntoView({ block: 'nearest' });
+        }
+    }
+
     onMount(async () => {
+        window.addEventListener('keydown', handleKeyDown);
         unlisten = await listen<string>("folder-changed", () => {
             // Debounce: rapid fs events (write + rename = 2 events) collapse into one refresh
             if (refreshTimer) clearTimeout(refreshTimer);
@@ -59,6 +89,7 @@
     });
 
     onDestroy(() => {
+        window.removeEventListener('keydown', handleKeyDown);
         unlisten?.();
         if (refreshTimer) clearTimeout(refreshTimer);
     });
@@ -76,6 +107,7 @@
     }
 
     function selectFile(path: string) {
+        if (disabled) return;
         selectedFilePath = path;
         onFileSelect(path);
     }
@@ -96,7 +128,7 @@
         </button>
     </div>
 
-    <div class="panel-content files-content">
+    <div class="panel-content files-content" bind:this={contentEl}>
         {#if fileTree}
             <!-- Skip root node, show its children directly -->
             {#each fileTree.children as child (child.path)}
