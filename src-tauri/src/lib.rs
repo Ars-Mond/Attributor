@@ -373,11 +373,17 @@ fn scan_folder(path: String) -> Result<FileNode, String> {
 }
 
 #[tauri::command]
-fn open_folder(app: tauri::AppHandle) -> Result<Option<FileNode>, String> {
+async fn open_folder(app: tauri::AppHandle) -> Result<Option<FileNode>, String> {
     use tauri::Manager;
     use tauri_plugin_dialog::DialogExt;
 
-    let Some(folder) = app.dialog().file().blocking_pick_folder() else {
+    // Non-blocking: pick_folder fires the callback from a native dialog thread.
+    // blocking_pick_folder() would stall the main thread → "Not Responding" on Windows.
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog().file().pick_folder(move |result| {
+        let _ = tx.send(result);
+    });
+    let Some(folder) = rx.await.map_err(|e| e.to_string())? else {
         info!("open_folder: cancelled");
         return Ok(None);
     };

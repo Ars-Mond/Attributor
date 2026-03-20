@@ -8,9 +8,11 @@
     let {
         onFileSelect,
         onFileGone,
+        onBusy,
     }: {
         onFileSelect: (path: string) => void;
         onFileGone?: () => void;
+        onBusy?: (busy: boolean) => void;
     } = $props();
 
     // --- State ---
@@ -64,8 +66,13 @@
     // ── Actions ──────────────────────────────────────────────────────────
 
     async function openFolder() {
-        const result = await invoke<FileNode | null>("open_folder");
-        if (result) fileTree = result;
+        onBusy?.(true);
+        try {
+            const result = await invoke<FileNode | null>("open_folder");
+            if (result) fileTree = result;
+        } finally {
+            onBusy?.(false);
+        }
     }
 
     function selectFile(path: string) {

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { convertFileSrc } from "@tauri-apps/api/core";
+    import {convertFileSrc} from "@tauri-apps/api/core";
     import MetadataPanel from "$lib/MetadataPanel.svelte";
     import FilesPanel from "$lib/FilesPanel.svelte";
     import UnsavedChangesDialog from "$lib/UnsavedChangesDialog.svelte";
@@ -8,7 +8,7 @@
     const LEFT_MIN = 260;
     const LEFT_MAX = 700;
     let panelWidth = $state(380);
-    let resizing   = $state(false);
+    let resizing = $state(false);
 
     function startResize(e: MouseEvent) {
         e.preventDefault();
@@ -17,6 +17,7 @@
         function onMove(ev: MouseEvent) {
             panelWidth = Math.min(LEFT_MAX, Math.max(LEFT_MIN, ev.clientX));
         }
+
         function onUp() {
             resizing = false;
             window.removeEventListener("mousemove", onMove);
@@ -39,6 +40,7 @@
         function onMove(ev: MouseEvent) {
             rightPanelWidth = Math.min(RIGHT_MAX, Math.max(RIGHT_MIN, window.innerWidth - ev.clientX));
         }
+
         function onUp() {
             resizing = false;
             window.removeEventListener("mousemove", onMove);
@@ -53,12 +55,13 @@
     let imageSrc = $state<string | null>(null);
 
     // --- Panel bindings ---
-    let metaPanel:  any = $state(null);
+    let metaPanel: any = $state(null);
     let filesPanel: any = $state(null);
     let isDirty = $state(false);
+    let isLoading = $state(false);
 
     // --- Unsaved changes dialog ---
-    let showDialog  = $state(false);
+    let showDialog = $state(false);
     let pendingPath = $state<string | null>(null);
     let currentPath = $state<string | null>(null);
 
@@ -67,22 +70,24 @@
     );
 
     // --- File-gone toast ---
-    let goneMessage   = $state<string | null>(null);
+    let goneMessage = $state<string | null>(null);
     let goneTimer: ReturnType<typeof setTimeout> | null = null;
 
     function showGoneToast(name: string) {
         if (goneTimer) clearTimeout(goneTimer);
         goneMessage = name;
-        goneTimer = setTimeout(() => { goneMessage = null; }, 6000);
+        goneTimer = setTimeout(() => {
+            goneMessage = null;
+        }, 6000);
     }
 
     /** Called by FilesPanel when the open file disappears from the folder. */
     function handleFileGone() {
         const name = currentBasename;
         metaPanel?.clear();
-        imageSrc    = null;
+        imageSrc = null;
         currentPath = null;
-        showDialog  = false;
+        showDialog = false;
         pendingPath = null;
         showGoneToast(name);
     }
@@ -90,16 +95,16 @@
     /** Update viewer when the file was renamed during save. */
     function handlePathChange(newPath: string) {
         currentPath = newPath;
-        imageSrc    = convertFileSrc(newPath);
+        imageSrc = convertFileSrc(newPath);
         filesPanel?.setSelectedPath(newPath);
     }
 
     /** Actually open a file: load into metadata panel + show in viewer. */
     async function openFile(path: string) {
         await metaPanel?.loadFile(path);
-        imageSrc    = convertFileSrc(path);
+        imageSrc = convertFileSrc(path);
         currentPath = path;
-        showDialog  = false;
+        showDialog = false;
         pendingPath = null;
     }
 
@@ -107,7 +112,7 @@
     async function handleFileSelect(path: string) {
         if (isDirty) {
             pendingPath = path;
-            showDialog  = true;
+            showDialog = true;
         } else {
             await openFile(path);
         }
@@ -125,13 +130,13 @@
             if (pendingPath) await openFile(pendingPath);
         } catch {
             // Validation failed — close dialog so the user can fill required fields
-            showDialog  = false;
+            showDialog = false;
             pendingPath = null;
         }
     }
 
     function handleDialogCancel() {
-        showDialog  = false;
+        showDialog = false;
         pendingPath = null;
     }
 </script>
@@ -193,9 +198,16 @@
 
     <!-- ── Right: files panel ── -->
     <div class="panel-wrapper" style="width: {rightPanelWidth}px;">
-        <FilesPanel bind:this={filesPanel} onFileSelect={handleFileSelect} onFileGone={handleFileGone} />
+        <FilesPanel bind:this={filesPanel} onFileSelect={handleFileSelect} onFileGone={handleFileGone} onBusy={(b) => (isLoading = b)} />
     </div>
 </div>
+
+<!-- ── Loading overlay (dialog open) ── -->
+{#if isLoading}
+    <div class="loading-overlay" aria-hidden="true">
+        <div class="spinner"></div>
+    </div>
+{/if}
 
 <!-- ── Unsaved changes dialog ── -->
 {#if showDialog}
@@ -320,5 +332,29 @@
     @keyframes toast-in {
         from { opacity: 0; transform: translateX(-50%) translateY(8px); }
         to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    // ── Loading overlay ──
+    .loading-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 200;
+        backdrop-filter: blur(4px);
+        background: rgba(0, 0, 0, 0.25);
+        pointer-events: all;
+        @include flex(row, center, center);
+    }
+
+    .spinner {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 2.5px solid rgba(255, 255, 255, 0.15);
+        border-top-color: rgba(255, 255, 255, 0.75);
+        animation: spin 0.65s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
     }
 </style>
