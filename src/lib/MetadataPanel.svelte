@@ -1,6 +1,6 @@
 <script lang="ts">
-    import { invoke } from "@tauri-apps/api/core";
-    import type { Metadata, ReadResult } from "./types";
+    import {invoke} from "@tauri-apps/api/core";
+    import type {Metadata, ReadResult} from "./types";
 
     // ── Bindable props ─────────────────────────────────────────────────────
 
@@ -14,16 +14,16 @@
 
     // ── Form state ─────────────────────────────────────────────────────────
 
-    let filepath        = $state("");          // full OS path (internal, not editable)
-    let filename        = $state("");          // stem only — shown and editable
-    let title           = $state("");
-    let description     = $state("");
-    let keywordInput    = $state("");
-    let keywords        = $state<string[]>([]);
-    let categories      = $state("");
+    let filepath = $state("");          // full OS path (internal, not editable)
+    let filename = $state("");          // stem only — shown and editable
+    let title = $state("");
+    let description = $state("");
+    let keywordInput = $state("");
+    let keywords = $state<string[]>([]);
+    let categories = $state("");
     let releaseFilename = $state("");
-    let autoSave        = $state(false);
-    let saveAttempted   = $state(false);
+    let autoSave = $state(false);
+    let saveAttempted = $state(false);
 
     // ── Snapshot (dirty tracking) ──────────────────────────────────────────
     // Purely in-memory: taken when a file is opened. No files are created.
@@ -53,26 +53,36 @@
 
     const isDirtyComputed = $derived(
         snapshot !== null && (
-            filename     !== snapshot.filename     ||
-            title        !== snapshot.title        ||
-            description  !== snapshot.description  ||
+            filename !== snapshot.filename ||
+            title !== snapshot.title ||
+            description !== snapshot.description ||
             JSON.stringify(keywords) !== JSON.stringify(snapshot.keywords) ||
-            categories   !== snapshot.categories   ||
+            categories !== snapshot.categories ||
             releaseFilename !== snapshot.releaseFilename
         )
     );
 
-    $effect(() => { isDirty = isDirtyComputed; });
+    $effect(() => {
+        isDirty = isDirtyComputed;
+    });
 
     // ── Auto-save ──────────────────────────────────────────────────────────
 
     $effect(() => {
         // Track all editable fields so the effect re-runs on every keystroke
-        filename; title; description; keywords; categories; releaseFilename;
+        filename;
+        title;
+        description;
+        keywords;
+        categories;
+        releaseFilename;
 
         if (!autoSave || !isDirtyComputed || hasErrors) return;
 
-        const timer = setTimeout(() => { doSave().catch(() => {}); }, 1000);
+        const timer = setTimeout(() => {
+            doSave().catch(() => {
+            });
+        }, 1000);
         return () => clearTimeout(timer);
     });
 
@@ -80,8 +90,8 @@
 
     const fileStatus = $derived(
         snapshot === null ? 'none' :
-        isDirtyComputed  ? 'edit' :
-        'open'
+            isDirtyComputed ? 'edit' :
+                'open'
     );
 
     // Display path below the status row
@@ -94,9 +104,9 @@
             ? ['No file selected']
             : (
                 [
-                    !filename.trim()      && 'Filename is required',
-                    !title.trim()         && 'Title is required',
-                    !description.trim()   && 'Description is required',
+                    !filename.trim() && 'Filename is required',
+                    !title.trim() && 'Title is required',
+                    !description.trim() && 'Description is required',
                     keywords.length === 0 && 'At least one keyword is required',
                 ] as (string | false)[]
             ).filter((v): v is string => !!v)
@@ -108,23 +118,23 @@
 
     /** Load a file: reset fields, read existing XMP, then take snapshot. */
     export async function loadFile(path: string): Promise<void> {
-        filepath     = path;
-        filename     = extractStem(path);
-        title        = '';
-        description  = '';
+        filepath = path;
+        filename = extractStem(path);
+        title = '';
+        description = '';
         keywordInput = '';
-        keywords     = [];
-        categories   = '';
+        keywords = [];
+        categories = '';
         releaseFilename = '';
         saveAttempted = false;
         snapshot = null; // clear dirty state immediately
 
         try {
-            const meta = await invoke<ReadResult>('read_metadata', { path });
-            title           = meta.title;
-            description     = meta.description;
-            keywords        = meta.keywords;
-            categories      = meta.categories;
+            const meta = await invoke<ReadResult>('read_metadata', {path});
+            title = meta.title;
+            description = meta.description;
+            keywords = meta.keywords;
+            categories = meta.categories;
             releaseFilename = meta.releaseFilename;
         } catch (e) {
             // File has no XMP yet — leave fields empty
@@ -136,28 +146,28 @@
 
     /** Clear everything — called when the open file is deleted or renamed externally. */
     export function clear(): void {
-        filepath        = "";
-        filename        = "";
-        title           = "";
-        description     = "";
-        keywordInput    = "";
-        keywords        = [];
-        categories      = "";
+        filepath = "";
+        filename = "";
+        title = "";
+        description = "";
+        keywordInput = "";
+        keywords = [];
+        categories = "";
         releaseFilename = "";
-        snapshot        = null;
-        saveAttempted   = false;
+        snapshot = null;
+        saveAttempted = false;
     }
 
     /** Revert all fields to the last snapshot. */
     export function reset(): void {
         if (!snapshot) return;
-        filename        = snapshot.filename;
-        title           = snapshot.title;
-        description     = snapshot.description;
-        keywords        = [...snapshot.keywords];
-        categories      = snapshot.categories;
+        filename = snapshot.filename;
+        title = snapshot.title;
+        description = snapshot.description;
+        keywords = [...snapshot.keywords];
+        categories = snapshot.categories;
         releaseFilename = snapshot.releaseFilename;
-        saveAttempted   = false;
+        saveAttempted = false;
     }
 
     /**
@@ -174,7 +184,7 @@
 
     function extractStem(path: string): string {
         const base = path.replace(/\\/g, '/').split('/').pop() ?? '';
-        const dot  = base.lastIndexOf('.');
+        const dot = base.lastIndexOf('.');
         return dot > 0 ? base.slice(0, dot) : base;
     }
 
@@ -190,7 +200,7 @@
             releaseFilename,
         };
 
-        const newPath = await invoke<string>('save_metadata', { metadata });
+        const newPath = await invoke<string>('save_metadata', {metadata});
 
         const prevFilepath = filepath;
         filepath = newPath;
@@ -263,6 +273,132 @@
             for (let i = 0; i < parts.length - 1; i++) addKeyword(parts[i]);
             keywordInput = parts[parts.length - 1];
         }
+    }
+
+    // ── Keyword drag & drop (pointer-based, ghost + placeholder) ──────────
+
+    let dragFromIndex = $state<number | null>(null);
+    let dropInsert = $state<number | null>(null);  // insertion point in 'without' array
+    let ghostWidth = $state(0);
+    let chipsEl: HTMLElement | undefined;
+
+    // Chip rects captured once at drag start (in 'without' order, i.e. excluding dragged chip).
+    // Using frozen rects prevents the feedback loop that causes row-boundary flickering:
+    // placeholder movement changes layout → recalc changes dropInsert → layout changes → loop.
+    let frozenRects: DOMRect[] = [];
+
+    // During drag: keywords minus dragged chip, with null placeholder at drop position.
+    // Outside drag: same as keywords (null never appears).
+    const dragDisplay = $derived.by((): (string | null)[] => {
+        if (dragFromIndex === null || dropInsert === null) return keywords;
+        const arr: (string | null)[] = keywords.filter((_, i) => i !== dragFromIndex);
+        arr.splice(Math.min(dropInsert, arr.length), 0, null);
+        return arr;
+    });
+
+    function startChipDrag(e: PointerEvent, kwIndex: number) {
+        if ((e.target as HTMLElement).closest('.chip-remove')) return;
+        if (dragFromIndex !== null || keywords.length < 2) return;
+        e.preventDefault();
+
+        const chipEl = e.currentTarget as HTMLElement;
+        const rect = chipEl.getBoundingClientRect();
+        const ox = e.clientX - rect.left;
+        const oy = e.clientY - rect.top;
+        ghostWidth = rect.width;
+
+        // Capture chip rects BEFORE state changes (before placeholder appears in DOM).
+        // Filter out the dragged chip so indices match the 'without' array.
+        if (chipsEl) {
+            frozenRects = [...chipsEl.querySelectorAll<HTMLElement>('.chip')]
+                .filter((_, i) => i !== kwIndex)
+                .map(c => c.getBoundingClientRect());
+        }
+
+        // Create ghost clone that follows the cursor
+        const ghost = chipEl.cloneNode(true) as HTMLElement;
+        Object.assign(ghost.style, {
+            position: 'fixed',
+            left: `${rect.left}px`,
+            top: `${rect.top}px`,
+            width: `${rect.width}px`,
+            margin: '0',
+            pointerEvents: 'none',
+            zIndex: '9999',
+            cursor: 'grabbing',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.55)',
+            opacity: '0.9',
+        });
+        document.body.appendChild(ghost);
+
+        dragFromIndex = kwIndex;
+        dropInsert = kwIndex;
+
+        const onMove = (ev: PointerEvent) => {
+            ghost.style.left = `${ev.clientX - ox}px`;
+            ghost.style.top = `${ev.clientY - oy}px`;
+            const next = calcDropInsert(ev.clientX, ev.clientY);
+            if (next !== dropInsert) dropInsert = next;
+        };
+
+        const onUp = () => {
+            ghost.remove();
+            if (dropInsert !== null && dragFromIndex !== null && dropInsert !== dragFromIndex) {
+                const arr = [...keywords];
+                const [moved] = arr.splice(dragFromIndex, 1);  // arr is now 'without'
+                arr.splice(dropInsert, 0, moved);
+                keywords = arr;
+            }
+            dragFromIndex = null;
+            dropInsert = null;
+            ghostWidth = 0;
+            frozenRects = [];
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+        };
+
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+    }
+
+    // Returns insertion index in the 'without' array using frozen chip rects.
+    // Rows are determined by Y range with midpoint boundary → no oscillation.
+    function calcDropInsert(x: number, y: number): number {
+        const rects = frozenRects;
+        if (!rects.length) return 0;
+
+        const chipH = rects[0].height;
+
+        // Group chips into rows by comparing top values
+        const rows: { top: number; bottom: number; indices: number[] }[] = [];
+        for (let i = 0; i < rects.length; i++) {
+            const r = rects[i];
+            const row = rows.find(row => Math.abs(row.top - r.top) < chipH * 0.5);
+            if (row) {
+                row.indices.push(i);
+                row.bottom = Math.max(row.bottom, r.bottom);
+            } else {
+                rows.push({top: r.top, bottom: r.bottom, indices: [i]});
+            }
+        }
+        rows.sort((a, b) => a.top - b.top);
+
+        // Pick the row: use midpoint between adjacent rows as hard boundary.
+        // Because frozenRects never change, these midpoints are stable → no flicker.
+        let targetRow = rows[rows.length - 1];
+        for (let r = 0; r < rows.length - 1; r++) {
+            const midY = (rows[r].bottom + rows[r + 1].top) / 2;
+            if (y <= midY) {
+                targetRow = rows[r];
+                break;
+            }
+        }
+
+        // Within the row, split by each chip's horizontal midpoint
+        for (const i of targetRow.indices) {
+            if (x < rects[i].left + rects[i].width / 2) return i;
+        }
+        return targetRow.indices[targetRow.indices.length - 1] + 1;
     }
 </script>
 
@@ -339,16 +475,31 @@
                     oninput={handleKeywordInput}
                 />
                 {#if keywords.length > 0}
-                    <div class="keyword-chips">
-                        {#each keywords as kw}
-                            <span class="chip">
-                                {kw}
-                                <button
-                                    class="chip-remove"
-                                    onclick={() => removeKeyword(kw)}
-                                    aria-label="Remove keyword {kw}"
-                                >×</button>
-                            </span>
+                    <div
+                        class="keyword-chips"
+                        class:keyword-chips--dragging={dragFromIndex !== null}
+                        bind:this={chipsEl}
+                    >
+                        {#each dragDisplay as item (item ?? '__placeholder__')}
+                            {#if item === null}
+                                <span
+                                    class="chip chip--placeholder"
+                                    style="width:{ghostWidth}px"
+                                ></span>
+                            {:else}
+                                <span
+                                    class="chip"
+                                    onpointerdown={(e) => startChipDrag(e, keywords.indexOf(item))}
+                                    role="listitem"
+                                >
+                                    {item}
+                                    <button
+                                        class="chip-remove"
+                                        onclick={() => removeKeyword(item)}
+                                        aria-label="Remove keyword {item}"
+                                    >×</button>
+                                </span>
+                            {/if}
                         {/each}
                     </div>
                 {/if}
