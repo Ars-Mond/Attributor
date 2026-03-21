@@ -7,8 +7,11 @@
   ],
   "permissions": [
     "core:default",
+    "core:window:allow-maximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-set-size",
+    "core:window:allow-outer-size",
     "opener:default",
-    "store:default",
     "store:default",
     "dialog:default"
   ]

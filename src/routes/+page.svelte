@@ -1,8 +1,11 @@
 <script lang="ts">
-    import {convertFileSrc} from "@tauri-apps/api/core";
+    import { onMount, onDestroy } from "svelte";
+    import { convertFileSrc } from "@tauri-apps/api/core";
+    import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
     import MetadataPanel from "$lib/MetadataPanel.svelte";
     import FilesPanel from "$lib/FilesPanel.svelte";
     import UnsavedChangesDialog from "$lib/UnsavedChangesDialog.svelte";
+    import { loadAppState, saveAppState } from "$lib/store";
 
     // --- Left panel resize ---
     const LEFT_MIN = 260;
@@ -22,6 +25,7 @@
             resizing = false;
             window.removeEventListener("mousemove", onMove);
             window.removeEventListener("mouseup", onUp);
+            saveAppState({ leftPanelWidth: panelWidth });
         }
 
         window.addEventListener("mousemove", onMove);
@@ -45,6 +49,7 @@
             resizing = false;
             window.removeEventListener("mousemove", onMove);
             window.removeEventListener("mouseup", onUp);
+            saveAppState({ rightPanelWidth: rightPanelWidth });
         }
 
         window.addEventListener("mousemove", onMove);
@@ -106,6 +111,7 @@
         currentPath = path;
         showDialog = false;
         pendingPath = null;
+        saveAppState({ lastFile: path });
     }
 
     /** Called from FilesPanel when user clicks a file. */
@@ -140,6 +146,59 @@
         pendingPath = null;
         filesPanel?.setSelectedPath(currentPath ?? '');  // revert highlight to actual open file
     }
+
+    // --- Session restore & window state ---
+
+    let unlistenResize: (() => void) | null = null;
+    let winResizeTimer: ReturnType<typeof setTimeout> | null = null;
+
+    onMount(async () => {
+        const win = getCurrentWindow();
+        const state = await loadAppState();
+
+        // 1. Restore window size / maximize
+        if (state.windowMaximized) {
+            await win.maximize();
+        } else if (state.windowWidth && state.windowHeight) {
+            await win.setSize(new PhysicalSize(state.windowWidth, state.windowHeight));
+        }
+
+        // 2. Restore panel widths
+        if (state.leftPanelWidth)  panelWidth       = state.leftPanelWidth;
+        if (state.rightPanelWidth) rightPanelWidth  = state.rightPanelWidth;
+
+        // 3. Restore last folder, then last file
+        if (state.lastFolder) {
+            const ok = await filesPanel?.openFolderByPath(state.lastFolder);
+            if (ok && state.lastFile) {
+                try {
+                    await openFile(state.lastFile);
+                    filesPanel?.setSelectedPath(state.lastFile);
+                } catch {
+                    // File no longer exists — ignore
+                }
+            }
+        }
+
+        // Save window size whenever it changes (debounced)
+        unlistenResize = await win.onResized(async () => {
+            if (winResizeTimer) clearTimeout(winResizeTimer);
+            winResizeTimer = setTimeout(async () => {
+                const maximized = await win.isMaximized();
+                if (maximized) {
+                    saveAppState({ windowMaximized: true });
+                } else {
+                    const size = await win.outerSize();
+                    saveAppState({ windowMaximized: false, windowWidth: size.width, windowHeight: size.height });
+                }
+            }, 500);
+        });
+    });
+
+    onDestroy(() => {
+        unlistenResize?.();
+        if (winResizeTimer) clearTimeout(winResizeTimer);
+    });
 </script>
 
 <div class="app" class:resizing>
@@ -199,7 +258,14 @@
 
     <!-- ── Right: files panel ── -->
     <div class="panel-wrapper" style="width: {rightPanelWidth}px;">
-        <FilesPanel bind:this={filesPanel} onFileSelect={handleFileSelect} onFileGone={handleFileGone} onBusy={(b) => (isLoading = b)} disabled={showDialog} />
+        <FilesPanel
+            bind:this={filesPanel}
+            onFileSelect={handleFileSelect}
+            onFileGone={handleFileGone}
+            onFolderOpen={(path) => saveAppState({ lastFolder: path })}
+            onBusy={(b) => (isLoading = b)}
+            disabled={showDialog}
+        />
     </div>
 </div>
 

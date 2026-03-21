@@ -372,9 +372,51 @@ fn scan_folder(path: String) -> Result<FileNode, String> {
     scan_dir(p).map_err(|e| e.to_string())
 }
 
+/// Start watching a folder for changes and emit `folder-changed` events.
+fn start_watching(app: &tauri::AppHandle, path: &std::path::Path) {
+    use tauri::Manager;
+    let app_clone = app.clone();
+    let watch_path = path.to_string_lossy().to_string();
+
+    match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+        if res.is_ok() {
+            use tauri::Emitter;
+            app_clone.emit("folder-changed", &watch_path).ok();
+        }
+    }) {
+        Ok(mut watcher) => {
+            if let Err(e) = watcher.watch(path, RecursiveMode::Recursive) {
+                error!("Failed to watch folder: {e}");
+            } else {
+                info!("Watching: {}", path.display());
+                let state = app.state::<WatcherState>();
+                // Replacing the previous watcher implicitly drops it, which stops watching the old folder.
+                *state.0.lock().unwrap_or_else(|e| e.into_inner()) = Some(watcher);
+            }
+        }
+        Err(e) => error!("Failed to create watcher: {e}"),
+    }
+}
+
+/// Open a folder by path without a dialog (used to restore last folder on startup).
+#[tauri::command]
+async fn open_folder_path(app: tauri::AppHandle, path: String) -> Result<FileNode, String> {
+    let path = std::path::PathBuf::from(&path);
+    if !path.is_dir() {
+        return Err(format!("Not a directory: {}", path.display()));
+    }
+    info!("open_folder_path: {}", path.display());
+    let node = scan_dir(&path).map_err(|e| {
+        let msg = e.to_string();
+        error!("scan_dir failed: {msg}");
+        msg
+    })?;
+    start_watching(&app, &path);
+    Ok(node)
+}
+
 #[tauri::command]
 async fn open_folder(app: tauri::AppHandle) -> Result<Option<FileNode>, String> {
-    use tauri::Manager;
     use tauri_plugin_dialog::DialogExt;
 
     // Non-blocking: pick_folder fires the callback from a native dialog thread.
@@ -395,30 +437,7 @@ async fn open_folder(app: tauri::AppHandle) -> Result<Option<FileNode>, String> 
         error!("scan_dir failed: {msg}");
         msg
     })?;
-
-    // ── Start watching the folder ──
-    let app_clone = app.clone();
-    let watch_path = path.to_string_lossy().to_string();
-    let watcher_result = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-        if res.is_ok() {
-            use tauri::Emitter;
-            app_clone.emit("folder-changed", &watch_path).ok();
-        }
-    });
-
-    match watcher_result {
-        Ok(mut watcher) => {
-            if let Err(e) = watcher.watch(&path, RecursiveMode::Recursive) {
-                error!("Failed to watch folder: {e}");
-            } else {
-                info!("Watching: {}", path.display());
-                let state = app.state::<WatcherState>();
-                *state.0.lock().unwrap_or_else(|e| e.into_inner()) = Some(watcher);
-            }
-        }
-        Err(e) => error!("Failed to create watcher: {e}"),
-    }
-
+    start_watching(&app, &path);
     Ok(Some(node))
 }
 
@@ -495,7 +514,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![read_metadata, save_metadata, open_folder, scan_folder])
+        .invoke_handler(tauri::generate_handler![read_metadata, save_metadata, open_folder, open_folder_path, scan_folder])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
