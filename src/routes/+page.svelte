@@ -191,6 +191,9 @@
             }
         }
 
+        // 4. Show window after full UI init
+        await win.show();
+
         // Save window size whenever it changes (debounced)
         unlistenResize = await win.onResized(async () => {
             if (winResizeTimer) clearTimeout(winResizeTimer);
