@@ -32,4 +32,5 @@ log = "0.4.29"
 notify = "6"
 tokio = { version = "1", features = ["sync"] }
 tauri-plugin-clipboard-manager = "2.3.2"
+nucleo-matcher = "0.3.1"
 
