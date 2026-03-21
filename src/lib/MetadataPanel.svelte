@@ -1,5 +1,6 @@
 <script lang="ts">
     import {invoke} from "@tauri-apps/api/core";
+    import {writeText, readText} from "@tauri-apps/plugin-clipboard-manager";
     import type {Metadata, ReadResult} from "./types";
 
     // ── Bindable props ─────────────────────────────────────────────────────
@@ -275,6 +276,20 @@
         }
     }
 
+    // ── Keyword clipboard ──────────────────────────────────────────────────
+
+    async function copyKeywords() {
+        if (!keywords.length) return;
+        await writeText(keywords.join(', ') + ', ');
+    }
+
+    async function pasteKeywords() {
+        const text = await readText();
+        if (!text) return;
+        const parts = text.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+        for (const word of parts) addKeyword(word);
+    }
+
     // ── Keyword drag & drop (pointer-based, ghost + placeholder) ──────────
 
     let dragFromIndex = $state<number | null>(null);
@@ -474,6 +489,31 @@
                     onkeydown={handleKeywordKeydown}
                     oninput={handleKeywordInput}
                 />
+                <div class="keyword-actions">
+                    <button
+                        class="kw-action-btn"
+                        onclick={copyKeywords}
+                        disabled={keywords.length === 0}
+                        title="Copy keywords to clipboard"
+                    >
+                        <svg viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6z"/>
+                            <path d="M2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h-1v1H2V6h1V5H2z"/>
+                        </svg>
+                        Copy
+                    </button>
+                    <button
+                        class="kw-action-btn"
+                        onclick={pasteKeywords}
+                        title="Paste keywords from clipboard"
+                    >
+                        <svg viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                            <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                        </svg>
+                        Paste
+                    </button>
+                </div>
                 {#if keywords.length > 0}
                     <div
                         class="keyword-chips"
@@ -626,6 +666,43 @@
         text-overflow: ellipsis;
         white-space: nowrap;
         padding-left: 15px;
+    }
+
+    // ── Keyword clipboard actions ──
+    .keyword-actions {
+        @include flex(row, flex-start, center);
+        gap: 6px;
+        margin-top: 4px;
+    }
+
+    .kw-action-btn {
+        @include btn-reset;
+        @include flex(row, flex-start, center);
+        gap: 5px;
+        padding: 3px 8px;
+        border: 1px solid $border;
+        border-radius: $radius-sm;
+        background: $bg-surface;
+        color: $text-secondary;
+        font-size: $fs-footnote1;
+        @include transition(background, color, border-color);
+
+        svg {
+            width: 11px;
+            height: 11px;
+            flex-shrink: 0;
+        }
+
+        &:hover:not(:disabled) {
+            background: #2e2e2e;
+            color: $text;
+            border-color: $text-muted;
+        }
+
+        &:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
     }
 
     // ── Input validation ──

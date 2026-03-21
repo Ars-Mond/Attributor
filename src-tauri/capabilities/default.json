@@ -11,6 +11,8 @@
     "core:window:allow-is-maximized",
     "core:window:allow-set-size",
     "core:window:allow-outer-size",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-text",
     "opener:default",
     "store:default",
     "dialog:default"
