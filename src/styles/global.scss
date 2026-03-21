@@ -24,6 +24,11 @@ body {
     font-size: $fs-regular;
     height: 100vh;
     overflow: hidden;
+    user-select: none;
+}
+
+input, textarea {
+    user-select: text;
 }
 
 // ─────────────────────────────────────────────
