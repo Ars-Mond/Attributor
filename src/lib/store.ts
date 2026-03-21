@@ -1,20 +1,23 @@
-import { load, type Store } from '@tauri-apps/plugin-store';
+import {load, type Store} from '@tauri-apps/plugin-store';
 
 const FILE = 'ui-state.json';
 let _store: Store | null = null;
 
 async function getStore(): Promise<Store> {
-    return (_store ??= await load(FILE, { autoSave: false }));
+    return (_store ??= await load(FILE, {autoSave: false, defaults: {}}));
 }
 
 export interface AppState {
-    lastFolder:       string;
-    lastFile:         string;
-    leftPanelWidth:   number;
-    rightPanelWidth:  number;
-    windowMaximized:  boolean;
-    windowWidth:      number;
-    windowHeight:     number;
+    lastFolder: string;
+    lastFile: string;
+    leftPanelWidth: number;
+    rightPanelWidth: number;
+    windowMaximized: boolean;
+    windowWidth: number;
+    windowHeight: number;
+    descriptionHeight: number;
+    stockKeywordsOpen: boolean;
+    optionalOpen: boolean;
 }
 
 export async function loadAppState(): Promise<Partial<AppState>> {
@@ -24,6 +27,7 @@ export async function loadAppState(): Promise<Partial<AppState>> {
             'lastFolder', 'lastFile',
             'leftPanelWidth', 'rightPanelWidth',
             'windowMaximized', 'windowWidth', 'windowHeight',
+            'descriptionHeight', 'stockKeywordsOpen', 'optionalOpen',
         ];
         const values = await Promise.all(keys.map(k => s.get(k)));
         return Object.fromEntries(

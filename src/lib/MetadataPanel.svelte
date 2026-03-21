@@ -1,7 +1,9 @@
 <script lang="ts">
+    import {onMount} from "svelte";
     import {invoke} from "@tauri-apps/api/core";
     import {writeText, readText} from "@tauri-apps/plugin-clipboard-manager";
     import KeywordSuggestions from "./KeywordSuggestions.svelte";
+    import {loadAppState, saveAppState} from "./store";
     import type {Metadata, ReadResult} from "./types";
 
     // ── Bindable props ─────────────────────────────────────────────────────
@@ -26,6 +28,49 @@
     let releaseFilename = $state("");
     let autoSave = $state(false);
     let saveAttempted = $state(false);
+
+    // ── UI preferences (persisted) ─────────────────────────────────────────
+
+    let descriptionEl: HTMLTextAreaElement | undefined;
+    let stockKeywordsOpen = $state(false);
+    let optionalOpen = $state(false);
+    let uiLoaded = $state(false);
+
+    onMount(async () => {
+        const s = await loadAppState();
+        // Apply height imperatively — avoids reactive style conflicts with browser resize handle
+        if (s.descriptionHeight && descriptionEl) {
+            descriptionEl.style.height = `${s.descriptionHeight}px`;
+        }
+        if (s.stockKeywordsOpen !== undefined) stockKeywordsOpen = s.stockKeywordsOpen;
+        if (s.optionalOpen !== undefined) optionalOpen = s.optionalOpen;
+        uiLoaded = true;
+    });
+
+    // Persist textarea height via ResizeObserver — writes directly to store, no reactive state
+    $effect(() => {
+        if (!descriptionEl) return;
+        let saveTimer: ReturnType<typeof setTimeout> | null = null;
+        const obs = new ResizeObserver(entries => {
+            if (!uiLoaded) return;
+            const h = Math.round(entries[0].contentRect.height);
+            if (h > 0) {
+                if (saveTimer) clearTimeout(saveTimer);
+                saveTimer = setTimeout(() => saveAppState({descriptionHeight: h}), 300);
+            }
+        });
+        obs.observe(descriptionEl);
+        return () => {
+            obs.disconnect();
+            if (saveTimer) clearTimeout(saveTimer);
+        };
+    });
+
+    // Persist spoiler states
+    $effect(() => {
+        if (!uiLoaded) return;
+        saveAppState({stockKeywordsOpen, optionalOpen});
+    });
 
     // ── Snapshot (dirty tracking) ──────────────────────────────────────────
     // Purely in-memory: taken when a file is opened. No files are created.
@@ -474,6 +519,7 @@
             <label class="field">
                 <span class="field-label">Description <span class="required">*</span></span>
                 <textarea
+                    bind:this={descriptionEl}
                     class="input textarea"
                     class:input--invalid={saveAttempted && !description.trim()}
                     placeholder="Describe the image in detail..."
@@ -556,7 +602,11 @@
         </section>
 
         <!-- ── Preset keywords ── -->
-        <details class="optional-details">
+        <details
+            class="optional-details"
+            open={stockKeywordsOpen}
+            ontoggle={(e) => stockKeywordsOpen = (e.currentTarget as HTMLDetailsElement).open}
+        >
             <summary class="optional-summary">
                 <span class="group-label" style="border: none; padding: 0;">Stock Keywords</span>
                 <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
@@ -582,7 +632,11 @@
         </details>
 
         <!-- ── Optional fields ── -->
-        <details class="optional-details">
+        <details
+            class="optional-details"
+            open={optionalOpen}
+            ontoggle={(e) => optionalOpen = (e.currentTarget as HTMLDetailsElement).open}
+        >
             <summary class="optional-summary">
                 <span class="group-label" style="border: none; padding: 0;">Optional</span>
                 <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
