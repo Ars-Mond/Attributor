@@ -556,23 +556,30 @@
         </section>
 
         <!-- ── Preset keywords ── -->
-        <section class="field-group presets">
-            <p class="group-label">Stock Keywords</p>
-            {#each Object.entries(presets) as [group, tags]}
-                <div class="preset-group">
-                    <span class="preset-group-label">{group}</span>
-                    <div class="preset-tags">
-                        {#each tags as tag}
-                            <button
-                                class="preset-btn"
-                                class:active={keywords.includes(tag)}
-                                onclick={() => addKeyword(tag)}
-                            >{tag}</button>
-                        {/each}
+        <details class="optional-details">
+            <summary class="optional-summary">
+                <span class="group-label" style="border: none; padding: 0;">Stock Keywords</span>
+                <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 6l4 4 4-4"/>
+                </svg>
+            </summary>
+            <div class="optional-body presets">
+                {#each Object.entries(presets) as [group, tags]}
+                    <div class="preset-group">
+                        <span class="preset-group-label">{group}</span>
+                        <div class="preset-tags">
+                            {#each tags as tag}
+                                <button
+                                    class="preset-btn"
+                                    class:active={keywords.includes(tag)}
+                                    onclick={() => addKeyword(tag)}
+                                >{tag}</button>
+                            {/each}
+                        </div>
                     </div>
-                </div>
-            {/each}
-        </section>
+                {/each}
+            </div>
+        </details>
 
         <!-- ── Optional fields ── -->
         <details class="optional-details">
@@ -728,7 +735,7 @@
     }
 
     // ── Preset keywords ──
-    .presets { padding-bottom: 4px; }
+    .presets { gap: 8px; }
 
     .preset-group {
         @include flex(column, flex-start, stretch);
