@@ -772,7 +772,7 @@
         }
 
         &:hover:not(:disabled) {
-            background: #2e2e2e;
+            background: var(--hover-bg-strong);
             color: $text;
             border-color: $text-muted;
         }
@@ -818,7 +818,7 @@
         padding: 3px 8px;
         @include transition(background, color, border-color);
 
-        &:hover { background: #2e2e2e; color: $text; }
+        &:hover { background: var(--hover-bg-strong); color: $text; }
         &.active { background: $chip-bg; border-color: $chip-border; color: $chip-text; }
     }
 
@@ -839,7 +839,7 @@
         @include transition(background);
 
         &::-webkit-details-marker { display: none; }
-        &:hover { background: #2a2a2a; }
+        &:hover { background: var(--hover-bg); }
     }
 
     .optional-details[open] .optional-summary { border-radius: $radius-md $radius-md 0 0; }
@@ -876,8 +876,8 @@
         padding: 6px 16px;
         font-size: $fs-footnote1;
         color: $required-color;
-        border-bottom: 1px solid rgba($required-color, 0.2);
-        background: rgba($required-color, 0.06);
+        border-bottom: 1px solid var(--required-alpha-20);
+        background: var(--required-alpha-06);
         line-height: 1.5;
     }
 

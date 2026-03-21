@@ -102,7 +102,7 @@
         min-width: 0;
 
         &:hover {
-            background: #2a2a2a;
+            background: var(--hover-bg);
             color: $text;
         }
 

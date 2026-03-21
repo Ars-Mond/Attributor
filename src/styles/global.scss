@@ -1,5 +1,5 @@
+@use 'themes';
 @use 'mixins' as *;
-@use 'sass:color';
 
 // ─────────────────────────────────────────────
 // Reset
@@ -86,7 +86,7 @@ h6 { font-size: $fs-h6; font-weight: 500; line-height: 1.4;  }
     color: #fff;
 
     &:hover  { background: $accent-hover; }
-    &:active { background: color.adjust($accent, $lightness: -10%); }
+    &:active { background: var(--accent-active); }
 }
 
 .btn-ghost {
@@ -231,9 +231,7 @@ h6 { font-size: $fs-h6; font-weight: 500; line-height: 1.4;  }
     @include flex(column, flex-start, stretch);
     gap: 20px;
 
-    &::-webkit-scrollbar       { width: 6px; }
-    &::-webkit-scrollbar-track { background: transparent; }
-    &::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 6px; }
+    @include scrollbar;
 }
 
 .panel-footer {

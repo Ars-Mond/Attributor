@@ -45,7 +45,7 @@
     .overlay {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.55);
+        background: var(--overlay-bg);
         backdrop-filter: blur(3px);
         @include flex(row, center, center);
         z-index: 200;
@@ -60,7 +60,7 @@
         max-width: calc(100vw - 48px);
         @include flex(column, flex-start, stretch);
         gap: 14px;
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+        box-shadow: 0 12px 40px var(--shadow-heavy);
     }
 
     .dialog-title {
@@ -91,7 +91,7 @@
         color: $required-color;
 
         &:hover {
-            background: rgba($required-color, 0.08);
+            background: var(--required-alpha-08);
             color: $required-color;
             border-color: $required-color;
         }

@@ -117,12 +117,12 @@
     .kw-suggestions {
         position: fixed;
         z-index: 1000;
-        background: #1f1f1f;
+        background: $bg-panel;
         border: 1px solid $border-focus;
         border-radius: $radius-md;
         list-style: none;
         padding: 3px 0;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 6px 20px var(--shadow);
         max-height: 300px;
         overflow-y: auto;
         @include scrollbar;

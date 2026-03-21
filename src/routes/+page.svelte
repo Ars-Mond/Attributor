@@ -5,7 +5,9 @@
     import MetadataPanel from "$lib/MetadataPanel.svelte";
     import FilesPanel from "$lib/FilesPanel.svelte";
     import UnsavedChangesDialog from "$lib/UnsavedChangesDialog.svelte";
+    import ThemeSwitcher from "$lib/ThemeSwitcher.svelte";
     import { loadAppState, saveAppState } from "$lib/store";
+    import { applyTheme, DEFAULT_THEME } from "$lib/themes";
 
     // --- Left panel resize ---
     const LEFT_MIN = 260;
@@ -64,6 +66,7 @@
     let filesPanel: any = $state(null);
     let isDirty = $state(false);
     let isLoading = $state(false);
+    let currentTheme = $state(DEFAULT_THEME);
 
     // --- Unsaved changes dialog ---
     let showDialog = $state(false);
@@ -156,6 +159,14 @@
         const win = getCurrentWindow();
         const state = await loadAppState();
 
+        // 0. Restore theme
+        if (state.theme) {
+            currentTheme = state.theme;
+            applyTheme(state.theme);
+        } else {
+            applyTheme(DEFAULT_THEME);
+        }
+
         // 1. Restore window size / maximize
         if (state.windowMaximized) {
             await win.maximize();
@@ -219,6 +230,9 @@
 
     <!-- ── Center: image viewer ── -->
     <main class="viewer">
+        <div class="viewer-toolbar">
+            <ThemeSwitcher current={currentTheme} />
+        </div>
         {#if imageSrc}
             <img class="image" src={imageSrc} alt="Preview" />
         {:else}
@@ -337,6 +351,13 @@
         position: relative;
     }
 
+    .viewer-toolbar {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 10;
+    }
+
     .image {
         max-width: 100%;
         max-height: 100%;
@@ -369,7 +390,7 @@
         font-size: $fs-small;
         max-width: 420px;
         width: max-content;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 4px 20px var(--shadow);
         animation: toast-in 0.2s ease;
 
         strong { color: #fde68a; }
@@ -407,7 +428,7 @@
         inset: 0;
         z-index: 200;
         backdrop-filter: blur(4px);
-        background: rgba(0, 0, 0, 0.25);
+        background: var(--overlay-loading);
         pointer-events: all;
         @include flex(row, center, center);
     }
@@ -416,8 +437,8 @@
         width: 30px;
         height: 30px;
         border-radius: 50%;
-        border: 2.5px solid rgba(255, 255, 255, 0.15);
-        border-top-color: rgba(255, 255, 255, 0.75);
+        border: 2.5px solid var(--spinner-track);
+        border-top-color: var(--spinner-color);
         animation: spin 0.65s linear infinite;
     }
 
