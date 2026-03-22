@@ -575,7 +575,7 @@
                         class:keyword-chips--dragging={dragFromIndex !== null}
                         bind:this={chipsEl}
                     >
-                        {#each dragDisplay as item (item ?? '__placeholder__')}
+                        {#each dragDisplay as item, i (item === null ? `__placeholder__${i}` : `${i}:${item}`)}
                             {#if item === null}
                                 <span
                                     class="chip chip--placeholder"

@@ -224,6 +224,7 @@ fn parse_xmp(xmp_bytes: &[u8]) -> ReadResult {
 
     let mut result = ReadResult::default();
     let mut ctx = Ctx::None;
+    let mut text_buf = String::new();
     let mut buf = Vec::new();
 
     loop {
@@ -233,25 +234,57 @@ fn parse_xmp(xmp_bytes: &[u8]) -> ReadResult {
                 b"title" => ctx = Ctx::Title,
                 b"description" => ctx = Ctx::Desc,
                 b"subject" => ctx = Ctx::Subject,
-                b"Category" => ctx = Ctx::Category,
+                b"Category" => { ctx = Ctx::Category; text_buf.clear(); }
+                b"li" if ctx != Ctx::None => text_buf.clear(),
                 _ => {}
             },
             Ok(Event::End(ref e)) => match e.local_name().as_ref() {
-                b"title" | b"description" | b"subject" | b"Category" => ctx = Ctx::None,
-                _ => {}
-            },
-            Ok(Event::Text(e)) => {
-                if let Ok(raw) = std::str::from_utf8(e.as_ref()) {
-                    let text = raw.trim().to_string();
+                b"li" if ctx != Ctx::None => {
+                    let text = text_buf.trim().to_string();
                     if !text.is_empty() {
                         match ctx {
                             Ctx::Title if result.title.is_empty() => result.title = text,
                             Ctx::Desc if result.description.is_empty() => result.description = text,
-                            Ctx::Subject => result.keywords.push(text),
-                            Ctx::Category => result.categories = text,
+                            Ctx::Subject => {
+                                if !result.keywords.contains(&text) {
+                                    result.keywords.push(text);
+                                }
+                            }
                             _ => {}
                         }
                     }
+                    text_buf.clear();
+                }
+                b"Category" => {
+                    let text = text_buf.trim().to_string();
+                    if !text.is_empty() {
+                        result.categories = text;
+                    }
+                    text_buf.clear();
+                    ctx = Ctx::None;
+                }
+                b"title" | b"description" | b"subject" => ctx = Ctx::None,
+                _ => {}
+            },
+            Ok(Event::Text(e)) => {
+                if ctx != Ctx::None {
+                    if let Ok(cow) = e.xml_content() {
+                        text_buf.push_str(&cow);
+                    }
+                }
+            }
+            Ok(Event::GeneralRef(e)) => {
+                if ctx != Ctx::None {
+                    let name = e.into_inner();
+                    let ch = match name.as_ref() {
+                        b"amp"  => "&",
+                        b"lt"   => "<",
+                        b"gt"   => ">",
+                        b"apos" => "'",
+                        b"quot" => "\"",
+                        _ => "",
+                    };
+                    text_buf.push_str(ch);
                 }
             }
             Ok(Event::Eof) | Err(_) => break,
@@ -341,7 +374,8 @@ fn read_metadata(path: String) -> Result<ReadResult, String> {
     };
 
     let result = xmp.as_deref().map(parse_xmp).unwrap_or_default();
-    debug!("read_metadata: title={:?} keywords={}", result.title, result.keywords.len());
+    debug!("read_metadata: title={:?} keywords_count={}", result.title, result.keywords.len());
+    debug!("read_metadata: keywords={}", result.keywords.join(", "));
     Ok(result)
 }
 
