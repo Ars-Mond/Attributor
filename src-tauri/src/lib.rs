@@ -634,6 +634,11 @@ pub fn run() {
                 } else {
                     log::LevelFilter::Info
                 })
+                .target(tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("attributor".into()),
+                    },
+                ))
                 .build(),
         )
         .plugin(tauri_plugin_clipboard_manager::init())
