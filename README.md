@@ -1,4 +1,4 @@
-# ![Attributor](src-tauri/icons/logo.png)
+# ![Attributor](banner.png)
 
 # Attributor
 
