@@ -8,6 +8,8 @@ Desktop application for editing photo metadata (EXIF/XMP) before submitting to s
 
 Download the latest installer from the [Releases](../../releases) page.
 
+See [CHANGELOG.md](CHANGELOG.md) for version history.
+
 ## Usage
 
 1. Click **Open Folder** and select a directory with your photos.
