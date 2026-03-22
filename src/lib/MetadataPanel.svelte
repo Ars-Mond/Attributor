@@ -104,7 +104,7 @@
             filename !== snapshot.filename ||
             title !== snapshot.title ||
             description !== snapshot.description ||
-            JSON.stringify(keywords) !== JSON.stringify(snapshot.keywords) ||
+            (keywords.length !== snapshot.keywords.length || keywords.some((k, i) => k !== snapshot.keywords[i])) ||
             categories !== snapshot.categories ||
             releaseFilename !== snapshot.releaseFilename
         )
