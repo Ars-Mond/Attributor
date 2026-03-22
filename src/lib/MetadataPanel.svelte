@@ -28,6 +28,7 @@
     let releaseFilename = $state("");
     let autoSave = $state(false);
     let saveAttempted = $state(false);
+    let saveError = $state<string | null>(null);
 
     // ── UI preferences (persisted) ─────────────────────────────────────────
 
@@ -264,8 +265,13 @@
 
     async function handleSave() {
         saveAttempted = true;
+        saveError = null;
         if (hasErrors) return;
-        await doSave();
+        try {
+            await doSave();
+        } catch (e) {
+            saveError = e instanceof Error ? e.message : String(e);
+        }
     }
 
     // ── Preset keywords ────────────────────────────────────────────────────
@@ -669,6 +675,10 @@
         {#if saveAttempted && hasErrors}
             <div class="footer-errors">
                 {validationErrors.join(' · ')}
+            </div>
+        {:else if saveError}
+            <div class="footer-errors">
+                Save failed: {saveError}
             </div>
         {/if}
         <div class="footer-controls">
