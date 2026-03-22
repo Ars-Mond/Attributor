@@ -287,7 +287,11 @@ fn parse_xmp(xmp_bytes: &[u8]) -> ReadResult {
                     text_buf.push_str(ch);
                 }
             }
-            Ok(Event::Eof) | Err(_) => break,
+            Ok(Event::Eof) => break,
+            Err(e) => {
+                warn!("parse_xmp: XML parse error: {e}");
+                break;
+            }
             _ => {}
         }
     }
