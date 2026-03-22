@@ -2,6 +2,7 @@ import {load, type Store} from '@tauri-apps/plugin-store';
 
 const FILE = 'ui-state.json';
 let _store: Store | null = null;
+let _saveQueue: Promise<void> = Promise.resolve();
 
 async function getStore(): Promise<Store> {
     return (_store ??= await load(FILE, {autoSave: false, defaults: {}}));
@@ -40,12 +41,14 @@ export async function loadAppState(): Promise<Partial<AppState>> {
     }
 }
 
-export async function saveAppState(patch: Partial<AppState>): Promise<void> {
-    try {
-        const s = await getStore();
-        await Promise.all(Object.entries(patch).map(([k, v]) => s.set(k, v)));
-        await s.save();
-    } catch (e) {
-        console.warn('saveAppState failed:', e);
-    }
+export function saveAppState(patch: Partial<AppState>): void {
+    _saveQueue = _saveQueue.then(async () => {
+        try {
+            const s = await getStore();
+            await Promise.all(Object.entries(patch).map(([k, v]) => s.set(k, v)));
+            await s.save();
+        } catch (e) {
+            console.warn('saveAppState failed:', e);
+        }
+    });
 }
