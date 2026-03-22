@@ -492,9 +492,12 @@ pub struct FileNode {
 /// Re-scan a folder path that was previously opened (no dialog).
 /// Called by the frontend after a `folder-changed` event.
 #[tauri::command]
-fn scan_folder(path: String) -> Result<FileNode, String> {
-    let p = std::path::Path::new(&path);
-    scan_dir(p).map_err(|e| e.to_string())
+async fn scan_folder(path: String) -> Result<FileNode, String> {
+    let p = std::path::PathBuf::from(path);
+    tokio::task::spawn_blocking(move || scan_dir(&p))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
 }
 
 /// Start watching a folder for changes and emit `folder-changed` events.
@@ -531,11 +534,15 @@ async fn open_folder_path(app: tauri::AppHandle, path: String) -> Result<FileNod
         return Err(format!("Not a directory: {}", path.display()));
     }
     info!("open_folder_path: {}", path.display());
-    let node = scan_dir(&path).map_err(|e| {
-        let msg = e.to_string();
-        error!("scan_dir failed: {msg}");
-        msg
-    })?;
+    let scan_path = path.clone();
+    let node = tokio::task::spawn_blocking(move || scan_dir(&scan_path))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| {
+            let msg = e.to_string();
+            error!("scan_dir failed: {msg}");
+            msg
+        })?;
     start_watching(&app, &path);
     Ok(node)
 }
@@ -557,11 +564,15 @@ async fn open_folder(app: tauri::AppHandle) -> Result<Option<FileNode>, String> 
 
     let path = folder.into_path().map_err(|e| e.to_string())?;
     info!("open_folder: {}", path.display());
-    let node = scan_dir(&path).map_err(|e| {
-        let msg = e.to_string();
-        error!("scan_dir failed: {msg}");
-        msg
-    })?;
+    let scan_path = path.clone();
+    let node = tokio::task::spawn_blocking(move || scan_dir(&scan_path))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| {
+            let msg = e.to_string();
+            error!("scan_dir failed: {msg}");
+            msg
+        })?;
     start_watching(&app, &path);
     Ok(Some(node))
 }
@@ -575,7 +586,10 @@ fn scan_dir(path: &std::path::Path) -> std::io::Result<FileNode> {
 
     let mut children = Vec::new();
 
-    if path.is_dir() {
+    // Cache is_dir from metadata to avoid repeated syscalls per entry.
+    let is_dir = path.metadata().map(|m| m.is_dir()).unwrap_or(false);
+
+    if is_dir {
         let mut entries: Vec<_> = std::fs::read_dir(path)?
             .filter_map(|e| match e {
                 Ok(entry) => Some(entry),
@@ -587,14 +601,15 @@ fn scan_dir(path: &std::path::Path) -> std::io::Result<FileNode> {
             .collect();
 
         entries.sort_by(|a, b| {
-            let a_dir = a.path().is_dir();
-            let b_dir = b.path().is_dir();
+            let a_dir = a.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            let b_dir = b.file_type().map(|t| t.is_dir()).unwrap_or(false);
             b_dir.cmp(&a_dir).then_with(|| a.file_name().cmp(&b.file_name()))
         });
 
         for entry in entries {
             let child = entry.path();
-            if child.is_dir() || is_supported_image(&child) {
+            let child_is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            if child_is_dir || is_supported_image(&child) {
                 match scan_dir(&child) {
                     Ok(node) => children.push(node),
                     Err(err) => warn!("scan_dir: skipping {}: {err}", child.display()),
@@ -606,7 +621,7 @@ fn scan_dir(path: &std::path::Path) -> std::io::Result<FileNode> {
     Ok(FileNode {
         name,
         path: path.to_string_lossy().to_string(),
-        is_dir: path.is_dir(),
+        is_dir,
         children,
     })
 }
