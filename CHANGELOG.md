@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.2.1] - 2026-03-22
+## [0.2.1] - 2026-03-23
 
 ### Fixed
 - Apostrophes and special characters (e.g. `mother's day`) in keywords now preserved correctly
@@ -13,7 +13,7 @@
 - Frontend errors and uncaught exceptions forwarded to Tauri log backend
 
 
-## [0.2.0] - 2026-03-15
+## [0.2.0] - 2026-03-22
 
 ### Added
 - Light / Dark theme switcher with persistent selection
@@ -30,7 +30,7 @@
 - Window is hidden on startup and shown only after full UI initialization (theme, panels, last file) to prevent flash of unstyled content
 
 
-## [0.1.2] - 2026-02-10
+## [0.1.2] - 2026-03-21
 
 ### Added
 - Session restore: window size, panel widths, last opened folder and file
@@ -42,7 +42,7 @@
 - Stock keywords presets section layout reworked
 
 
-## [0.1.1] - 2025-12-01
+## [0.1.1] - 2026-03-20
 
 ### Added
 - Minimum window size enforced (1280 × 720)
@@ -56,7 +56,7 @@
 - Critical data loss bug in PNG XMP write (`set_png_xmp`)
 
 
-## [0.1.0] - 2025-11-01
+## [0.1.0] - 2026-03-16
 
 ### Added
 - Initial release
