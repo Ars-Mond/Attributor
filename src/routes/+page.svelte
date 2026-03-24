@@ -1,61 +1,53 @@
 <script lang="ts">
-    import { onMount, onDestroy } from "svelte";
-    import { convertFileSrc } from "@tauri-apps/api/core";
-    import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
+    import {onMount, onDestroy} from "svelte";
+    import {convertFileSrc} from "@tauri-apps/api/core";
+    import {getCurrentWindow, PhysicalSize} from "@tauri-apps/api/window";
     import MetadataPanel from "$lib/MetadataPanel.svelte";
     import FilesPanel from "$lib/FilesPanel.svelte";
     import UnsavedChangesDialog from "$lib/UnsavedChangesDialog.svelte";
     import ThemeSwitcher from "$lib/ThemeSwitcher.svelte";
-    import { loadAppState, saveAppState } from "$lib/store";
-    import { applyTheme, DEFAULT_THEME } from "$lib/themes";
+    import {loadAppState, saveAppState} from "$lib/store";
+    import {applyTheme, DEFAULT_THEME} from "$lib/themes";
+    import DockLayout from "$lib/docking/DockLayout.svelte";
+    import DockToolbar from "$lib/docking/DockToolbar.svelte";
+    import type {LayoutNode, WindowConfig} from "$lib/docking/dockTypes";
+    import {getDefaultLayout, removePanel, addPanelToRoot, findPanel, serializeLayout, deserializeLayout} from "$lib/docking/dockStore";
 
-    // --- Left panel resize ---
-    const LEFT_MIN = 260;
-    const LEFT_MAX = 700;
-    let panelWidth = $state(380);
-    let resizing = $state(false);
+    // --- Docking ---
+    const windowConfigs: WindowConfig[] = [
+        {id: 'control', title: 'Control', closable: true},
+        {id: 'view', title: 'View', closable: false},
+        {id: 'hierarchy', title: 'Hierarchy', closable: true},
+    ];
 
-    function startResize(e: MouseEvent) {
-        e.preventDefault();
-        resizing = true;
+    let layout = $state<LayoutNode>(getDefaultLayout());
+    let hiddenWindows = $state<string[]>([]);
 
-        function onMove(ev: MouseEvent) {
-            panelWidth = Math.min(LEFT_MAX, Math.max(LEFT_MIN, ev.clientX));
-        }
-
-        function onUp() {
-            resizing = false;
-            window.removeEventListener("mousemove", onMove);
-            window.removeEventListener("mouseup", onUp);
-            saveAppState({ leftPanelWidth: panelWidth });
-        }
-
-        window.addEventListener("mousemove", onMove);
-        window.addEventListener("mouseup", onUp);
+    function handleLayoutChange(newLayout: LayoutNode) {
+        layout = newLayout;
+        persistDock();
     }
 
-    // --- Right panel resize ---
-    const RIGHT_MIN = 160;
-    const RIGHT_MAX = 500;
-    let rightPanelWidth = $state(240);
-
-    function startRightResize(e: MouseEvent) {
-        e.preventDefault();
-        resizing = true;
-
-        function onMove(ev: MouseEvent) {
-            rightPanelWidth = Math.min(RIGHT_MAX, Math.max(RIGHT_MIN, window.innerWidth - ev.clientX));
+    function handleCloseWindow(windowId: string) {
+        const result = removePanel(layout, windowId);
+        if (result) {
+            layout = result;
+            hiddenWindows = [...hiddenWindows, windowId];
+            persistDock();
         }
+    }
 
-        function onUp() {
-            resizing = false;
-            window.removeEventListener("mousemove", onMove);
-            window.removeEventListener("mouseup", onUp);
-            saveAppState({ rightPanelWidth: rightPanelWidth });
-        }
+    function handleShowWindow(windowId: string) {
+        layout = addPanelToRoot(layout, windowId);
+        hiddenWindows = hiddenWindows.filter(id => id !== windowId);
+        persistDock();
+    }
 
-        window.addEventListener("mousemove", onMove);
-        window.addEventListener("mouseup", onUp);
+    function persistDock() {
+        saveAppState({
+            dockLayout: serializeLayout(layout),
+            dockHiddenWindows: JSON.stringify(hiddenWindows),
+        });
     }
 
     // --- Image viewer ---
@@ -114,7 +106,7 @@
         currentPath = path;
         showDialog = false;
         pendingPath = null;
-        saveAppState({ lastFile: path });
+        saveAppState({lastFile: path});
     }
 
     /** Called from FilesPanel when user clicks a file. */
@@ -147,7 +139,7 @@
     function handleDialogCancel() {
         showDialog = false;
         pendingPath = null;
-        filesPanel?.setSelectedPath(currentPath ?? '');  // revert highlight to actual open file
+        filesPanel?.setSelectedPath(currentPath ?? '');
     }
 
     // --- Session restore & window state ---
@@ -174,9 +166,17 @@
             await win.setSize(new PhysicalSize(state.windowWidth, state.windowHeight));
         }
 
-        // 2. Restore panel widths
-        if (state.leftPanelWidth)  panelWidth       = state.leftPanelWidth;
-        if (state.rightPanelWidth) rightPanelWidth  = state.rightPanelWidth;
+        // 2. Restore dock layout
+        if (state.dockLayout) {
+            const restored = deserializeLayout(state.dockLayout);
+            if (restored) layout = restored;
+        }
+        if (state.dockHiddenWindows) {
+            try {
+                const parsed = JSON.parse(state.dockHiddenWindows);
+                if (Array.isArray(parsed)) hiddenWindows = parsed;
+            } catch { /* ignore */ }
+        }
 
         // 3. Restore last folder, then last file
         if (state.lastFolder) {
@@ -200,10 +200,10 @@
             winResizeTimer = setTimeout(async () => {
                 const maximized = await win.isMaximized();
                 if (maximized) {
-                    saveAppState({ windowMaximized: true });
+                    saveAppState({windowMaximized: true});
                 } else {
                     const size = await win.outerSize();
-                    saveAppState({ windowMaximized: false, windowWidth: size.width, windowHeight: size.height });
+                    saveAppState({windowMaximized: false, windowWidth: size.width, windowHeight: size.height});
                 }
             }, 500);
         });
@@ -215,85 +215,75 @@
     });
 </script>
 
-<div class="app" class:resizing>
-    <!-- ── Left: metadata panel ── -->
-    <div class="panel-wrapper" style="width: {panelWidth}px;">
-        <MetadataPanel bind:this={metaPanel} bind:isDirty onPathChange={handlePathChange} />
-    </div>
+<div class="app">
+    <DockToolbar
+        {hiddenWindows}
+        {windowConfigs}
+        {currentTheme}
+        onShowWindow={handleShowWindow}
+    />
 
-    <!-- ── Left resize handle ── -->
-    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div
-        class="resize-handle"
-        onmousedown={startResize}
-        role="separator"
-        aria-label="Resize metadata panel"
-        aria-orientation="vertical"
-    ></div>
+    <DockLayout
+        bind:layout
+        {windowConfigs}
+        onClose={handleCloseWindow}
+        onLayoutChange={handleLayoutChange}
+    >
+        {#snippet renderWindow(windowId: string)}
+            {#if windowId === 'control'}
+                <MetadataPanel bind:this={metaPanel} bind:isDirty onPathChange={handlePathChange} />
+            {:else if windowId === 'view'}
+                <div class="viewer">
+                    <div class="viewer-toolbar">
+                        <ThemeSwitcher current={currentTheme} />
+                    </div>
+                    {#if imageSrc}
+                        <img class="image" src={imageSrc} alt="Preview" />
+                    {:else}
+                        <div class="placeholder">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" />
+                                <circle cx="8.5" cy="8.5" r="1.5" />
+                                <path d="M21 15l-5-5L5 21" />
+                            </svg>
+                            <p>No image open</p>
+                        </div>
+                    {/if}
 
-    <!-- ── Center: image viewer ── -->
-    <main class="viewer">
-        <div class="viewer-toolbar">
-            <ThemeSwitcher current={currentTheme} />
-        </div>
-        {#if imageSrc}
-            <img class="image" src={imageSrc} alt="Preview" />
-        {:else}
-            <div class="placeholder">
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                    <path d="M21 15l-5-5L5 21" />
-                </svg>
-                <p>No image open</p>
-            </div>
-        {/if}
-
-        <!-- ── File-gone toast ── -->
-        {#if goneMessage}
-            <div class="gone-toast" role="alert">
-                <svg class="gone-icon" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
-                </svg>
-                <span>
-                    <strong>{goneMessage}</strong> was moved or deleted externally.
-                </span>
-                <button class="gone-close" onclick={() => { goneMessage = null; }} aria-label="Dismiss">×</button>
-            </div>
-        {/if}
-    </main>
-
-    <!-- ── Right resize handle ── -->
-    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div
-        class="resize-handle"
-        onmousedown={startRightResize}
-        role="separator"
-        aria-label="Resize files panel"
-        aria-orientation="vertical"
-    ></div>
-
-    <!-- ── Right: files panel ── -->
-    <div class="panel-wrapper" style="width: {rightPanelWidth}px;">
-        <FilesPanel
-            bind:this={filesPanel}
-            onFileSelect={handleFileSelect}
-            onFileGone={handleFileGone}
-            onFolderOpen={(path) => saveAppState({ lastFolder: path })}
-            onBusy={(b) => (isLoading = b)}
-            disabled={showDialog}
-        />
-    </div>
+                    {#if goneMessage}
+                        <div class="gone-toast" role="alert">
+                            <svg class="gone-icon" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+                            </svg>
+                            <span>
+                                <strong>{goneMessage}</strong> was moved or deleted externally.
+                            </span>
+                            <button class="gone-close" onclick={() => {goneMessage = null;}} aria-label="Dismiss">×</button>
+                        </div>
+                    {/if}
+                </div>
+            {:else if windowId === 'hierarchy'}
+                <FilesPanel
+                    bind:this={filesPanel}
+                    onFileSelect={handleFileSelect}
+                    onFileGone={handleFileGone}
+                    onFolderOpen={(path) => saveAppState({lastFolder: path})}
+                    onBusy={(b) => (isLoading = b)}
+                    disabled={showDialog}
+                />
+            {/if}
+        {/snippet}
+    </DockLayout>
 </div>
 
-<!-- ── Loading overlay (dialog open) ── -->
+<!-- Loading overlay -->
 {#if isLoading}
     <div class="loading-overlay" aria-hidden="true">
         <div class="spinner"></div>
     </div>
 {/if}
 
-<!-- ── Unsaved changes dialog ── -->
+<!-- Unsaved changes dialog -->
 {#if showDialog}
     <UnsavedChangesDialog
         filename={currentBasename}
@@ -307,43 +297,9 @@
     @use '../styles/mixins' as *;
 
     .app {
-        @include flex(row, flex-start, stretch);
+        @include flex(column, flex-start, stretch);
         height: 100vh;
         overflow: hidden;
-
-        &.resizing {
-            user-select: none;
-            cursor: col-resize;
-        }
-    }
-
-    .panel-wrapper {
-        @include flex(column, flex-start, stretch, null, 0);
-        min-width: 0;
-        overflow: hidden;
-
-        :global(aside.panel) {
-            flex: 1;
-            min-height: 0;
-            width: 100%;
-        }
-    }
-
-    .resize-handle {
-        width: $handle-width;
-        flex-shrink: 0;
-        background: $border;
-        cursor: col-resize;
-        @include transition(background);
-        position: relative;
-
-        &::after {
-            content: '';
-            position: absolute;
-            inset: 0 -4px;
-        }
-
-        &:hover { background: $accent; }
     }
 
     .viewer {
@@ -351,6 +307,7 @@
         overflow: hidden;
         background: $bg-app;
         min-width: 0;
+        min-height: 0;
         position: relative;
     }
 
@@ -373,11 +330,11 @@
         gap: 12px;
         color: $text-muted;
 
-        svg { opacity: 0.4; }
-        p   { font-size: $fs-regular; }
+        svg {opacity: 0.4;}
+        p {font-size: $fs-regular;}
     }
 
-    // ── File-gone toast ──
+    // File-gone toast
     .gone-toast {
         position: absolute;
         bottom: 20px;
@@ -396,7 +353,7 @@
         box-shadow: 0 4px 20px var(--shadow);
         animation: toast-in 0.2s ease;
 
-        strong { color: #fde68a; }
+        strong {color: #fde68a;}
     }
 
     .gone-icon {
@@ -417,15 +374,15 @@
         flex-shrink: 0;
         @include transition(opacity);
 
-        &:hover { opacity: 1; }
+        &:hover {opacity: 1;}
     }
 
     @keyframes toast-in {
-        from { opacity: 0; transform: translateX(-50%) translateY(8px); }
-        to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        from {opacity: 0; transform: translateX(-50%) translateY(8px);}
+        to {opacity: 1; transform: translateX(-50%) translateY(0);}
     }
 
-    // ── Loading overlay ──
+    // Loading overlay
     .loading-overlay {
         position: fixed;
         inset: 0;
@@ -446,6 +403,6 @@
     }
 
     @keyframes spin {
-        to { transform: rotate(360deg); }
+        to {transform: rotate(360deg);}
     }
 </style>
