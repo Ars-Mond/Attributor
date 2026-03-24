@@ -12,6 +12,10 @@
     import DockToolbar from "$lib/docking/DockToolbar.svelte";
     import type {LayoutNode, WindowConfig} from "$lib/docking/dockTypes";
     import {getDefaultLayout, removePanel, addPanelToRoot, findPanel, serializeLayout, deserializeLayout} from "$lib/docking/dockStore";
+    import MenuBar from "$lib/menu/MenuBar.svelte";
+    import MenuTab from "$lib/menu/MenuTab.svelte";
+    import MenuItem from "$lib/menu/MenuItem.svelte";
+    import MenuSeparator from "$lib/menu/MenuSeparator.svelte";
 
     // --- Docking ---
     const windowConfigs: WindowConfig[] = [
@@ -216,6 +220,30 @@
 </script>
 
 <div class="app">
+    <MenuBar>
+        <MenuTab label="File">
+            <MenuItem label="Open directory..." onClick={() => filesPanel?.openFolderDialog()} />
+            <MenuSeparator />
+            <MenuItem label="Settings" onClick={() => {}} />
+        </MenuTab>
+        <MenuTab label="Windows">
+            <MenuItem
+                label="Show Control"
+                onClick={() => handleShowWindow('control')}
+                disabled={!hiddenWindows.includes('control')}
+            />
+            <MenuItem
+                label="Show Hierarchy"
+                onClick={() => handleShowWindow('hierarchy')}
+                disabled={!hiddenWindows.includes('hierarchy')}
+            />
+        </MenuTab>
+        <MenuTab label="Help">
+            <MenuItem label="Help?" onClick={() => {}} />
+            <MenuItem label="About" onClick={() => {}} />
+        </MenuTab>
+    </MenuBar>
+
     <DockToolbar
         {hiddenWindows}
         {windowConfigs}

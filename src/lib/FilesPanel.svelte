@@ -113,6 +113,11 @@
         }
     }
 
+    /** Open a folder using the OS dialog. */
+    export async function openFolderDialog() {
+        await openFolder();
+    }
+
     /** Open a folder by path without a dialog (used to restore last session). */
     export async function openFolderByPath(path: string): Promise<boolean> {
         try {
