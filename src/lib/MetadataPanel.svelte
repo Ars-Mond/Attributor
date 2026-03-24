@@ -137,6 +137,13 @@
         return () => clearTimeout(timer);
     });
 
+    // ── Field stats ────────────────────────────────────────────────────────
+
+    const titleWords = $derived(title.trim() ? title.split(' ').length : 0);
+    const titleChars = $derived(title.length);
+    const descWords = $derived(description.trim() ? description.split(' ').length : 0);
+    const descChars = $derived(description.length);
+
     // ── File status ────────────────────────────────────────────────────────
 
     const fileStatus = $derived(
@@ -515,7 +522,10 @@
             </label>
 
             <label class="field">
-                <span class="field-label">Title <span class="required">*</span></span>
+                <div class="field-header">
+                    <span class="field-label">Title <span class="required">*</span></span>
+                    <span class="field-stats">{titleWords}w : {titleChars}l</span>
+                </div>
                 <input
                     class="input"
                     class:input--invalid={saveAttempted && !title.trim()}
@@ -526,7 +536,10 @@
             </label>
 
             <label class="field">
-                <span class="field-label">Description <span class="required">*</span></span>
+                <div class="field-header">
+                    <span class="field-label">Description <span class="required">*</span></span>
+                    <span class="field-stats">{descWords}w : {descChars}l</span>
+                </div>
                 <textarea
                     bind:this={descriptionEl}
                     class="input textarea"
@@ -577,6 +590,7 @@
                         </svg>
                         Paste
                     </button>
+                    <span class="kw-count">{keywords.length}</span>
                 </div>
                 {#if keywords.length > 0}
                     <div
@@ -916,5 +930,24 @@
     .save-btn {
         margin-left: auto;
         &:disabled { opacity: 0.4; cursor: not-allowed; }
+    }
+
+    // ── Field header (label + stats row) ──
+    .field-header {
+        @include flex(row, space-between, baseline);
+    }
+
+    .field-stats {
+        font-size: $fs-footnote2;
+        color: $text-muted;
+        font-weight: 400;
+        flex-shrink: 0;
+    }
+
+    // ── Keyword count ──
+    .kw-count {
+        margin-left: auto;
+        font-size: $fs-footnote1;
+        color: $text-muted;
     }
 </style>
