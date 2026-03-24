@@ -10,7 +10,8 @@
     import DockLayout from "$lib/docking/DockLayout.svelte";
     import DockToolbar from "$lib/docking/DockToolbar.svelte";
     import type {LayoutNode, WindowConfig} from "$lib/docking/dockTypes";
-    import {getDefaultLayout, removePanel, addPanelToRoot, findPanel, serializeLayout, deserializeLayout} from "$lib/docking/dockStore";
+    import {getDefaultLayout, removePanel, addPanelToRoot, findPanel, findSavePoint, insertPanel, serializeLayout, deserializeLayout} from "$lib/docking/dockStore";
+    import type {PanelSavePoint} from "$lib/docking/dockStore";
     import MenuBar from "$lib/menu/MenuBar.svelte";
     import MenuTab from "$lib/menu/MenuTab.svelte";
     import MenuItem from "$lib/menu/MenuItem.svelte";
@@ -25,6 +26,8 @@
 
     let layout = $state<LayoutNode>(getDefaultLayout());
     let hiddenWindows = $state<string[]>([]);
+    // Saved positions for closed panels — plain variable, no reactivity needed
+    let savedPositions: Record<string, PanelSavePoint> = {};
 
     function handleLayoutChange(newLayout: LayoutNode) {
         layout = newLayout;
@@ -32,6 +35,10 @@
     }
 
     function handleCloseWindow(windowId: string) {
+        // Save position before removal so we can restore it later
+        const sp = findSavePoint(layout, windowId);
+        if (sp) savedPositions[windowId] = sp;
+
         const result = removePanel(layout, windowId);
         if (result) {
             layout = result;
@@ -41,7 +48,14 @@
     }
 
     function handleShowWindow(windowId: string) {
-        layout = addPanelToRoot(layout, windowId);
+        const sp = savedPositions[windowId];
+        if (sp && findPanel(layout, sp.neighborId)) {
+            // Restore to saved position with original size
+            layout = insertPanel(layout, sp.neighborId, windowId, sp.zone, sp.size);
+            delete savedPositions[windowId];
+        } else {
+            layout = addPanelToRoot(layout, windowId);
+        }
         hiddenWindows = hiddenWindows.filter(id => id !== windowId);
         persistDock();
     }
@@ -252,11 +266,11 @@
         </MenuTab>
     </MenuBar>
 
-    <DockToolbar
-        {hiddenWindows}
-        {windowConfigs}
-        onShowWindow={handleShowWindow}
-    />
+<!--    <DockToolbar-->
+<!--        {hiddenWindows}-->
+<!--        {windowConfigs}-->
+<!--        onShowWindow={handleShowWindow}-->
+<!--    />-->
 
     <DockLayout
         bind:layout

@@ -1,5 +1,12 @@
 import type {LayoutNode, SplitNode, SplitChild, PanelNode, DropZone, SplitDirection} from './dockTypes';
 
+/** Saved position of a panel before it was hidden, used to restore it to the same spot. */
+export interface PanelSavePoint {
+    neighborId: string; // adjacent panel to insert next to
+    zone: DropZone;     // which side of the neighbor to reinsert on
+    size: number;       // original size fraction in the parent split
+}
+
 export function getDefaultLayout(): LayoutNode {
     return {
         type: 'split',
@@ -77,14 +84,16 @@ function zoneBefore(zone: DropZone): boolean {
  * Insert a panel next to a target panel.
  * If the target is inside a split with matching direction, inserts flat into the same array.
  * Otherwise creates a new nested split.
+ * savedSize: if provided, the inserted panel takes exactly this fraction instead of 50/50.
  */
 export function insertPanel(
     tree: LayoutNode,
     targetId: string,
     draggedId: string,
     zone: DropZone,
+    savedSize?: number,
 ): LayoutNode {
-    return insertPanelInner(tree, targetId, draggedId, zone, null);
+    return insertPanelInner(tree, targetId, draggedId, zone, null, savedSize);
 }
 
 function insertPanelInner(
@@ -93,6 +102,7 @@ function insertPanelInner(
     draggedId: string,
     zone: DropZone,
     parentDirection: SplitDirection | null,
+    savedSize?: number,
 ): LayoutNode {
     if (tree.type === 'panel') {
         if (tree.windowId !== targetId) return tree;
@@ -120,11 +130,14 @@ function insertPanelInner(
             c => c.node.type === 'panel' && c.node.windowId === targetId
         );
         if (targetIdx !== -1) {
-            // Flatten: insert into this array, splitting the target's size
+            // Flatten: insert into this array
             const targetChild = tree.children[targetIdx];
-            const half = targetChild.size / 2;
-            const dragged: SplitChild = {node: {type: 'panel', windowId: draggedId}, size: half};
-            const resized: SplitChild = {node: targetChild.node, size: half};
+            // Use savedSize if provided (restoring to original position), otherwise split 50/50
+            const draggedSz = savedSize !== undefined
+                ? Math.min(savedSize, targetChild.size * 0.85)
+                : targetChild.size / 2;
+            const dragged: SplitChild = {node: {type: 'panel', windowId: draggedId}, size: draggedSz};
+            const resized: SplitChild = {node: targetChild.node, size: targetChild.size - draggedSz};
 
             const newChildren = [...tree.children];
             if (zoneBefore(zone)) {
@@ -138,21 +151,67 @@ function insertPanelInner(
 
     // Recurse into children
     const newChildren = tree.children.map(child => {
-        const result = insertPanelInner(child.node, targetId, draggedId, zone, tree.direction);
+        const result = insertPanelInner(child.node, targetId, draggedId, zone, tree.direction, savedSize);
         if (result !== child.node) {
-            // If the result is a split with same direction as us, flatten it
-            if (result.type === 'split' && result.direction === tree.direction) {
-                // This case is when a panel was replaced by a split of same direction —
-                // but this only happens when the panel was NOT a direct child (handled above).
-                // For nested panels that created a new split with matching parent direction,
-                // we keep it nested to preserve the tree structure correctly.
-            }
             return {node: result, size: child.size};
         }
         return child;
     });
 
     return {type: 'split', direction: tree.direction, children: newChildren};
+}
+
+/**
+ * Find the save point for a panel before it is removed.
+ * Returns the nearest panel neighbor and the zone/size needed to restore the panel there.
+ */
+export function findSavePoint(tree: LayoutNode, windowId: string): PanelSavePoint | null {
+    if (tree.type === 'panel') return null;
+
+    // Check if this split directly contains the target panel
+    const idx = tree.children.findIndex(
+        c => c.node.type === 'panel' && c.node.windowId === windowId
+    );
+    if (idx !== -1) {
+        const size = tree.children[idx].size;
+        const dir = tree.direction;
+
+        // Prefer previous sibling
+        if (idx > 0) {
+            const neighborId = getFirstPanelId(tree.children[idx - 1].node);
+            if (neighborId) {
+                // Panel was to the right/bottom of the neighbor
+                const zone: DropZone = dir === 'horizontal' ? 'right' : 'bottom';
+                return {neighborId, zone, size};
+            }
+        }
+        // Fall back to next sibling
+        if (idx < tree.children.length - 1) {
+            const neighborId = getFirstPanelId(tree.children[idx + 1].node);
+            if (neighborId) {
+                // Panel was to the left/top of the neighbor
+                const zone: DropZone = dir === 'horizontal' ? 'left' : 'top';
+                return {neighborId, zone, size};
+            }
+        }
+    }
+
+    // Recurse into children
+    for (const child of tree.children) {
+        const result = findSavePoint(child.node, windowId);
+        if (result) return result;
+    }
+    return null;
+}
+
+/** Return the windowId of the first (depth-first) PanelNode in a subtree. */
+function getFirstPanelId(node: LayoutNode): string | null {
+    if (node.type === 'panel') return node.windowId;
+    for (const child of node.children) {
+        const id = getFirstPanelId(child.node);
+        if (id) return id;
+    }
+    return null;
 }
 
 /** Add a panel back to the layout. If root is horizontal split, append; otherwise wrap. */
