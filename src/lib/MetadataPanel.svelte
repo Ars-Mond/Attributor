@@ -158,6 +158,7 @@
     let batchCatMixed = $state(false);
     let batchKeywordStates = $state<{word: string; state: 'all' | 'some'}[]>([]);
     let batchOriginalUnion: Set<string> = new Set();
+    let kwFileMap = $state<Map<string, string[]>>(new Map());
 
     let applyTitle = $state(false);
     let applyDescription = $state(false);
@@ -220,7 +221,7 @@
         batchCategories = batchCatMixed ? '' : valid[0].categories;
         applyCategories = !batchCatMixed && batchCategories !== '';
 
-        // Keywords: union with per-word state
+        // Keywords: union with per-word state and per-word file list
         const kwSets = valid.map(r => new Set(r.keywords));
         const union = new Set(valid.flatMap(r => r.keywords));
         batchOriginalUnion = union;
@@ -228,6 +229,20 @@
             word,
             state: kwSets.every(s => s.has(word)) ? 'all' : 'some',
         }));
+
+        // Map keyword → basenames of files that contain it
+        const fileMap = new Map<string, string[]>();
+        for (let i = 0; i < paths.length; i++) {
+            const r = results[i];
+            if (!r) continue;
+            const base = paths[i].replace(/\\/g, '/').split('/').pop() ?? paths[i];
+            for (const kw of r.keywords) {
+                const arr = fileMap.get(kw);
+                if (arr) arr.push(base);
+                else fileMap.set(kw, [base]);
+            }
+        }
+        kwFileMap = fileMap;
 
         batchLoading = false;
     }
@@ -716,7 +731,7 @@
                                     class:chip--some={kws.state === 'some'}
                                     onclick={() => handleBatchChipClick(kws.word, kws.state)}
                                     role="listitem"
-                                    title={kws.state === 'some' ? 'Click to add to all files' : 'Click to remove from all files'}
+                                    title={(kwFileMap.get(kws.word) ?? []).join('\n')}
                                 >
                                     {kws.word}
                                 </span>
