@@ -1,16 +1,13 @@
 <script lang="ts">
-    import ThemeSwitcher from '$lib/ThemeSwitcher.svelte';
     import type {WindowConfig} from './dockTypes';
 
     let {
         hiddenWindows = [],
         windowConfigs = [],
-        currentTheme = 'dark',
         onShowWindow,
     }: {
         hiddenWindows?: string[];
         windowConfigs?: WindowConfig[];
-        currentTheme?: string;
         onShowWindow?: (id: string) => void;
     } = $props();
 
@@ -21,16 +18,11 @@
 
 {#if hiddenConfigs.length > 0}
     <div class="dock-toolbar">
-        <div class="dock-toolbar-left">
-            {#each hiddenConfigs as cfg}
-                <button class="dock-toolbar-btn" onclick={() => onShowWindow?.(cfg.id)}>
-                    Show {cfg.title}
-                </button>
-            {/each}
-        </div>
-        <div class="dock-toolbar-right">
-            <ThemeSwitcher current={currentTheme} />
-        </div>
+        {#each hiddenConfigs as cfg}
+            <button class="dock-toolbar-btn" onclick={() => onShowWindow?.(cfg.id)}>
+                Show {cfg.title}
+            </button>
+        {/each}
     </div>
 {/if}
 
@@ -38,21 +30,14 @@
     @use '../../styles/mixins' as *;
 
     .dock-toolbar {
-        @include flex(row, space-between, center);
+        @include flex(row, flex-start, center);
         height: 32px;
         min-height: 32px;
         padding: 0 8px;
+        gap: 6px;
         background: $bg-panel;
         border-bottom: 1px solid $border;
-    }
-
-    .dock-toolbar-left {
-        @include flex(row, flex-start, center);
-        gap: 6px;
-    }
-
-    .dock-toolbar-right {
-        @include flex(row, flex-end, center);
+        flex-shrink: 0;
     }
 
     .dock-toolbar-btn {

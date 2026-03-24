@@ -5,9 +5,8 @@
     import MetadataPanel from "$lib/MetadataPanel.svelte";
     import FilesPanel from "$lib/FilesPanel.svelte";
     import UnsavedChangesDialog from "$lib/UnsavedChangesDialog.svelte";
-    import ThemeSwitcher from "$lib/ThemeSwitcher.svelte";
     import {loadAppState, saveAppState} from "$lib/store";
-    import {applyTheme, DEFAULT_THEME} from "$lib/themes";
+    import {themes, applyTheme, DEFAULT_THEME} from "$lib/themes";
     import DockLayout from "$lib/docking/DockLayout.svelte";
     import DockToolbar from "$lib/docking/DockToolbar.svelte";
     import type {LayoutNode, WindowConfig} from "$lib/docking/dockTypes";
@@ -224,6 +223,15 @@
         <MenuTab label="File">
             <MenuItem label="Open directory..." onClick={() => filesPanel?.openFolderDialog()} />
             <MenuSeparator />
+            <MenuTab label="Theme">
+                {#each themes as t}
+                    <MenuItem
+                        label={t.name}
+                        onClick={() => { currentTheme = t.id; applyTheme(t.id); saveAppState({theme: t.id}); }}
+                    />
+                {/each}
+            </MenuTab>
+            <MenuSeparator />
             <MenuItem label="Settings" onClick={() => {}} />
         </MenuTab>
         <MenuTab label="Windows">
@@ -247,7 +255,6 @@
     <DockToolbar
         {hiddenWindows}
         {windowConfigs}
-        {currentTheme}
         onShowWindow={handleShowWindow}
     />
 
@@ -262,9 +269,6 @@
                 <MetadataPanel bind:this={metaPanel} bind:isDirty onPathChange={handlePathChange} />
             {:else if windowId === 'view'}
                 <div class="viewer">
-                    <div class="viewer-toolbar">
-                        <ThemeSwitcher current={currentTheme} />
-                    </div>
                     {#if imageSrc}
                         <img class="image" src={imageSrc} alt="Preview" />
                     {:else}
@@ -337,13 +341,6 @@
         min-width: 0;
         min-height: 0;
         position: relative;
-    }
-
-    .viewer-toolbar {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        z-index: 10;
     }
 
     .image {
