@@ -71,9 +71,9 @@ $fs-footnote2:   11px;
 
 // Custom thin scrollbar
 @mixin scrollbar($width: 6px, $thumb: var(--scrollbar-thumb)) {
-    &::-webkit-scrollbar       { width: $width; }
-    &::-webkit-scrollbar-track { background: transparent; }
-    &::-webkit-scrollbar-thumb { background: $thumb; border-radius: $width; }
+    &::-webkit-scrollbar        { width: $width; height: $width; }
+    &::-webkit-scrollbar-track  { background: transparent; }
+    &::-webkit-scrollbar-thumb  { background: $thumb; border-radius: $width; }
 }
 
 // Strip browser button defaults

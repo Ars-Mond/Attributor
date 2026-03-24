@@ -1,19 +1,24 @@
 <script lang="ts">
-    import { untrack } from "svelte";
+    import {untrack} from "svelte";
+    import {convertFileSrc} from "@tauri-apps/api/core";
     import FileTree from "./FileTree.svelte";
-    import type { FileNode } from "./types";
+    import type {FileNode} from "./types";
 
     let {
         node,
         depth = 0,
         selectedPaths,
         activePath,
+        viewMode = 'table' as 'table' | 'content',
+        layoutDir = 'vertical' as 'vertical' | 'horizontal',
         onSelect,
     }: {
         node: FileNode;
         depth?: number;
         selectedPaths: Set<string>;
         activePath: string;
+        viewMode?: 'table' | 'content';
+        layoutDir?: 'vertical' | 'horizontal';
         onSelect: (path: string, e: MouseEvent) => void;
     } = $props();
 
@@ -25,20 +30,25 @@
         !node.is_dir &&
         /\.(jpg|jpeg|png|webp)$/i.test(node.name)
     );
+
+    const showThumb = $derived(viewMode === 'content' && isImage);
 </script>
 
-<div class="tree-node">
+<div class="tree-node" class:tree-node--h={layoutDir === 'horizontal'}>
     {#if node.is_dir}
         <!-- Folder row -->
         <button
             class="tree-item"
+            class:tree-item--content={viewMode === 'content'}
             style="padding-left: {depth * 14 + 8}px"
             onclick={() => (expanded = !expanded)}
         >
-            <svg class="chevron" class:open={expanded} viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+                class:open={expanded}
+            >
                 <path d="M6 4l4 4-4 4"/>
             </svg>
-            <svg class="icon" viewBox="0 0 16 16" fill="currentColor">
+            <svg class="icon" class:icon--content={viewMode === 'content'} viewBox="0 0 16 16" fill="currentColor">
                 <path d="M1.5 3A1.5 1.5 0 0 0 0 4.5v8A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 14.5 4H7.621a1.5 1.5 0 0 1-1.06-.44L5.5 2.5A1.5 1.5 0 0 0 4.379 2H1.5A1.5 1.5 0 0 0 0 3.5v.5h1.5V3z"/>
             </svg>
             <span class="name">{node.name}</span>
@@ -51,6 +61,8 @@
                     depth={depth + 1}
                     {selectedPaths}
                     {activePath}
+                    {viewMode}
+                    {layoutDir}
                     {onSelect}
                 />
             {/each}
@@ -63,11 +75,14 @@
             class:selected={selectedPaths.has(node.path)}
             class:active={activePath === node.path}
             class:image={isImage}
+            class:tree-item--content={viewMode === 'content'}
             style="padding-left: {depth * 14 + 8}px"
             data-path={node.path}
             onclick={(e) => onSelect(node.path, e)}
         >
-            {#if isImage}
+            {#if showThumb}
+                <img class="thumb" src={convertFileSrc(node.path)} alt="" loading="lazy" />
+            {:else if isImage}
                 <!-- Image file icon -->
                 <svg class="icon image-icon" viewBox="0 0 16 16" fill="currentColor">
                     <path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
@@ -87,7 +102,15 @@
 <style lang="scss">
     @use '../styles/mixins' as *;
 
-    .tree-node { width: 100%; }
+    .tree-node {
+        width: 100%;
+
+        // In horizontal layout: each node is a self-sized column
+        &--h {
+            width: auto;
+            flex-shrink: 0;
+        }
+    }
 
     .tree-item {
         @include btn-reset;
@@ -118,6 +141,22 @@
         &.active {
             box-shadow: inset 2px 0 0 $accent;
         }
+
+        // Content mode: taller rows to accommodate thumbnail
+        &--content {
+            padding-top: 4px;
+            padding-bottom: 4px;
+            min-height: 72px;
+        }
+    }
+
+    .thumb {
+        width: 64px;
+        height: 64px;
+        object-fit: cover;
+        border-radius: $radius-sm;
+        flex-shrink: 0;
+        display: block;
     }
 
     .chevron {
@@ -136,6 +175,12 @@
         flex-shrink: 0;
         color: $text-muted;
         opacity: 0.7;
+
+        &--content {
+            width: 64px;
+            height: 64px;
+            opacity: 0.9;
+        }
     }
 
     .image-icon { color: $accent; opacity: 0.8; }

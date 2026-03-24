@@ -1,9 +1,13 @@
 <script lang="ts">
     import {invoke} from "@tauri-apps/api/core";
+    import {convertFileSrc} from "@tauri-apps/api/core";
     import {listen} from "@tauri-apps/api/event";
     import {onMount, onDestroy} from "svelte";
     import FileTree from "./FileTree.svelte";
     import type {FileNode} from "./types";
+
+    type ViewMode = 'table' | 'content' | 'icons';
+    type LayoutDir = 'vertical' | 'horizontal';
 
     let {
         onFileSelect,
@@ -27,6 +31,26 @@
     let activePath = $state('');
     let anchorPath = ''; // anchor for shift-click range (plain var, no reactivity needed)
     let contentEl = $state<HTMLElement | null>(null);
+
+    let viewMode = $state<ViewMode>('table');
+    let layoutDir = $state<LayoutDir>('vertical');
+
+    function isImageFile(name: string): boolean {
+        return /\.(jpg|jpeg|png|webp)$/i.test(name);
+    }
+
+    // Horizontal wheel scroll for content/icons modes
+    $effect(() => {
+        if (!contentEl || viewMode === 'table' || layoutDir !== 'horizontal') return;
+
+        function onWheel(e: WheelEvent) {
+            e.preventDefault();
+            contentEl!.scrollLeft += e.deltaY;
+        }
+
+        contentEl.addEventListener('wheel', onWheel, {passive: false});
+        return () => contentEl!.removeEventListener('wheel', onWheel);
+    });
 
     // ── Folder watching ──────────────────────────────────────────────────
 
@@ -134,7 +158,7 @@
             doSingleSelect(path);
         }
 
-        items[nextIdx].scrollIntoView({block: 'nearest'});
+        items[nextIdx].scrollIntoView({block: 'nearest', inline: 'nearest'});
     }
 
     onMount(async () => {
@@ -220,20 +244,123 @@
 <aside class="panel panel--files">
     <div class="files-header">
         <span class="files-title">Files</span>
+        <div class="view-controls">
+            <!-- View mode buttons -->
+            <div class="btn-group">
+                <button
+                    class="view-btn"
+                    class:active={viewMode === 'table'}
+                    onclick={() => viewMode = 'table'}
+                    title="Table"
+                >
+                    <!-- Table: three horizontal lines -->
+                    <svg viewBox="0 0 14 14" fill="currentColor">
+                        <rect x="1" y="2" width="12" height="2" rx="0.5"/>
+                        <rect x="1" y="6" width="12" height="2" rx="0.5"/>
+                        <rect x="1" y="10" width="12" height="2" rx="0.5"/>
+                    </svg>
+                </button>
+                <button
+                    class="view-btn"
+                    class:active={viewMode === 'content'}
+                    onclick={() => viewMode = 'content'}
+                    title="Content"
+                >
+                    <!-- Content: thumbnail + text row, twice -->
+                    <svg viewBox="0 0 14 14" fill="currentColor">
+                        <rect x="1" y="1" width="4" height="5" rx="0.5"/>
+                        <rect x="6" y="2" width="7" height="1.5" rx="0.5"/>
+                        <rect x="6" y="4.5" width="5" height="1.5" rx="0.5"/>
+                        <rect x="1" y="8" width="4" height="5" rx="0.5"/>
+                        <rect x="6" y="9" width="7" height="1.5" rx="0.5"/>
+                        <rect x="6" y="11.5" width="5" height="1.5" rx="0.5"/>
+                    </svg>
+                </button>
+                <button
+                    class="view-btn"
+                    class:active={viewMode === 'icons'}
+                    onclick={() => viewMode = 'icons'}
+                    title="Icons"
+                >
+                    <!-- Icons: 2x2 grid -->
+                    <svg viewBox="0 0 14 14" fill="currentColor">
+                        <rect x="1" y="1" width="5.5" height="5.5" rx="0.5"/>
+                        <rect x="7.5" y="1" width="5.5" height="5.5" rx="0.5"/>
+                        <rect x="1" y="7.5" width="5.5" height="5.5" rx="0.5"/>
+                        <rect x="7.5" y="7.5" width="5.5" height="5.5" rx="0.5"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Layout direction buttons (only for content and icons) -->
+            {#if viewMode !== 'table'}
+                <div class="btn-group">
+                    <button
+                        class="view-btn"
+                        class:active={layoutDir === 'vertical'}
+                        onclick={() => layoutDir = 'vertical'}
+                        title="Vertical"
+                    >
+                        <!-- Vertical: three horizontal bars (stack top-down) -->
+                        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                            <line x1="2" y1="3" x2="12" y2="3"/>
+                            <line x1="2" y1="7" x2="12" y2="7"/>
+                            <line x1="2" y1="11" x2="12" y2="11"/>
+                        </svg>
+                    </button>
+                    <button
+                        class="view-btn"
+                        class:active={layoutDir === 'horizontal'}
+                        onclick={() => layoutDir = 'horizontal'}
+                        title="Horizontal"
+                    >
+                        <!-- Horizontal: three vertical bars (stack left-right) -->
+                        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                            <line x1="3" y1="2" x2="3" y2="12"/>
+                            <line x1="7" y1="2" x2="7" y2="12"/>
+                            <line x1="11" y1="2" x2="11" y2="12"/>
+                        </svg>
+                    </button>
+                </div>
+            {/if}
+        </div>
     </div>
 
-    <div class="panel-content files-content" bind:this={contentEl}>
+    <div
+        class="panel-content files-content"
+        class:files-content--icons={viewMode === 'icons'}
+        class:files-content--horizontal={viewMode !== 'table' && layoutDir === 'horizontal'}
+        bind:this={contentEl}
+    >
         {#if fileTree}
-            <!-- Skip root node, show its children directly -->
-            {#each fileTree.children as child (child.path)}
-                <FileTree
-                    node={child}
-                    depth={0}
-                    {selectedPaths}
-                    {activePath}
-                    onSelect={handleTreeSelect}
-                />
-            {/each}
+            {#if viewMode === 'icons'}
+                <!-- Flat list of image files from the root level only -->
+                {#each fileTree.children.filter(c => !c.is_dir && isImageFile(c.name)) as node (node.path)}
+                    <button
+                        class="icon-item"
+                        class:selected={selectedPaths.has(node.path)}
+                        class:active={activePath === node.path}
+                        data-path={node.path}
+                        onclick={(e) => handleTreeSelect(node.path, e)}
+                    >
+                        <img class="icon-thumb" src={convertFileSrc(node.path)} alt={node.name} />
+                        <span class="icon-name">{node.name}</span>
+                    </button>
+                {/each}
+            {:else}
+                <!-- Table / content mode: recursive tree -->
+                {#each fileTree.children as child (child.path)}
+                    <FileTree
+                        node={child}
+                        depth={0}
+                        {selectedPaths}
+                        {activePath}
+                        {viewMode}
+                        {layoutDir}
+                        onSelect={handleTreeSelect}
+                    />
+                {/each}
+            {/if}
         {:else}
             <div class="files-empty">
                 <svg width="36" height="36" viewBox="0 0 16 16" fill="currentColor">
@@ -254,10 +381,11 @@
     }
 
     .files-header {
-        @include flex(row, flex-start, center);
-        padding: 10px 12px;
+        @include flex(row, space-between, center);
+        padding: 6px 8px 6px 12px;
         border-bottom: 1px solid $border;
         flex-shrink: 0;
+        gap: 8px;
     }
 
     .files-title {
@@ -266,13 +394,116 @@
         letter-spacing: 0.04em;
         color: $text-secondary;
         text-transform: uppercase;
+        flex-shrink: 0;
     }
 
+    // ── View / layout controls ──
+
+    .view-controls {
+        @include flex(row, flex-end, center);
+        gap: 4px;
+    }
+
+    .btn-group {
+        @include flex(row, flex-start, center);
+        border: 1px solid $border;
+        border-radius: $radius-sm;
+        overflow: hidden;
+    }
+
+    .view-btn {
+        @include btn-reset;
+        @include flex(row, center, center);
+        @include transition(background, color);
+        width: 26px;
+        height: 24px;
+        color: $text-muted;
+
+        svg {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+        }
+
+        & + & {
+            border-left: 1px solid $border;
+        }
+
+        &:hover { background: var(--hover-bg); color: $text; }
+        &.active { background: $chip-bg; color: $chip-text; }
+    }
+
+    // ── Content area ──
 
     .files-content {
         padding: 6px 4px;
         gap: 1px;
+
+        // Icons mode: wrapping flex grid
+        &--icons {
+            @include flex(row, flex-start, flex-start);
+            flex-wrap: wrap;
+            align-content: flex-start;
+            padding: 8px;
+            gap: 8px;
+        }
+
+        // Horizontal layout: single row, scroll sideways
+        &--horizontal {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto;
+            overflow-y: hidden;
+            align-items: flex-start;
+            padding: 6px;
+            gap: 2px;
+            @include scrollbar;
+        }
     }
+
+    // ── Icon items ──
+
+    .icon-item {
+        @include btn-reset;
+        @include flex(column, flex-start, center);
+        @include transition(background, color);
+        gap: 6px;
+        padding: 6px;
+        border-radius: $radius-sm;
+        //min-width: 300px;
+        max-width: 300px;
+        color: $text-secondary;
+
+        &:hover { background: var(--hover-bg); color: $text; }
+
+        &.selected {
+            background: $chip-bg;
+            color: $chip-text;
+        }
+
+        &.active {
+            box-shadow: inset 2px 0 0 $accent;
+        }
+    }
+
+    .icon-thumb {
+        max-width: 300px;
+        max-height: 300px;
+        object-fit: contain;
+        border-radius: $radius-sm;
+        display: block;
+    }
+
+    .icon-name {
+        font-size: $fs-small;
+        text-align: center;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        width: 100%;
+    }
+
+    // ── Empty state ──
 
     .files-empty {
         @include flex(column, center, center);
