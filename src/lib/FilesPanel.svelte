@@ -144,11 +144,6 @@
 <aside class="panel panel--files">
     <div class="files-header">
         <span class="files-title">Files</span>
-        <button class="btn-ghost btn--icon" onclick={openFolder} title="Open folder">
-            <svg viewBox="0 0 16 16" fill="currentColor">
-                <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.56 2.311 1.184C7.985 3.648 8.48 4 9 4h4.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9z"/>
-            </svg>
-        </button>
     </div>
 
     <div class="panel-content files-content" bind:this={contentEl}>
@@ -182,7 +177,7 @@
     }
 
     .files-header {
-        @include flex(row, space-between, center);
+        @include flex(row, flex-start, center);
         padding: 10px 12px;
         border-bottom: 1px solid $border;
         flex-shrink: 0;
@@ -196,17 +191,6 @@
         text-transform: uppercase;
     }
 
-    .btn--icon {
-        @include flex(row, center, center);
-        padding: 4px;
-        border-radius: $radius-sm;
-
-        svg {
-            width: 14px;
-            height: 14px;
-            display: block;
-        }
-    }
 
     .files-content {
         padding: 6px 4px;
