@@ -6,13 +6,15 @@
     let {
         node,
         depth = 0,
-        selectedPath,
+        selectedPaths,
+        activePath,
         onSelect,
     }: {
         node: FileNode;
         depth?: number;
-        selectedPath: string;
-        onSelect: (path: string) => void;
+        selectedPaths: Set<string>;
+        activePath: string;
+        onSelect: (path: string, e: MouseEvent) => void;
     } = $props();
 
     // untrack: depth is a static prop per node instance; we only need its
@@ -47,7 +49,8 @@
                 <FileTree
                     node={child}
                     depth={depth + 1}
-                    {selectedPath}
+                    {selectedPaths}
+                    {activePath}
                     {onSelect}
                 />
             {/each}
@@ -57,11 +60,12 @@
         <!-- File row -->
         <button
             class="tree-item file"
-            class:selected={selectedPath === node.path}
+            class:selected={selectedPaths.has(node.path)}
+            class:active={activePath === node.path}
             class:image={isImage}
             style="padding-left: {depth * 14 + 8}px"
             data-path={node.path}
-            onclick={() => onSelect(node.path)}
+            onclick={(e) => onSelect(node.path, e)}
         >
             {#if isImage}
                 <!-- Image file icon -->
@@ -109,6 +113,10 @@
         &.selected {
             background: $chip-bg;
             color: $chip-text;
+        }
+
+        &.active {
+            box-shadow: inset 2px 0 0 $accent;
         }
     }
 

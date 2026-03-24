@@ -10,18 +10,22 @@
         onFileGone,
         onFolderOpen,
         onBusy,
+        onSelectionChange,
         disabled = false,
     }: {
         onFileSelect: (path: string) => void;
         onFileGone?: () => void;
         onFolderOpen?: (path: string) => void;
         onBusy?: (busy: boolean) => void;
+        onSelectionChange?: (paths: string[]) => void;
         disabled?: boolean;
     } = $props();
 
     // --- State ---
     let fileTree = $state<FileNode | null>(null);
-    let selectedFilePath = $state("");
+    let selectedPaths = $state<Set<string>>(new Set());
+    let activePath = $state('');
+    let anchorPath = ''; // anchor for shift-click range (plain var, no reactivity needed)
     let contentEl = $state<HTMLElement | null>(null);
 
     // ── Folder watching ──────────────────────────────────────────────────
@@ -32,14 +36,73 @@
     /** Collect all non-directory paths from the tree recursively. */
     function flatFilePaths(node: FileNode): Set<string> {
         const set = new Set<string>();
-
         function walk(n: FileNode) {
             if (!n.is_dir) set.add(n.path);
             for (const c of n.children) walk(c);
         }
-
         walk(node);
         return set;
+    }
+
+    // ── Selection helpers ─────────────────────────────────────────────────
+
+    function getVisibleFilePaths(): string[] {
+        if (!contentEl) return [];
+        return [...contentEl.querySelectorAll<HTMLElement>('[data-path]')]
+            .map(el => el.dataset.path!);
+    }
+
+    function doSingleSelect(path: string) {
+        selectedPaths = new Set([path]);
+        activePath = path;
+        anchorPath = path;
+        onFileSelect(path);
+        onSelectionChange?.([path]);
+    }
+
+    function doRangeSelect(targetPath: string) {
+        const items = getVisibleFilePaths();
+        const anchorIdx = items.indexOf(anchorPath);
+        const targetIdx = items.indexOf(targetPath);
+        if (anchorIdx === -1 || targetIdx === -1) {
+            doSingleSelect(targetPath);
+            return;
+        }
+        const start = Math.min(anchorIdx, targetIdx);
+        const end = Math.max(anchorIdx, targetIdx);
+        const range = items.slice(start, end + 1);
+        selectedPaths = new Set(range);
+        activePath = targetPath;
+        // don't update anchorPath for range selections
+        onSelectionChange?.(range);
+    }
+
+    function doToggleSelect(path: string) {
+        const next = new Set(selectedPaths);
+        if (next.has(path)) {
+            next.delete(path);
+        } else {
+            next.add(path);
+        }
+        activePath = path;
+        anchorPath = path;
+        selectedPaths = next;
+        const arr = [...next];
+        onSelectionChange?.(arr);
+        if (arr.length === 1) {
+            onFileSelect(arr[0]);
+        }
+    }
+
+    function handleTreeSelect(path: string, e: MouseEvent) {
+        if (disabled) return;
+        if (e.shiftKey) {
+            doRangeSelect(path);
+        } else if (e.ctrlKey || e.metaKey) {
+            doToggleSelect(path);
+        } else {
+            doSingleSelect(path);
+        }
     }
 
     function handleKeyDown(e: KeyboardEvent) {
@@ -56,22 +119,28 @@
         const items = [...contentEl.querySelectorAll<HTMLElement>('[data-path]')];
         if (items.length === 0) return;
 
-        const currentIdx = items.findIndex(el => el.dataset.path === selectedFilePath);
+        const currentIdx = items.findIndex(el => el.dataset.path === activePath);
         const nextIdx = e.key === 'ArrowDown'
             ? (currentIdx === -1 ? 0 : Math.min(currentIdx + 1, items.length - 1))
             : (currentIdx === -1 ? 0 : Math.max(currentIdx - 1, 0));
 
-        if (nextIdx !== currentIdx || currentIdx === -1) {
-            const path = items[nextIdx].dataset.path!;
-            selectFile(path);
-            items[nextIdx].scrollIntoView({block: 'nearest'});
+        if (nextIdx === currentIdx && currentIdx !== -1) return;
+
+        const path = items[nextIdx].dataset.path!;
+
+        if (e.shiftKey) {
+            doRangeSelect(path);
+        } else {
+            doSingleSelect(path);
         }
+
+        items[nextIdx].scrollIntoView({block: 'nearest'});
     }
 
     onMount(async () => {
         window.addEventListener('keydown', handleKeyDown);
         unlisten = await listen<string>("folder-changed", () => {
-            // Debounce: rapid fs events (write + rename = 2 events) collapse into one refresh
+            // Debounce: rapid fs events collapse into one refresh
             if (refreshTimer) clearTimeout(refreshTimer);
             refreshTimer = setTimeout(async () => {
                 if (fileTree) {
@@ -79,9 +148,19 @@
                         const updated = await invoke<FileNode>("scan_folder", {path: fileTree.path});
                         fileTree = updated;
 
-                        // Notify parent if the currently selected file disappeared
-                        if (selectedFilePath && !flatFilePaths(updated).has(selectedFilePath)) {
-                            selectedFilePath = "";
+                        const allPaths = flatFilePaths(updated);
+
+                        // Remove no-longer-existing paths from selection
+                        const newSelected = new Set([...selectedPaths].filter(p => allPaths.has(p)));
+                        if (newSelected.size !== selectedPaths.size) {
+                            selectedPaths = newSelected;
+                            onSelectionChange?.([...newSelected]);
+                        }
+
+                        // Notify parent if the active file disappeared
+                        if (activePath && !allPaths.has(activePath)) {
+                            activePath = '';
+                            anchorPath = '';
                             onFileGone?.();
                         }
                     } catch (e) {
@@ -129,15 +208,12 @@
         }
     }
 
-    function selectFile(path: string) {
-        if (disabled) return;
-        selectedFilePath = path;
-        onFileSelect(path);
-    }
-
-    /** Called by parent after a file rename so the highlight stays correct. */
+    /** Reset selection to a single file (used after rename). */
     export function setSelectedPath(path: string) {
-        selectedFilePath = path;
+        selectedPaths = new Set([path]);
+        activePath = path;
+        anchorPath = path;
+        onSelectionChange?.([path]);
     }
 </script>
 
@@ -153,8 +229,9 @@
                 <FileTree
                     node={child}
                     depth={0}
-                    selectedPath={selectedFilePath}
-                    onSelect={selectFile}
+                    {selectedPaths}
+                    {activePath}
+                    onSelect={handleTreeSelect}
                 />
             {/each}
         {:else}

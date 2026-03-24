@@ -76,6 +76,7 @@
     let isDirty = $state(false);
     let isLoading = $state(false);
     let currentTheme = $state(DEFAULT_THEME);
+    let batchPaths = $state<string[]>([]);
 
     // --- Unsaved changes dialog ---
     let showDialog = $state(false);
@@ -128,12 +129,17 @@
 
     /** Called from FilesPanel when user clicks a file. */
     async function handleFileSelect(path: string) {
-        if (isDirty) {
+        if (isDirty && batchPaths.length <= 1) {
             pendingPath = path;
             showDialog = true;
         } else {
             await openFile(path);
         }
+    }
+
+    /** Called when selection changes (single or multi). */
+    function handleSelectionChange(paths: string[]) {
+        batchPaths = paths;
     }
 
     // --- Dialog actions ---
@@ -280,7 +286,7 @@
     >
         {#snippet renderWindow(windowId)}
             {#if windowId === 'control'}
-                <MetadataPanel bind:this={metaPanel} bind:isDirty onPathChange={handlePathChange} />
+                <MetadataPanel bind:this={metaPanel} bind:isDirty onPathChange={handlePathChange} {batchPaths} />
             {:else if windowId === 'view'}
                 <div class="viewer">
                     {#if imageSrc}
@@ -315,6 +321,7 @@
                     onFileGone={handleFileGone}
                     onFolderOpen={(path) => saveAppState({lastFolder: path})}
                     onBusy={(b) => (isLoading = b)}
+                    onSelectionChange={handleSelectionChange}
                     disabled={showDialog}
                 />
             {/if}

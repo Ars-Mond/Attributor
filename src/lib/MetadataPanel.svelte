@@ -11,28 +11,32 @@
     let {
         isDirty = $bindable(false),
         onPathChange,
+        batchPaths = [],
     }: {
         isDirty?: boolean;
         onPathChange?: (newPath: string) => void;
+        batchPaths?: string[];
     } = $props();
+
+    const isBatch = $derived(batchPaths.length > 1);
 
     // ── Form state ─────────────────────────────────────────────────────────
 
-    let filepath = $state("");          // full OS path (internal, not editable)
-    let filename = $state("");          // stem only — shown and editable
-    let title = $state("");
-    let description = $state("");
-    let keywordInput = $state("");
+    let filepath = $state('');          // full OS path (internal, not editable)
+    let filename = $state('');          // stem only — shown and editable
+    let title = $state('');
+    let description = $state('');
+    let keywordInput = $state('');
     let keywords = $state<string[]>([]);
-    let categories = $state("");
-    let releaseFilename = $state("");
+    let categories = $state('');
+    let releaseFilename = $state('');
     let autoSave = $state(false);
     let saveAttempted = $state(false);
     let saveError = $state<string | null>(null);
 
     // ── UI preferences (persisted) ─────────────────────────────────────────
 
-    let descriptionEl: HTMLTextAreaElement | undefined;
+    let descriptionEl = $state<HTMLTextAreaElement | undefined>(undefined);
     let stockKeywordsOpen = $state(false);
     let optionalOpen = $state(false);
     let uiLoaded = $state(false);
@@ -74,8 +78,6 @@
     });
 
     // ── Snapshot (dirty tracking) ──────────────────────────────────────────
-    // Purely in-memory: taken when a file is opened. No files are created.
-    // isDirty = current fields ≠ snapshot fields.
 
     interface Snapshot {
         filename: string;
@@ -89,14 +91,7 @@
     let snapshot = $state<Snapshot | null>(null);
 
     function captureSnapshot(): Snapshot {
-        return {
-            filename,
-            title,
-            description,
-            keywords: [...keywords],
-            categories,
-            releaseFilename,
-        };
+        return {filename, title, description, keywords: [...keywords], categories, releaseFilename};
     }
 
     const isDirtyComputed = $derived.by(() => {
@@ -120,44 +115,24 @@
     // ── Auto-save ──────────────────────────────────────────────────────────
 
     $effect(() => {
-        // Track all editable fields so the effect re-runs on every keystroke
-        filename;
-        title;
-        description;
-        keywords;
-        categories;
-        releaseFilename;
-
+        filename; title; description; keywords; categories; releaseFilename;
         if (!autoSave || !isDirtyComputed || hasErrors) return;
-
-        const timer = setTimeout(() => {
-            doSave().catch(() => {
-            });
-        }, 1000);
+        const timer = setTimeout(() => { doSave().catch(() => {}); }, 1000);
         return () => clearTimeout(timer);
     });
-
-    // ── Field stats ────────────────────────────────────────────────────────
-
-    const titleWords = $derived(title.trim() ? title.split(' ').length : 0);
-    const titleChars = $derived(title.length);
-    const descWords = $derived(description.trim() ? description.split(' ').length : 0);
-    const descChars = $derived(description.length);
 
     // ── File status ────────────────────────────────────────────────────────
 
     const fileStatus = $derived(
-        snapshot === null ? 'none' :
-            isDirtyComputed ? 'edit' :
-                'open'
+        snapshot === null ? 'none' : isDirtyComputed ? 'edit' : 'open'
     );
 
-    // Display path below the status row
     const displayPath = $derived(filepath);
 
     // ── Validation ─────────────────────────────────────────────────────────
 
     const validationErrors = $derived(
+        isBatch ? [] :
         !filepath
             ? ['No file selected']
             : (
@@ -172,6 +147,184 @@
 
     const hasErrors = $derived(validationErrors.length > 0);
 
+    // ── Batch mode state ───────────────────────────────────────────────────
+
+    let batchLoading = $state(false);
+    let batchTitle = $state('');
+    let batchTitleMixed = $state(false);
+    let batchDescription = $state('');
+    let batchDescMixed = $state(false);
+    let batchCategories = $state('');
+    let batchCatMixed = $state(false);
+    let batchKeywordStates = $state<{word: string; state: 'all' | 'some'}[]>([]);
+    let batchOriginalUnion: Set<string> = new Set();
+
+    let applyTitle = $state(false);
+    let applyDescription = $state(false);
+    let applyCategories = $state(false);
+
+    let batchKeywordInput = $state('');
+    let batchKwInputEl = $state<HTMLInputElement | undefined>(undefined);
+
+    let savingCount = $state(0);
+    let savingTotal = $state(0);
+    const isSaving = $derived(savingTotal > 0);
+
+    // ── Field stats (depends on batch state) ──────────────────────────────
+
+    const titleWords = $derived.by(() => {
+        const t = isBatch ? batchTitle : title;
+        return t.trim() ? t.split(' ').length : 0;
+    });
+    const titleChars = $derived(isBatch ? batchTitle.length : title.length);
+    const descWords = $derived.by(() => {
+        const d = isBatch ? batchDescription : description;
+        return d.trim() ? d.split(' ').length : 0;
+    });
+    const descChars = $derived(isBatch ? batchDescription.length : description.length);
+
+    let batchLoadId = 0;
+
+    async function loadBatchData(paths: string[]) {
+        const myId = ++batchLoadId;
+        batchLoading = true;
+
+        const results = await Promise.all(
+            paths.map(p => invoke<ReadResult>('read_metadata', {path: p}).catch(() => null))
+        );
+
+        if (myId !== batchLoadId) return; // superseded
+
+        const valid = results.filter((r): r is ReadResult => r !== null);
+
+        if (valid.length === 0) {
+            batchLoading = false;
+            return;
+        }
+
+        // Title
+        const titleSet = new Set(valid.map(r => r.title));
+        batchTitleMixed = titleSet.size > 1;
+        batchTitle = batchTitleMixed ? '' : valid[0].title;
+        applyTitle = !batchTitleMixed && batchTitle !== '';
+
+        // Description
+        const descSet = new Set(valid.map(r => r.description));
+        batchDescMixed = descSet.size > 1;
+        batchDescription = batchDescMixed ? '' : valid[0].description;
+        applyDescription = !batchDescMixed && batchDescription !== '';
+
+        // Categories
+        const catSet = new Set(valid.map(r => r.categories));
+        batchCatMixed = catSet.size > 1;
+        batchCategories = batchCatMixed ? '' : valid[0].categories;
+        applyCategories = !batchCatMixed && batchCategories !== '';
+
+        // Keywords: union with per-word state
+        const kwSets = valid.map(r => new Set(r.keywords));
+        const union = new Set(valid.flatMap(r => r.keywords));
+        batchOriginalUnion = union;
+        batchKeywordStates = [...union].map(word => ({
+            word,
+            state: kwSets.every(s => s.has(word)) ? 'all' : 'some',
+        }));
+
+        batchLoading = false;
+    }
+
+    $effect(() => {
+        const paths = batchPaths;
+        if (paths.length <= 1) {
+            batchLoadId++; // cancel any in-flight load
+            batchLoading = false;
+            return;
+        }
+        loadBatchData(paths);
+    });
+
+    // ── Batch keyword helpers ──────────────────────────────────────────────
+
+    function addBatchKeyword(word: string) {
+        const trimmed = word.trim().toLowerCase();
+        if (!trimmed || batchKeywordStates.some(s => s.word === trimmed)) return;
+        batchKeywordStates = [...batchKeywordStates, {word: trimmed, state: 'all'}];
+    }
+
+    function handleBatchChipClick(word: string, state: 'all' | 'some') {
+        if (state === 'some') {
+            // Promote to 'all'
+            batchKeywordStates = batchKeywordStates.map(s =>
+                s.word === word ? {word, state: 'all'} : s
+            );
+        } else {
+            // Remove (will be deleted from all files on save)
+            batchKeywordStates = batchKeywordStates.filter(s => s.word !== word);
+        }
+    }
+
+    function handleBatchKeywordKeydown(e: KeyboardEvent) {
+        if (suggestionsComp?.handleKeydown(e)) return;
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addBatchKeyword(batchKeywordInput);
+            batchKeywordInput = '';
+        }
+    }
+
+    // Unified keyword adder for preset buttons
+    function handleAddKeyword(word: string) {
+        if (isBatch) {
+            addBatchKeyword(word);
+        } else {
+            addKeyword(word);
+        }
+    }
+
+    // Compute the new keyword list for a file during batch save
+    function computeNewKeywords(fileKeywords: string[]): string[] {
+        const currentWords = new Set(batchKeywordStates.map(s => s.word));
+        const allWords = batchKeywordStates.filter(s => s.state === 'all').map(s => s.word);
+        // Keywords that were in the original union but removed by user
+        const removedWords = new Set([...batchOriginalUnion].filter(w => !currentWords.has(w)));
+
+        const kept = fileKeywords.filter(k => !removedWords.has(k));
+        const toAdd = allWords.filter(k => !kept.includes(k));
+        return [...kept, ...toAdd];
+    }
+
+    async function handleBatchSave() {
+        savingTotal = batchPaths.length;
+        savingCount = 0;
+
+        for (const path of batchPaths) {
+            try {
+                let currentMeta: ReadResult | null = null;
+                try {
+                    currentMeta = await invoke<ReadResult>('read_metadata', {path});
+                } catch { /* use empty defaults */ }
+
+                const metadata: Metadata = {
+                    filepath: path,
+                    filename: extractStem(path),
+                    title: applyTitle ? batchTitle : (currentMeta?.title ?? ''),
+                    description: applyDescription ? batchDescription : (currentMeta?.description ?? ''),
+                    keywords: computeNewKeywords(currentMeta?.keywords ?? []),
+                    categories: applyCategories ? batchCategories : (currentMeta?.categories ?? ''),
+                    releaseFilename: currentMeta?.releaseFilename ?? '',
+                };
+
+                await invoke('save_metadata', {metadata});
+            } catch (e) {
+                console.error('Batch save failed for', path, e);
+            }
+            savingCount++;
+        }
+
+        savingTotal = 0;
+        // Reload to reflect saved state
+        loadBatchData(batchPaths);
+    }
+
     // ── Exported interface ─────────────────────────────────────────────────
 
     /** Load a file: reset fields, read existing XMP, then take snapshot. */
@@ -185,7 +338,7 @@
         categories = '';
         releaseFilename = '';
         saveAttempted = false;
-        snapshot = null; // clear dirty state immediately
+        snapshot = null;
 
         try {
             const meta = await invoke<ReadResult>('read_metadata', {path});
@@ -195,23 +348,22 @@
             categories = meta.categories;
             releaseFilename = meta.releaseFilename;
         } catch (e) {
-            // File has no XMP yet — leave fields empty
             console.warn('read_metadata failed:', e);
         }
 
         snapshot = captureSnapshot();
     }
 
-    /** Clear everything — called when the open file is deleted or renamed externally. */
+    /** Clear everything — called when the open file is deleted externally. */
     export function clear(): void {
-        filepath = "";
-        filename = "";
-        title = "";
-        description = "";
-        keywordInput = "";
+        filepath = '';
+        filename = '';
+        title = '';
+        description = '';
+        keywordInput = '';
         keywords = [];
-        categories = "";
-        releaseFilename = "";
+        categories = '';
+        releaseFilename = '';
         snapshot = null;
         saveAttempted = false;
     }
@@ -249,7 +401,6 @@
     async function doSave(): Promise<string> {
         const metadata: Metadata = {
             filepath,
-            // Strip extension if user accidentally typed it
             filename: filename.trim().replace(/\.[^/.]+$/, ''),
             title,
             description,
@@ -262,7 +413,6 @@
 
         const prevFilepath = filepath;
         filepath = newPath;
-        // Derive new stem from returned path in case Rust sanitized it
         filename = extractStem(newPath);
         snapshot = captureSnapshot();
 
@@ -288,26 +438,26 @@
 
     const presets: Record<string, string[]> = {
         Nature: [
-            "nature", "landscape", "sky", "water", "forest", "mountain",
-            "sunset", "ocean", "river", "flower", "tree", "grass", "cloud",
+            'nature', 'landscape', 'sky', 'water', 'forest', 'mountain',
+            'sunset', 'ocean', 'river', 'flower', 'tree', 'grass', 'cloud',
         ],
         People: [
-            "portrait", "woman", "man", "child", "family", "people",
-            "lifestyle", "crowd", "face", "smile",
+            'portrait', 'woman', 'man', 'child', 'family', 'people',
+            'lifestyle', 'crowd', 'face', 'smile',
         ],
         Urban: [
-            "city", "architecture", "building", "street", "urban",
-            "skyline", "road", "bridge",
+            'city', 'architecture', 'building', 'street', 'urban',
+            'skyline', 'road', 'bridge',
         ],
         Concepts: [
-            "business", "technology", "abstract", "vintage", "minimal",
-            "creative", "design", "background", "texture", "pattern",
+            'business', 'technology', 'abstract', 'vintage', 'minimal',
+            'creative', 'design', 'background', 'texture', 'pattern',
         ],
         Animals: [
-            "dog", "cat", "bird", "wildlife", "animal", "pet", "horse",
+            'dog', 'cat', 'bird', 'wildlife', 'animal', 'pet', 'horse',
         ],
         Seasons: [
-            "winter", "summer", "spring", "autumn", "snow", "rain", "fog",
+            'winter', 'summer', 'spring', 'autumn', 'snow', 'rain', 'fog',
         ],
     };
 
@@ -361,17 +511,13 @@
     // ── Keyword drag & drop (pointer-based, ghost + placeholder) ──────────
 
     let dragFromIndex = $state<number | null>(null);
-    let dropInsert = $state<number | null>(null);  // insertion point in 'without' array
+    let dropInsert = $state<number | null>(null);
     let ghostWidth = $state(0);
     let chipsEl = $state<HTMLElement | undefined>(undefined);
 
-    // Chip rects captured once at drag start (in 'without' order, i.e. excluding dragged chip).
-    // Using frozen rects prevents the feedback loop that causes row-boundary flickering:
-    // placeholder movement changes layout → recalc changes dropInsert → layout changes → loop.
+    // Chip rects captured once at drag start to prevent oscillation
     let frozenRects: DOMRect[] = [];
 
-    // During drag: keywords minus dragged chip, with null placeholder at drop position.
-    // Outside drag: same as keywords (null never appears).
     const dragDisplay = $derived.by((): (string | null)[] => {
         if (dragFromIndex === null || dropInsert === null) return keywords;
         const arr: (string | null)[] = keywords.filter((_, i) => i !== dragFromIndex);
@@ -390,15 +536,12 @@
         const oy = e.clientY - rect.top;
         ghostWidth = rect.width;
 
-        // Capture chip rects BEFORE state changes (before placeholder appears in DOM).
-        // Filter out the dragged chip so indices match the 'without' array.
         if (chipsEl) {
             frozenRects = [...chipsEl.querySelectorAll<HTMLElement>('.chip')]
                 .filter((_, i) => i !== kwIndex)
                 .map(c => c.getBoundingClientRect());
         }
 
-        // Create ghost clone that follows the cursor
         const ghost = chipEl.cloneNode(true) as HTMLElement;
         Object.assign(ghost.style, {
             position: 'fixed',
@@ -428,7 +571,7 @@
             ghost.remove();
             if (dropInsert !== null && dragFromIndex !== null && dropInsert !== dragFromIndex) {
                 const arr = [...keywords];
-                const [moved] = arr.splice(dragFromIndex, 1);  // arr is now 'without'
+                const [moved] = arr.splice(dragFromIndex, 1);
                 arr.splice(dropInsert, 0, moved);
                 keywords = arr;
             }
@@ -444,16 +587,12 @@
         document.addEventListener('pointerup', onUp);
     }
 
-    // Returns insertion index in the 'without' array using frozen chip rects.
-    // Rows are determined by Y range with midpoint boundary → no oscillation.
     function calcDropInsert(x: number, y: number): number {
         const rects = frozenRects;
         if (!rects.length) return 0;
-
         const chipH = rects[0].height;
 
-        // Group chips into rows by comparing top values
-        const rows: { top: number; bottom: number; indices: number[] }[] = [];
+        const rows: {top: number; bottom: number; indices: number[]}[] = [];
         for (let i = 0; i < rects.length; i++) {
             const r = rects[i];
             const row = rows.find(row => Math.abs(row.top - r.top) < chipH * 0.5);
@@ -466,18 +605,12 @@
         }
         rows.sort((a, b) => a.top - b.top);
 
-        // Pick the row: use midpoint between adjacent rows as hard boundary.
-        // Because frozenRects never change, these midpoints are stable → no flicker.
         let targetRow = rows[rows.length - 1];
         for (let r = 0; r < rows.length - 1; r++) {
             const midY = (rows[r].bottom + rows[r + 1].top) / 2;
-            if (y <= midY) {
-                targetRow = rows[r];
-                break;
-            }
+            if (y <= midY) { targetRow = rows[r]; break; }
         }
 
-        // Within the row, split by each chip's horizontal midpoint
         for (const i of targetRow.indices) {
             if (x < rects[i].left + rects[i].width / 2) return i;
         }
@@ -490,139 +623,230 @@
         <h2 class="panel-title">Metadata</h2>
 
         <!-- ── File info ── -->
-        <div class="file-info">
-            <div class="file-status-row">
-                <span class="status-dot status-dot--{fileStatus}"></span>
-                <span class="status-label status-label--{fileStatus}">{fileStatus}</span>
-                {#if filename}
-                    <span class="file-basename">{filename}</span>
+        {#if isBatch}
+            <div class="file-info">
+                <div class="file-status-row">
+                    <span class="status-dot status-dot--batch"></span>
+                    <span class="status-label status-label--batch">Batch</span>
+                    <span class="file-basename">{batchPaths.length} files</span>
+                </div>
+                {#if batchLoading}
+                    <span class="file-path">Loading...</span>
                 {/if}
             </div>
-            {#if displayPath}
-                <span class="file-path">{displayPath}</span>
-            {/if}
-        </div>
-
-        <!-- ── Required fields ── -->
-        <section class="field-group">
-            <p class="group-label">Required</p>
-
-            <label class="field">
-                <span class="field-label">
-                    Filename <span class="required">*</span>
-                    <span class="hint">— rename on save</span>
-                </span>
-                <input
-                    class="input"
-                    class:input--invalid={saveAttempted && !filename.trim()}
-                    type="text"
-                    placeholder="mountain_sunset"
-                    bind:value={filename}
-                />
-            </label>
-
-            <label class="field">
-                <div class="field-header">
-                    <span class="field-label">Title <span class="required">*</span></span>
-                    <span class="field-stats">{titleWords}w : {titleChars}l</span>
+        {:else}
+            <div class="file-info">
+                <div class="file-status-row">
+                    <span class="status-dot status-dot--{fileStatus}"></span>
+                    <span class="status-label status-label--{fileStatus}">{fileStatus}</span>
+                    {#if filename}
+                        <span class="file-basename">{filename}</span>
+                    {/if}
                 </div>
-                <input
-                    class="input"
-                    class:input--invalid={saveAttempted && !title.trim()}
-                    type="text"
-                    placeholder="A stunning mountain sunset"
-                    bind:value={title}
-                />
-            </label>
+                {#if displayPath}
+                    <span class="file-path">{displayPath}</span>
+                {/if}
+            </div>
+        {/if}
 
-            <label class="field">
-                <div class="field-header">
-                    <span class="field-label">Description <span class="required">*</span></span>
-                    <span class="field-stats">{descWords}w : {descChars}l</span>
-                </div>
-                <textarea
-                    bind:this={descriptionEl}
-                    class="input textarea"
-                    class:input--invalid={saveAttempted && !description.trim()}
-                    placeholder="Describe the image in detail..."
-                    rows={4}
-                    bind:value={description}
-                ></textarea>
-            </label>
+        <!-- ── Required / batch fields ── -->
+        {#if isBatch}
+            <section class="field-group">
+                <p class="group-label">Fields</p>
 
-            <div class="field">
-                <span class="field-label">
-                    Keywords <span class="required">*</span>
-                    <span class="hint">— Enter or ", " to add</span>
-                </span>
-                <input
-                    bind:this={inputEl}
-                    class="input"
-                    class:input--invalid={saveAttempted && keywords.length === 0}
-                    type="text"
-                    placeholder="mountain, sunset, nature..."
-                    bind:value={keywordInput}
-                    onkeydown={handleKeywordKeydown}
-                    oninput={handleKeywordInput}
-                    onblur={() => suggestionsComp?.handleBlur()}
-                />
-                <div class="keyword-actions">
-                    <button
-                        class="kw-action-btn"
-                        onclick={copyKeywords}
-                        disabled={keywords.length === 0}
-                        title="Copy keywords to clipboard"
-                    >
-                        <svg viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6z"/>
-                            <path d="M2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h-1v1H2V6h1V5H2z"/>
-                        </svg>
-                        Copy
-                    </button>
-                    <button
-                        class="kw-action-btn"
-                        onclick={pasteKeywords}
-                        title="Paste keywords from clipboard"
-                    >
-                        <svg viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
-                            <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
-                        </svg>
-                        Paste
-                    </button>
-                    <span class="kw-count">{keywords.length}</span>
+                <!-- Title -->
+                <div class="field">
+                    <div class="field-header">
+                        <label class="batch-apply-label">
+                            <input type="checkbox" bind:checked={applyTitle} />
+                            <span class="field-label">Title</span>
+                        </label>
+                        <span class="field-stats">{titleWords}w : {titleChars}l</span>
+                    </div>
+                    <input
+                        class="input"
+                        type="text"
+                        placeholder={batchTitleMixed ? '(разные значения)' : 'A stunning mountain sunset'}
+                        bind:value={batchTitle}
+                        oninput={() => { if (batchTitle) applyTitle = true; }}
+                    />
                 </div>
-                {#if keywords.length > 0}
-                    <div
-                        class="keyword-chips"
-                        class:keyword-chips--dragging={dragFromIndex !== null}
-                        bind:this={chipsEl}
-                    >
-                        {#each dragDisplay as item, i (item === null ? `__placeholder__${i}` : `${i}:${item}`)}
-                            {#if item === null}
-                                <span
-                                    class="chip chip--placeholder"
-                                    style="width:{ghostWidth}px"
-                                ></span>
-                            {:else}
+
+                <!-- Description -->
+                <div class="field">
+                    <div class="field-header">
+                        <label class="batch-apply-label">
+                            <input type="checkbox" bind:checked={applyDescription} />
+                            <span class="field-label">Description</span>
+                        </label>
+                        <span class="field-stats">{descWords}w : {descChars}l</span>
+                    </div>
+                    <textarea
+                        bind:this={descriptionEl}
+                        class="input textarea"
+                        placeholder={batchDescMixed ? '(разные значения)' : 'Describe the image in detail...'}
+                        rows={4}
+                        bind:value={batchDescription}
+                        oninput={() => { if (batchDescription) applyDescription = true; }}
+                    ></textarea>
+                </div>
+
+                <!-- Keywords (batch) -->
+                <div class="field">
+                    <span class="field-label">Keywords</span>
+                    <input
+                        bind:this={batchKwInputEl}
+                        class="input"
+                        type="text"
+                        placeholder="Add keyword to all..."
+                        bind:value={batchKeywordInput}
+                        onkeydown={handleBatchKeywordKeydown}
+                        onblur={() => suggestionsComp?.handleBlur()}
+                    />
+                    <div class="keyword-actions">
+                        <span class="kw-count">{batchKeywordStates.length}</span>
+                    </div>
+                    {#if batchKeywordStates.length > 0}
+                        <div class="keyword-chips">
+                            {#each batchKeywordStates as kws (kws.word)}
+                                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                            <!-- svelte-ignore a11y_click_events_have_key_events -->
                                 <span
                                     class="chip"
-                                    onpointerdown={(e) => startChipDrag(e, keywords.indexOf(item))}
+                                    class:chip--some={kws.state === 'some'}
+                                    onclick={() => handleBatchChipClick(kws.word, kws.state)}
                                     role="listitem"
+                                    title={kws.state === 'some' ? 'Click to add to all files' : 'Click to remove from all files'}
                                 >
-                                    {item}
-                                    <button
-                                        class="chip-remove"
-                                        onclick={() => removeKeyword(item)}
-                                        aria-label="Remove keyword {item}"
-                                    >×</button>
+                                    {kws.word}
                                 </span>
-                            {/if}
-                        {/each}
+                            {/each}
+                        </div>
+                    {/if}
+                </div>
+            </section>
+        {:else}
+            <!-- ── Required fields (single mode) ── -->
+            <section class="field-group">
+                <p class="group-label">Required</p>
+
+                <label class="field">
+                    <span class="field-label">
+                        Filename <span class="required">*</span>
+                        <span class="hint">— rename on save</span>
+                    </span>
+                    <input
+                        class="input"
+                        class:input--invalid={saveAttempted && !filename.trim()}
+                        type="text"
+                        placeholder="mountain_sunset"
+                        bind:value={filename}
+                    />
+                </label>
+
+                <label class="field">
+                    <div class="field-header">
+                        <span class="field-label">Title <span class="required">*</span></span>
+                        <span class="field-stats">{titleWords}w : {titleChars}l</span>
                     </div>
-                {/if}
-            </div>
-        </section>
+                    <input
+                        class="input"
+                        class:input--invalid={saveAttempted && !title.trim()}
+                        type="text"
+                        placeholder="A stunning mountain sunset"
+                        bind:value={title}
+                    />
+                </label>
+
+                <label class="field">
+                    <div class="field-header">
+                        <span class="field-label">Description <span class="required">*</span></span>
+                        <span class="field-stats">{descWords}w : {descChars}l</span>
+                    </div>
+                    <textarea
+                        bind:this={descriptionEl}
+                        class="input textarea"
+                        class:input--invalid={saveAttempted && !description.trim()}
+                        placeholder="Describe the image in detail..."
+                        rows={4}
+                        bind:value={description}
+                    ></textarea>
+                </label>
+
+                <div class="field">
+                    <span class="field-label">
+                        Keywords <span class="required">*</span>
+                        <span class="hint">— Enter or ", " to add</span>
+                    </span>
+                    <input
+                        bind:this={inputEl}
+                        class="input"
+                        class:input--invalid={saveAttempted && keywords.length === 0}
+                        type="text"
+                        placeholder="mountain, sunset, nature..."
+                        bind:value={keywordInput}
+                        onkeydown={handleKeywordKeydown}
+                        oninput={handleKeywordInput}
+                        onblur={() => suggestionsComp?.handleBlur()}
+                    />
+                    <div class="keyword-actions">
+                        <button
+                            class="kw-action-btn"
+                            onclick={copyKeywords}
+                            disabled={keywords.length === 0}
+                            title="Copy keywords to clipboard"
+                        >
+                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6z"/>
+                                <path d="M2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h-1v1H2V6h1V5H2z"/>
+                            </svg>
+                            Copy
+                        </button>
+                        <button
+                            class="kw-action-btn"
+                            onclick={pasteKeywords}
+                            title="Paste keywords from clipboard"
+                        >
+                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                                <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                            </svg>
+                            Paste
+                        </button>
+                        <span class="kw-count">{keywords.length}</span>
+                    </div>
+                    {#if keywords.length > 0}
+                        <div
+                            class="keyword-chips"
+                            class:keyword-chips--dragging={dragFromIndex !== null}
+                            bind:this={chipsEl}
+                        >
+                            {#each dragDisplay as item, i (item === null ? `__placeholder__${i}` : `${i}:${item}`)}
+                                {#if item === null}
+                                    <span
+                                        class="chip chip--placeholder"
+                                        style="width:{ghostWidth}px"
+                                    ></span>
+                                {:else}
+                                    <span
+                                        class="chip"
+                                        onpointerdown={(e) => startChipDrag(e, keywords.indexOf(item))}
+                                        role="listitem"
+                                    >
+                                        {item}
+                                        <button
+                                            class="chip-remove"
+                                            onclick={() => removeKeyword(item)}
+                                            aria-label="Remove keyword {item}"
+                                        >×</button>
+                                    </span>
+                                {/if}
+                            {/each}
+                        </div>
+                    {/if}
+                </div>
+            </section>
+        {/if}
 
         <!-- ── Preset keywords ── -->
         <details
@@ -644,8 +868,10 @@
                             {#each tags as tag}
                                 <button
                                     class="preset-btn"
-                                    class:active={keywords.includes(tag)}
-                                    onclick={() => addKeyword(tag)}
+                                    class:active={isBatch
+                                        ? batchKeywordStates.some(s => s.word === tag && s.state === 'all')
+                                        : keywords.includes(tag)}
+                                    onclick={() => handleAddKeyword(tag)}
                                 >{tag}</button>
                             {/each}
                         </div>
@@ -667,14 +893,32 @@
                 </svg>
             </summary>
             <div class="optional-body">
-                <label class="field">
-                    <span class="field-label">Categories</span>
-                    <input class="input" type="text" placeholder="Travel, Landscape" bind:value={categories} />
-                </label>
-                <label class="field">
-                    <span class="field-label">Release Filename</span>
-                    <input class="input" type="text" placeholder="model_release.pdf" bind:value={releaseFilename} />
-                </label>
+                {#if isBatch}
+                    <div class="field">
+                        <div class="field-header">
+                            <label class="batch-apply-label">
+                                <input type="checkbox" bind:checked={applyCategories} />
+                                <span class="field-label">Categories</span>
+                            </label>
+                        </div>
+                        <input
+                            class="input"
+                            type="text"
+                            placeholder={batchCatMixed ? '(разные значения)' : 'Travel, Landscape'}
+                            bind:value={batchCategories}
+                            oninput={() => { if (batchCategories) applyCategories = true; }}
+                        />
+                    </div>
+                {:else}
+                    <label class="field">
+                        <span class="field-label">Categories</span>
+                        <input class="input" type="text" placeholder="Travel, Landscape" bind:value={categories} />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">Release Filename</span>
+                        <input class="input" type="text" placeholder="model_release.pdf" bind:value={releaseFilename} />
+                    </label>
+                {/if}
             </div>
         </details>
     </div>
@@ -682,32 +926,45 @@
     <!-- ── Keyword suggestions dropdown ── -->
     <KeywordSuggestions
         bind:this={suggestionsComp}
-        {inputEl}
-        query={keywordInput}
-        onSelect={(kw) => { addKeyword(kw); keywordInput = ''; inputEl?.focus(); }}
+        inputEl={isBatch ? batchKwInputEl : inputEl}
+        query={isBatch ? batchKeywordInput : keywordInput}
+        onSelect={isBatch
+            ? (kw) => { addBatchKeyword(kw); batchKeywordInput = ''; batchKwInputEl?.focus(); }
+            : (kw) => { addKeyword(kw); keywordInput = ''; inputEl?.focus(); }
+        }
     />
 
     <!-- ── Footer ── -->
     <footer class="panel-footer">
-        {#if saveAttempted && hasErrors}
+        {#if !isBatch && saveAttempted && hasErrors}
             <div class="footer-errors">
                 {validationErrors.join(' · ')}
             </div>
-        {:else if saveError}
+        {:else if !isBatch && saveError}
             <div class="footer-errors">
                 Save failed: {saveError}
             </div>
         {/if}
         <div class="footer-controls">
-            <label class="autosave-toggle">
-                <input type="checkbox" bind:checked={autoSave} />
-                <span>Auto-save</span>
-            </label>
-            <button
-                class="btn-primary save-btn"
-                onclick={handleSave}
-                disabled={!filepath}
-            >Save Changes</button>
+            {#if isBatch}
+                <button
+                    class="btn-primary save-btn"
+                    onclick={handleBatchSave}
+                    disabled={isSaving}
+                >
+                    {isSaving ? `Saving ${savingCount}/${savingTotal}...` : `Save ${batchPaths.length} Files`}
+                </button>
+            {:else}
+                <label class="autosave-toggle">
+                    <input type="checkbox" bind:checked={autoSave} />
+                    <span>Auto-save</span>
+                </label>
+                <button
+                    class="btn-primary save-btn"
+                    onclick={handleSave}
+                    disabled={!filepath}
+                >Save Changes</button>
+            {/if}
         </div>
     </footer>
 </aside>
@@ -740,6 +997,7 @@
         &--none { background: $text-muted; }
         &--open { background: #4ade80; box-shadow: 0 0 5px rgba(74, 222, 128, 0.4); }
         &--edit { background: #fbbf24; box-shadow: 0 0 5px rgba(251, 191, 36, 0.4); }
+        &--batch { background: #60a5fa; box-shadow: 0 0 5px rgba(96, 165, 250, 0.4); }
     }
 
     .status-label {
@@ -752,6 +1010,7 @@
         &--none { color: $text-muted; }
         &--open { color: #4ade80; }
         &--edit { color: #fbbf24; }
+        &--batch { color: #60a5fa; }
     }
 
     .file-basename {
@@ -949,5 +1208,22 @@
         margin-left: auto;
         font-size: $fs-footnote1;
         color: $text-muted;
+    }
+
+    // ── Batch apply checkbox row ──
+    .batch-apply-label {
+        @include flex(row, flex-start, center);
+        gap: 6px;
+        cursor: pointer;
+
+        input[type="checkbox"] { accent-color: $accent; cursor: pointer; }
+    }
+
+    // ── Batch 'some' chip ──
+    .chip--some {
+        border: 1px dashed $text-muted !important;
+        background: $bg-surface !important;
+        color: $text-muted !important;
+        cursor: pointer;
     }
 </style>
