@@ -278,7 +278,7 @@
         onClose={handleCloseWindow}
         onLayoutChange={handleLayoutChange}
     >
-        {#snippet renderWindow(windowId: string)}
+        {#snippet renderWindow(windowId)}
             {#if windowId === 'control'}
                 <MetadataPanel bind:this={metaPanel} bind:isDirty onPathChange={handlePathChange} />
             {:else if windowId === 'view'}

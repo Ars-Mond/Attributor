@@ -99,16 +99,19 @@
         };
     }
 
-    const isDirtyComputed = $derived(
-        snapshot !== null && (
-            filename !== snapshot.filename ||
-            title !== snapshot.title ||
-            description !== snapshot.description ||
-            (keywords.length !== snapshot.keywords.length || keywords.some((k, i) => k !== snapshot.keywords[i])) ||
-            categories !== snapshot.categories ||
-            releaseFilename !== snapshot.releaseFilename
-        )
-    );
+    const isDirtyComputed = $derived.by(() => {
+        const snap = snapshot;
+        if (snap === null) return false;
+        return (
+            filename !== snap.filename ||
+            title !== snap.title ||
+            description !== snap.description ||
+            keywords.length !== snap.keywords.length ||
+            keywords.some((k, i) => k !== snap.keywords[i]) ||
+            categories !== snap.categories ||
+            releaseFilename !== snap.releaseFilename
+        );
+    });
 
     $effect(() => {
         isDirty = isDirtyComputed;
@@ -314,7 +317,7 @@
 
     // ── Keyword suggestions ────────────────────────────────────────────────
 
-    let inputEl: HTMLInputElement | undefined;
+    let inputEl = $state<HTMLInputElement | undefined>(undefined);
     let suggestionsComp: KeywordSuggestions | undefined;
 
     function handleKeywordKeydown(e: KeyboardEvent) {
@@ -353,7 +356,7 @@
     let dragFromIndex = $state<number | null>(null);
     let dropInsert = $state<number | null>(null);  // insertion point in 'without' array
     let ghostWidth = $state(0);
-    let chipsEl: HTMLElement | undefined;
+    let chipsEl = $state<HTMLElement | undefined>(undefined);
 
     // Chip rects captured once at drag start (in 'without' order, i.e. excluding dragged chip).
     // Using frozen rects prevents the feedback loop that causes row-boundary flickering:

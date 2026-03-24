@@ -6,7 +6,7 @@
 
     let open = $state(false);
     let triggerEl: HTMLButtonElement | undefined;
-    let listEl: HTMLUListElement | undefined;
+    let listEl = $state<HTMLUListElement | undefined>(undefined);
 
     const currentName = $derived(themes.find(t => t.id === current)?.name ?? current);
 
@@ -46,6 +46,7 @@
     {#if open}
         <ul class="theme-list" bind:this={listEl}>
             {#each themes as t}
+                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                 <li
                     class="theme-item"
                     class:theme-item--selected={t.id === current}

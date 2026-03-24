@@ -13,7 +13,7 @@
 
     let suggestions = $state<string[]>([]);
     let selectedIdx = $state(-1);
-    let suggestEl: HTMLUListElement | undefined;
+    let suggestEl = $state<HTMLUListElement | undefined>(undefined);
     let suggestTop = $state(0);
     let suggestLeft = $state(0);
     let suggestWidth = $state(0);
@@ -102,6 +102,7 @@
         style="top:{suggestTop}px; left:{suggestLeft}px; width:{suggestWidth}px"
     >
         {#each suggestions as kw, i}
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
             <li
                 class="kw-suggestion-item"
                 class:kw-suggestion-item--selected={i === selectedIdx}
