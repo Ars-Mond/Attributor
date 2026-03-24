@@ -5,9 +5,8 @@
     import {onMount, onDestroy} from "svelte";
     import FileTree from "./FileTree.svelte";
     import type {FileNode} from "./types";
-
-    type ViewMode = 'table' | 'content' | 'icons';
-    type LayoutDir = 'vertical' | 'horizontal';
+    import {panelState} from './filesPanelStore.svelte';
+    import type {ViewMode, LayoutDir} from './filesPanelStore.svelte';
 
     let {
         onFileSelect,
@@ -25,15 +24,8 @@
         disabled?: boolean;
     } = $props();
 
-    // --- State ---
-    let fileTree = $state<FileNode | null>(null);
-    let selectedPaths = $state<Set<string>>(new Set());
-    let activePath = $state('');
-    let anchorPath = ''; // anchor for shift-click range (plain var, no reactivity needed)
+    // contentEl is intentionally local — it's a DOM ref that must be re-bound each mount
     let contentEl = $state<HTMLElement | null>(null);
-
-    let viewMode = $state<ViewMode>('table');
-    let layoutDir = $state<LayoutDir>('vertical');
 
     function isImageFile(name: string): boolean {
         return /\.(jpg|jpeg|png|webp)$/i.test(name);
@@ -41,7 +33,7 @@
 
     // Horizontal wheel scroll for content/icons modes
     $effect(() => {
-        if (!contentEl || viewMode === 'table' || layoutDir !== 'horizontal') return;
+        if (!contentEl || panelState.viewMode === 'table' || panelState.layoutDir !== 'horizontal') return;
 
         function onWheel(e: WheelEvent) {
             e.preventDefault();
@@ -77,16 +69,16 @@
     }
 
     function doSingleSelect(path: string) {
-        selectedPaths = new Set([path]);
-        activePath = path;
-        anchorPath = path;
+        panelState.selectedPaths = new Set([path]);
+        panelState.activePath = path;
+        panelState.anchorPath = path;
         onFileSelect(path);
         onSelectionChange?.([path]);
     }
 
     function doRangeSelect(targetPath: string) {
         const items = getVisibleFilePaths();
-        const anchorIdx = items.indexOf(anchorPath);
+        const anchorIdx = items.indexOf(panelState.anchorPath);
         const targetIdx = items.indexOf(targetPath);
         if (anchorIdx === -1 || targetIdx === -1) {
             doSingleSelect(targetPath);
@@ -95,22 +87,22 @@
         const start = Math.min(anchorIdx, targetIdx);
         const end = Math.max(anchorIdx, targetIdx);
         const range = items.slice(start, end + 1);
-        selectedPaths = new Set(range);
-        activePath = targetPath;
+        panelState.selectedPaths = new Set(range);
+        panelState.activePath = targetPath;
         // don't update anchorPath for range selections
         onSelectionChange?.(range);
     }
 
     function doToggleSelect(path: string) {
-        const next = new Set(selectedPaths);
+        const next = new Set(panelState.selectedPaths);
         if (next.has(path)) {
             next.delete(path);
         } else {
             next.add(path);
         }
-        activePath = path;
-        anchorPath = path;
-        selectedPaths = next;
+        panelState.activePath = path;
+        panelState.anchorPath = path;
+        panelState.selectedPaths = next;
         const arr = [...next];
         onSelectionChange?.(arr);
         if (arr.length === 1) {
@@ -132,7 +124,7 @@
     function handleKeyDown(e: KeyboardEvent) {
         if (disabled) return;
         if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-        if (!contentEl || !fileTree) return;
+        if (!contentEl || !panelState.fileTree) return;
 
         // Don't hijack keyboard when user is typing
         const active = document.activeElement;
@@ -143,7 +135,7 @@
         const items = [...contentEl.querySelectorAll<HTMLElement>('[data-path]')];
         if (items.length === 0) return;
 
-        const currentIdx = items.findIndex(el => el.dataset.path === activePath);
+        const currentIdx = items.findIndex(el => el.dataset.path === panelState.activePath);
         const nextIdx = e.key === 'ArrowDown'
             ? (currentIdx === -1 ? 0 : Math.min(currentIdx + 1, items.length - 1))
             : (currentIdx === -1 ? 0 : Math.max(currentIdx - 1, 0));
@@ -167,24 +159,24 @@
             // Debounce: rapid fs events collapse into one refresh
             if (refreshTimer) clearTimeout(refreshTimer);
             refreshTimer = setTimeout(async () => {
-                if (fileTree) {
+                if (panelState.fileTree) {
                     try {
-                        const updated = await invoke<FileNode>("scan_folder", {path: fileTree.path});
-                        fileTree = updated;
+                        const updated = await invoke<FileNode>("scan_folder", {path: panelState.fileTree.path});
+                        panelState.fileTree = updated;
 
                         const allPaths = flatFilePaths(updated);
 
                         // Remove no-longer-existing paths from selection
-                        const newSelected = new Set([...selectedPaths].filter(p => allPaths.has(p)));
-                        if (newSelected.size !== selectedPaths.size) {
-                            selectedPaths = newSelected;
+                        const newSelected = new Set([...panelState.selectedPaths].filter(p => allPaths.has(p)));
+                        if (newSelected.size !== panelState.selectedPaths.size) {
+                            panelState.selectedPaths = newSelected;
                             onSelectionChange?.([...newSelected]);
                         }
 
                         // Notify parent if the active file disappeared
-                        if (activePath && !allPaths.has(activePath)) {
-                            activePath = '';
-                            anchorPath = '';
+                        if (panelState.activePath && !allPaths.has(panelState.activePath)) {
+                            panelState.activePath = '';
+                            panelState.anchorPath = '';
                             onFileGone?.();
                         }
                     } catch (e) {
@@ -208,7 +200,7 @@
         try {
             const result = await invoke<FileNode | null>("open_folder");
             if (result) {
-                fileTree = result;
+                panelState.fileTree = result;
                 onFolderOpen?.(result.path);
             }
         } finally {
@@ -225,7 +217,7 @@
     export async function openFolderByPath(path: string): Promise<boolean> {
         try {
             const result = await invoke<FileNode>("open_folder_path", {path});
-            fileTree = result;
+            panelState.fileTree = result;
             return true;
         } catch {
             return false;
@@ -234,9 +226,9 @@
 
     /** Reset selection to a single file (used after rename). */
     export function setSelectedPath(path: string) {
-        selectedPaths = new Set([path]);
-        activePath = path;
-        anchorPath = path;
+        panelState.selectedPaths = new Set([path]);
+        panelState.activePath = path;
+        panelState.anchorPath = path;
         onSelectionChange?.([path]);
     }
 </script>
@@ -249,8 +241,8 @@
             <div class="btn-group">
                 <button
                     class="view-btn"
-                    class:active={viewMode === 'table'}
-                    onclick={() => viewMode = 'table'}
+                    class:active={panelState.viewMode === 'table'}
+                    onclick={() => panelState.viewMode = 'table'}
                     title="Table"
                 >
                     <!-- Table: three horizontal lines -->
@@ -262,8 +254,8 @@
                 </button>
                 <button
                     class="view-btn"
-                    class:active={viewMode === 'content'}
-                    onclick={() => viewMode = 'content'}
+                    class:active={panelState.viewMode === 'content'}
+                    onclick={() => panelState.viewMode = 'content'}
                     title="Content"
                 >
                     <!-- Content: thumbnail + text row, twice -->
@@ -278,8 +270,8 @@
                 </button>
                 <button
                     class="view-btn"
-                    class:active={viewMode === 'icons'}
-                    onclick={() => viewMode = 'icons'}
+                    class:active={panelState.viewMode === 'icons'}
+                    onclick={() => panelState.viewMode = 'icons'}
                     title="Icons"
                 >
                     <!-- Icons: 2x2 grid -->
@@ -293,12 +285,12 @@
             </div>
 
             <!-- Layout direction buttons (only for content and icons) -->
-            {#if viewMode !== 'table'}
+            {#if panelState.viewMode !== 'table'}
                 <div class="btn-group">
                     <button
                         class="view-btn"
-                        class:active={layoutDir === 'vertical'}
-                        onclick={() => layoutDir = 'vertical'}
+                        class:active={panelState.layoutDir === 'vertical'}
+                        onclick={() => panelState.layoutDir = 'vertical'}
                         title="Vertical"
                     >
                         <!-- Vertical: three horizontal bars (stack top-down) -->
@@ -310,8 +302,8 @@
                     </button>
                     <button
                         class="view-btn"
-                        class:active={layoutDir === 'horizontal'}
-                        onclick={() => layoutDir = 'horizontal'}
+                        class:active={panelState.layoutDir === 'horizontal'}
+                        onclick={() => panelState.layoutDir = 'horizontal'}
                         title="Horizontal"
                     >
                         <!-- Horizontal: three vertical bars (stack left-right) -->
@@ -328,18 +320,18 @@
 
     <div
         class="panel-content files-content"
-        class:files-content--icons={viewMode === 'icons'}
-        class:files-content--horizontal={viewMode !== 'table' && layoutDir === 'horizontal'}
+        class:files-content--icons={panelState.viewMode === 'icons'}
+        class:files-content--horizontal={panelState.viewMode !== 'table' && panelState.layoutDir === 'horizontal'}
         bind:this={contentEl}
     >
-        {#if fileTree}
-            {#if viewMode === 'icons'}
+        {#if panelState.fileTree}
+            {#if panelState.viewMode === 'icons'}
                 <!-- Flat list of image files from the root level only -->
-                {#each fileTree.children.filter(c => !c.is_dir && isImageFile(c.name)) as node (node.path)}
+                {#each panelState.fileTree.children.filter(c => !c.is_dir && isImageFile(c.name)) as node (node.path)}
                     <button
                         class="icon-item"
-                        class:selected={selectedPaths.has(node.path)}
-                        class:active={activePath === node.path}
+                        class:selected={panelState.selectedPaths.has(node.path)}
+                        class:active={panelState.activePath === node.path}
                         data-path={node.path}
                         onclick={(e) => handleTreeSelect(node.path, e)}
                     >
@@ -349,14 +341,14 @@
                 {/each}
             {:else}
                 <!-- Table / content mode: recursive tree -->
-                {#each fileTree.children as child (child.path)}
+                {#each panelState.fileTree.children as child (child.path)}
                     <FileTree
                         node={child}
                         depth={0}
-                        {selectedPaths}
-                        {activePath}
-                        {viewMode}
-                        {layoutDir}
+                        selectedPaths={panelState.selectedPaths}
+                        activePath={panelState.activePath}
+                        viewMode={panelState.viewMode}
+                        layoutDir={panelState.layoutDir}
                         onSelect={handleTreeSelect}
                     />
                 {/each}
@@ -470,7 +462,6 @@
         gap: 6px;
         padding: 6px;
         border-radius: $radius-sm;
-        //min-width: 300px;
         max-width: 300px;
         color: $text-secondary;
 
