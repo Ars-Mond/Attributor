@@ -332,11 +332,13 @@
                         class="icon-item"
                         class:selected={panelState.selectedPaths.has(node.path)}
                         class:active={panelState.activePath === node.path}
+                        class:icon-item--horizontal={panelState.layoutDir === 'horizontal'}
                         data-path={node.path}
+                        title={node.name}
                         onclick={(e) => handleTreeSelect(node.path, e)}
                     >
                         <img class="icon-thumb" src={convertFileSrc(node.path)} alt={node.name} />
-                        <span class="icon-name">{node.name}</span>
+                        <span class="icon-overlay">{node.name}</span>
                     </button>
                 {/each}
             {:else}
@@ -431,22 +433,22 @@
         padding: 6px 4px;
         gap: 1px;
 
-        // Icons mode: wrapping flex grid
+        // Icons mode: vertical stack, each item fills full width
         &--icons {
-            @include flex(row, flex-start, flex-start);
-            flex-wrap: wrap;
-            align-content: flex-start;
-            padding: 8px;
-            gap: 8px;
+            flex-direction: column;
+            flex-wrap: nowrap;
+            align-items: stretch;
+            padding: 4px;
+            gap: 2px;
         }
 
-        // Horizontal layout: single row, scroll sideways
+        // Horizontal layout: single row, scroll sideways, items fill full height
         &--horizontal {
             flex-direction: row !important;
             flex-wrap: nowrap !important;
             overflow-x: auto;
             overflow-y: hidden;
-            align-items: flex-start;
+            align-items: stretch;
             padding: 6px;
             gap: 2px;
             @include scrollbar;
@@ -457,13 +459,13 @@
 
     .icon-item {
         @include btn-reset;
-        @include flex(column, flex-start, center);
         @include transition(background, color);
-        gap: 6px;
-        padding: 6px;
+        padding: 2px;
         border-radius: $radius-sm;
-        max-width: 300px;
+        position: relative;
+        overflow: hidden;
         color: $text-secondary;
+        flex-shrink: 0;
 
         &:hover { background: var(--hover-bg); color: $text; }
 
@@ -475,23 +477,50 @@
         &.active {
             box-shadow: inset 2px 0 0 $accent;
         }
+
+        // Horizontal layout: fill full container height, auto width
+        &--horizontal {
+            height: 100%;
+        }
     }
 
     .icon-thumb {
-        max-width: 300px;
-        max-height: 300px;
+        display: block;
         object-fit: contain;
         border-radius: $radius-sm;
-        display: block;
+        // Vertical: fill full width of item
+        width: 100%;
+        height: auto;
+
+        .icon-item--horizontal & {
+            // Horizontal: fill full height of item
+            width: auto;
+            height: 100%;
+        }
     }
 
-    .icon-name {
+    .icon-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 4px 6px;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
         font-size: $fs-small;
-        text-align: center;
+        white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        white-space: nowrap;
-        width: 100%;
+        text-align: left;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+        border-bottom-left-radius: $radius-sm;
+        border-bottom-right-radius: $radius-sm;
+        pointer-events: none;
+
+        .icon-item:hover & {
+            opacity: 1;
+        }
     }
 
     // ── Empty state ──
