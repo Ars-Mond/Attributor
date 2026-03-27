@@ -470,12 +470,13 @@
         &:hover { background: var(--hover-bg); color: $text; }
 
         &.selected {
-            background: $chip-bg;
-            color: $chip-text;
+            outline: 2px solid $accent;
+            outline-offset: -2px;
         }
 
         &.active {
-            box-shadow: inset 2px 0 0 $accent;
+            outline: 2px solid $accent;
+            outline-offset: -2px;
         }
 
         // Horizontal layout: fill full container height, auto width
