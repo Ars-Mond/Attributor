@@ -8,7 +8,6 @@
     import {loadAppState, saveAppState} from "$lib/store";
     import {themes, applyTheme, DEFAULT_THEME} from "$lib/themes";
     import DockLayout from "$lib/docking/DockLayout.svelte";
-    import DockToolbar from "$lib/docking/DockToolbar.svelte";
     import type {LayoutNode, WindowConfig} from "$lib/docking/dockTypes";
     import {getDefaultLayout, removePanel, addPanelToRoot, findPanel, findSavePoint, insertPanel, serializeLayout, deserializeLayout} from "$lib/docking/dockStore";
     import type {PanelSavePoint} from "$lib/docking/dockStore";
@@ -282,12 +281,6 @@
             <MenuItem label="About" onClick={() => { showAbout = true; }} />
         </MenuTab>
     </MenuBar>
-
-<!--    <DockToolbar-->
-<!--        {hiddenWindows}-->
-<!--        {windowConfigs}-->
-<!--        onShowWindow={handleShowWindow}-->
-<!--    />-->
 
     <DockLayout
         bind:layout
