@@ -32,7 +32,7 @@
 
     let {
         source,
-        width = 480,
+        width,
         height,
         position,
         buttons = [],
@@ -40,9 +40,19 @@
         backdrop = true,
     }: {
         source: string;
-        /** px number or any CSS length string */
+        /**
+         * Popup width. Accepts:
+         *   - number  → interpreted as px  (e.g. 480  → "480px")
+         *   - string  → used as-is         (e.g. "90%", "50vw", "640px")
+         *   - omitted → max-width: calc(100vw - 32px)
+         */
         width?: number | string;
-        /** px number or any CSS length string; if omitted the popup grows with content */
+        /**
+         * Popup height. Accepts:
+         *   - number  → interpreted as px  (e.g. 600  → "600px")
+         *   - string  → used as-is         (e.g. "90vh", "80%", "400px")
+         *   - omitted → grows with content, max-height: calc(100vh - 32px)
+         */
         height?: number | string;
         /** Absolute viewport coords. Omit to centre on screen. */
         position?: PopupPosition;
@@ -52,17 +62,19 @@
         backdrop?: boolean;
     } = $props();
 
-    const w = $derived(typeof width  === 'number' ? `${width}px`  : width);
-    const h = $derived(typeof height === 'number' ? `${height}px` : height);
+    /** Convert a size prop to a CSS value string. Numbers get "px" appended. */
+    function toSize(v: number | string): string {
+        return typeof v === 'number' ? `${v}px` : v;
+    }
 
     const popupStyle = $derived(
         [
-            `width:${w}`,
-            h ? `height:${h}` : '',
+            width  != null ? `width:${toSize(width)}`   : 'max-width:calc(100vw - 32px)',
+            height != null ? `height:${toSize(height)}`  : 'max-height:calc(100vh - 32px)',
             position
                 ? `left:${position.x}px;top:${position.y}px`
                 : 'top:50%;left:50%;transform:translate(-50%,-50%)',
-        ].filter(Boolean).join(';')
+        ].join(';')
     );
 
     /** Build inline CSS-variable overrides for a single button. */
@@ -146,8 +158,6 @@
         border-radius: $radius-md;
         box-shadow: 0 12px 40px var(--shadow-heavy);
         overflow: hidden;
-        max-width: calc(100vw - 32px);
-        max-height: calc(100vh - 32px);
     }
 
     // ── Markdown body ─────────────────────────────────────────────────────────
