@@ -265,16 +265,14 @@
         batchKeywordStates = [...batchKeywordStates, {word: trimmed, state: 'all'}];
     }
 
-    function handleBatchChipClick(word: string, state: 'all' | 'some') {
-        if (state === 'some') {
-            // Promote to 'all'
-            batchKeywordStates = batchKeywordStates.map(s =>
-                s.word === word ? {word, state: 'all'} : s
-            );
-        } else {
-            // Remove (will be deleted from all files on save)
-            batchKeywordStates = batchKeywordStates.filter(s => s.word !== word);
-        }
+    function promoteBatchKeyword(word: string) {
+        batchKeywordStates = batchKeywordStates.map(s =>
+            s.word === word ? {word, state: 'all'} : s
+        );
+    }
+
+    function removeBatchKeyword(word: string) {
+        batchKeywordStates = batchKeywordStates.filter(s => s.word !== word);
     }
 
     function handleBatchKeywordKeydown(e: KeyboardEvent) {
@@ -284,6 +282,27 @@
             addBatchKeyword(batchKeywordInput);
             batchKeywordInput = '';
         }
+    }
+
+    function handleBatchKeywordInput() {
+        if (batchKeywordInput.includes(', ')) {
+            const parts = batchKeywordInput.split(', ');
+            for (let i = 0; i < parts.length - 1; i++) addBatchKeyword(parts[i]);
+            batchKeywordInput = parts[parts.length - 1];
+        }
+    }
+
+    async function copyBatchKeywords() {
+        const common = batchKeywordStates.filter(s => s.state === 'all').map(s => s.word);
+        if (!common.length) return;
+        await writeText(common.join(', ') + ', ');
+    }
+
+    async function pasteBatchKeywords() {
+        const text = await readText();
+        if (!text) return;
+        const parts = text.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+        for (const word of parts) addBatchKeyword(word);
     }
 
     // Unified keyword adder for preset buttons
@@ -523,6 +542,83 @@
         for (const word of parts) addKeyword(word);
     }
 
+    // ── Batch keyword drag & drop ──────────────────────────────────────────
+
+    let batchDragFromIndex = $state<number | null>(null);
+    let batchDropInsert = $state<number | null>(null);
+    let batchGhostWidth = $state(0);
+    let batchChipsEl = $state<HTMLElement | undefined>(undefined);
+    let batchFrozenRects: DOMRect[] = [];
+
+    const batchDragDisplay = $derived.by((): ({word: string; state: 'all' | 'some'} | null)[] => {
+        if (batchDragFromIndex === null || batchDropInsert === null) return batchKeywordStates;
+        const arr: ({word: string; state: 'all' | 'some'} | null)[] = batchKeywordStates.filter((_, i) => i !== batchDragFromIndex);
+        arr.splice(Math.min(batchDropInsert, arr.length), 0, null);
+        return arr;
+    });
+
+    function startBatchChipDrag(e: PointerEvent, kwIndex: number) {
+        if ((e.target as HTMLElement).closest('.chip-remove') || (e.target as HTMLElement).closest('.chip-promote')) return;
+        if (batchDragFromIndex !== null || batchKeywordStates.length < 2) return;
+        e.preventDefault();
+
+        const chipEl = e.currentTarget as HTMLElement;
+        const rect = chipEl.getBoundingClientRect();
+        const ox = e.clientX - rect.left;
+        const oy = e.clientY - rect.top;
+        batchGhostWidth = rect.width;
+
+        if (batchChipsEl) {
+            batchFrozenRects = [...batchChipsEl.querySelectorAll<HTMLElement>('.chip')]
+                .filter((_, i) => i !== kwIndex)
+                .map(c => c.getBoundingClientRect());
+        }
+
+        const ghost = chipEl.cloneNode(true) as HTMLElement;
+        Object.assign(ghost.style, {
+            position: 'fixed',
+            left: `${rect.left}px`,
+            top: `${rect.top}px`,
+            width: `${rect.width}px`,
+            margin: '0',
+            pointerEvents: 'none',
+            zIndex: '9999',
+            cursor: 'grabbing',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.55)',
+            opacity: '0.9',
+        });
+        document.body.appendChild(ghost);
+
+        batchDragFromIndex = kwIndex;
+        batchDropInsert = kwIndex;
+
+        const onMove = (ev: PointerEvent) => {
+            ghost.style.left = `${ev.clientX - ox}px`;
+            ghost.style.top = `${ev.clientY - oy}px`;
+            const next = calcDropInsert(ev.clientX, ev.clientY, batchFrozenRects);
+            if (next !== batchDropInsert) batchDropInsert = next;
+        };
+
+        const onUp = () => {
+            ghost.remove();
+            if (batchDropInsert !== null && batchDragFromIndex !== null && batchDropInsert !== batchDragFromIndex) {
+                const arr = [...batchKeywordStates];
+                const [moved] = arr.splice(batchDragFromIndex, 1);
+                arr.splice(batchDropInsert, 0, moved);
+                batchKeywordStates = arr;
+            }
+            batchDragFromIndex = null;
+            batchDropInsert = null;
+            batchGhostWidth = 0;
+            batchFrozenRects = [];
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+        };
+
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+    }
+
     // ── Keyword drag & drop (pointer-based, ghost + placeholder) ──────────
 
     let dragFromIndex = $state<number | null>(null);
@@ -578,7 +674,7 @@
         const onMove = (ev: PointerEvent) => {
             ghost.style.left = `${ev.clientX - ox}px`;
             ghost.style.top = `${ev.clientY - oy}px`;
-            const next = calcDropInsert(ev.clientX, ev.clientY);
+            const next = calcDropInsert(ev.clientX, ev.clientY, frozenRects);
             if (next !== dropInsert) dropInsert = next;
         };
 
@@ -602,8 +698,7 @@
         document.addEventListener('pointerup', onUp);
     }
 
-    function calcDropInsert(x: number, y: number): number {
-        const rects = frozenRects;
+    function calcDropInsert(x: number, y: number, rects: DOMRect[]): number {
         if (!rects.length) return 0;
         const chipH = rects[0].height;
 
@@ -681,7 +776,7 @@
                     <input
                         class="input"
                         type="text"
-                        placeholder={batchTitleMixed ? '(разные значения)' : 'A stunning mountain sunset'}
+                        placeholder={batchTitleMixed ? '(mixed values)' : 'A stunning mountain sunset'}
                         bind:value={batchTitle}
                         oninput={() => { if (batchTitle) applyTitle = true; }}
                     />
@@ -699,7 +794,7 @@
                     <textarea
                         bind:this={descriptionEl}
                         class="input textarea"
-                        placeholder={batchDescMixed ? '(разные значения)' : 'Describe the image in detail...'}
+                        placeholder={batchDescMixed ? '(mixed values)' : 'Describe the image in detail...'}
                         rows={4}
                         bind:value={batchDescription}
                         oninput={() => { if (batchDescription) applyDescription = true; }}
@@ -708,7 +803,7 @@
 
                 <!-- Keywords (batch) -->
                 <div class="field">
-                    <span class="field-label">Keywords</span>
+                    <span class="field-label">Keywords <span class="hint">— Enter or ", " to add</span></span>
                     <input
                         bind:this={batchKwInputEl}
                         class="input"
@@ -716,25 +811,70 @@
                         placeholder="Add keyword to all..."
                         bind:value={batchKeywordInput}
                         onkeydown={handleBatchKeywordKeydown}
+                        oninput={handleBatchKeywordInput}
                         onblur={() => suggestionsComp?.handleBlur()}
                     />
                     <div class="keyword-actions">
+                        <button
+                            class="kw-action-btn"
+                            onclick={copyBatchKeywords}
+                            disabled={batchKeywordStates.filter(s => s.state === 'all').length === 0}
+                            title="Copy common keywords to clipboard"
+                        >
+                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6z"/>
+                                <path d="M2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h-1v1H2V6h1V5H2z"/>
+                            </svg>
+                            Copy
+                        </button>
+                        <button
+                            class="kw-action-btn"
+                            onclick={pasteBatchKeywords}
+                            title="Paste keywords from clipboard"
+                        >
+                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                                <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                            </svg>
+                            Paste
+                        </button>
                         <span class="kw-count">{batchKeywordStates.length}</span>
                     </div>
                     {#if batchKeywordStates.length > 0}
-                        <div class="keyword-chips">
-                            {#each batchKeywordStates as kws (kws.word)}
-                                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                            <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                <span
-                                    class="chip"
-                                    class:chip--some={kws.state === 'some'}
-                                    onclick={() => handleBatchChipClick(kws.word, kws.state)}
-                                    role="listitem"
-                                    title={(kwFileMap.get(kws.word) ?? []).join('\n')}
-                                >
-                                    {kws.word}
-                                </span>
+                        <div
+                            class="keyword-chips"
+                            class:keyword-chips--dragging={batchDragFromIndex !== null}
+                            bind:this={batchChipsEl}
+                        >
+                            {#each batchDragDisplay as item, i (item === null ? `__placeholder__${i}` : `${i}:${item.word}`)}
+                                {#if item === null}
+                                    <span
+                                        class="chip chip--placeholder"
+                                        style="width:{batchGhostWidth}px"
+                                    ></span>
+                                {:else}
+                                    <span
+                                        class="chip"
+                                        class:chip--some={item.state === 'some'}
+                                        onpointerdown={(e) => startBatchChipDrag(e, batchKeywordStates.findIndex(s => s.word === item.word))}
+                                        role="listitem"
+                                        title={(kwFileMap.get(item.word) ?? []).join('\n')}
+                                    >
+                                        {#if item.state === 'some'}
+                                            <button
+                                                class="chip-promote"
+                                                onclick={() => promoteBatchKeyword(item.word)}
+                                                title="Add to all files"
+                                            ></button>
+                                        {/if}
+                                        {item.word}
+                                        <button
+                                            class="chip-remove"
+                                            onclick={() => removeBatchKeyword(item.word)}
+                                            aria-label="Remove keyword {item.word}"
+                                        >×</button>
+                                    </span>
+                                {/if}
                             {/each}
                         </div>
                     {/if}
@@ -919,7 +1059,7 @@
                         <input
                             class="input"
                             type="text"
-                            placeholder={batchCatMixed ? '(разные значения)' : 'Travel, Landscape'}
+                            placeholder={batchCatMixed ? '(mixed values)' : 'Travel, Landscape'}
                             bind:value={batchCategories}
                             oninput={() => { if (batchCategories) applyCategories = true; }}
                         />
@@ -1239,6 +1379,32 @@
         border: 1px dashed $text-muted !important;
         background: $bg-surface !important;
         color: $text-muted !important;
+        // chip-promote takes over the left padding hit area
+        padding-left: 0 !important;
+    }
+
+    .chip-promote {
+        @include btn-reset;
+        // Extend hit area to chip left/top/bottom edges
+        align-self: stretch;
+        display: flex;
+        align-items: center;
+        margin: -3px 0 -3px 0;
+        padding: 0 4px 0 8px;
+        flex-shrink: 0;
         cursor: pointer;
+
+        // Visual circle via pseudo-element
+        &::before {
+            content: '';
+            display: block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: $accent;
+            flex-shrink: 0;
+        }
+
+        &:hover::before { opacity: 0.75; }
     }
 </style>

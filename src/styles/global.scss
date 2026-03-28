@@ -201,6 +201,12 @@ h6 { font-size: $fs-h6; font-weight: 500; line-height: 1.4;  }
     font-size: $fs-regular;
     line-height: 1;
     opacity: 0.6;
+    // Extend hit area to chip right/top/bottom edges
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    margin: -3px -8px -3px 0;
+    padding: 0 8px 0 4px;
     @include transition(opacity);
 
     &:hover { opacity: 1; }

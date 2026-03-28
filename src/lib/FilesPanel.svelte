@@ -14,6 +14,7 @@
         onFolderOpen,
         onBusy,
         onSelectionChange,
+        onAltSelect,
         disabled = false,
     }: {
         onFileSelect: (path: string) => void;
@@ -21,6 +22,7 @@
         onFolderOpen?: (path: string) => void;
         onBusy?: (busy: boolean) => void;
         onSelectionChange?: (paths: string[]) => void;
+        onAltSelect?: (path: string) => void;
         disabled?: boolean;
     } = $props();
 
@@ -112,6 +114,10 @@
 
     function handleTreeSelect(path: string, e: MouseEvent) {
         if (disabled) return;
+        if (e.altKey && panelState.selectedPaths.has(path)) {
+            onAltSelect?.(path);
+            return;
+        }
         if (e.shiftKey) {
             doRangeSelect(path);
         } else if (e.ctrlKey || e.metaKey) {

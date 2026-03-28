@@ -140,6 +140,14 @@
     /** Called when selection changes (single or multi). */
     function handleSelectionChange(paths: string[]) {
         batchPaths = paths;
+        if (paths.length > 1) {
+            imageSrc = convertFileSrc(paths[paths.length - 1]);
+        }
+    }
+
+    /** Called when Alt+click on a photo in batch mode — preview only. */
+    function handleAltSelect(path: string) {
+        imageSrc = convertFileSrc(path);
     }
 
     // --- Dialog actions ---
@@ -322,6 +330,7 @@
                     onFolderOpen={(path) => saveAppState({lastFolder: path})}
                     onBusy={(b) => (isLoading = b)}
                     onSelectionChange={handleSelectionChange}
+                    onAltSelect={handleAltSelect}
                     disabled={showDialog}
                 />
             {/if}
