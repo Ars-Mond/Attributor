@@ -264,7 +264,7 @@
                 {/each}
             </MenuTab>
             <MenuSeparator />
-            <MenuItem label="Settings" onClick={() => {}} />
+            <!--<MenuItem label="Settings" onClick={() => {}} />-->
         </MenuTab>
         <MenuTab label="Windows">
             <MenuItem
