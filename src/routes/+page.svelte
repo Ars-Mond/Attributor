@@ -16,6 +16,7 @@
     import MenuItem from "$lib/menu/MenuItem.svelte";
     import MenuSeparator from "$lib/menu/MenuSeparator.svelte";
     import AboutDialog from "$lib/AboutDialog.svelte";
+    import HelpDialog from "$lib/HelpDialog.svelte";
     import InputContextMenu from "$lib/InputContextMenu.svelte";
 
     // --- Docking ---
@@ -77,6 +78,7 @@
     let isDirty = $state(false);
     let isLoading = $state(false);
     let showAbout = $state(false);
+    let showHelp  = $state(false);
     let currentTheme = $state(DEFAULT_THEME);
     let batchPaths = $state<string[]>([]);
 
@@ -277,7 +279,7 @@
             />
         </MenuTab>
         <MenuTab label="Help">
-            <MenuItem label="Help?" onClick={() => {}} />
+            <MenuItem label="Help" onClick={() => { showHelp = true; }} />
             <MenuItem label="About" onClick={() => { showAbout = true; }} />
         </MenuTab>
     </MenuBar>
@@ -343,6 +345,10 @@
 
 <!-- Unsaved changes dialog -->
 <InputContextMenu />
+
+{#if showHelp}
+    <HelpDialog onClose={() => { showHelp = false; }} />
+{/if}
 
 {#if showAbout}
     <AboutDialog onClose={() => { showAbout = false; }} />
