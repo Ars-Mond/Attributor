@@ -17,6 +17,7 @@
     import MenuItem from "$lib/menu/MenuItem.svelte";
     import MenuSeparator from "$lib/menu/MenuSeparator.svelte";
     import AboutDialog from "$lib/AboutDialog.svelte";
+    import InputContextMenu from "$lib/InputContextMenu.svelte";
 
     // --- Docking ---
     const windowConfigs: WindowConfig[] = [
@@ -348,6 +349,8 @@
 {/if}
 
 <!-- Unsaved changes dialog -->
+<InputContextMenu />
+
 {#if showAbout}
     <AboutDialog onClose={() => { showAbout = false; }} />
 {/if}
