@@ -16,6 +16,7 @@
     import MenuTab from "$lib/menu/MenuTab.svelte";
     import MenuItem from "$lib/menu/MenuItem.svelte";
     import MenuSeparator from "$lib/menu/MenuSeparator.svelte";
+    import AboutDialog from "$lib/AboutDialog.svelte";
 
     // --- Docking ---
     const windowConfigs: WindowConfig[] = [
@@ -75,6 +76,7 @@
     let filesPanel: any = $state(null);
     let isDirty = $state(false);
     let isLoading = $state(false);
+    let showAbout = $state(false);
     let currentTheme = $state(DEFAULT_THEME);
     let batchPaths = $state<string[]>([]);
 
@@ -276,7 +278,7 @@
         </MenuTab>
         <MenuTab label="Help">
             <MenuItem label="Help?" onClick={() => {}} />
-            <MenuItem label="About" onClick={() => {}} />
+            <MenuItem label="About" onClick={() => { showAbout = true; }} />
         </MenuTab>
     </MenuBar>
 
@@ -346,6 +348,10 @@
 {/if}
 
 <!-- Unsaved changes dialog -->
+{#if showAbout}
+    <AboutDialog onClose={() => { showAbout = false; }} />
+{/if}
+
 {#if showDialog}
     <UnsavedChangesDialog
         filename={currentBasename}
