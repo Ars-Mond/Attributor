@@ -2,21 +2,46 @@
 
 # Attributor
 
-Desktop application for editing photo metadata (EXIF/XMP) before submitting to stock photo agencies. Fill in title, description, keywords, and categories — then save directly into the image file (JPEG, PNG, WebP).
+![Version](https://img.shields.io/badge/version-0.3.0-blue)
+![License](https://img.shields.io/badge/license-AGPL--3.0-green)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-orange)
 
-## Releases
+Desktop application for editing photo metadata (EXIF/XMP) before submitting to stock photo agencies. Fill in title, description, keywords, and categories — then save directly into the image file without re-encoding.
 
-Download the latest installer from the [Releases](../../releases) page.
+**Supported formats:** JPEG · PNG · WebP
 
-See [CHANGELOG.md](CHANGELOG.md) for version history.
+## Features
+
+- **Metadata editing** — title, description, keywords, categories, and release filename written directly into the image as XMP
+- **Batch mode** — select multiple files and edit shared metadata at once; keywords show which files contain them, with per-keyword promote/remove controls
+- **Keyword autocomplete** — fuzzy search over 1 000+ stock photography terms with drag-and-drop reordering, clipboard copy/paste, and comma-separated bulk input
+- **Auto-save** — optional 1-second debounce auto-save for single-file editing
+- **File watcher** — detects external changes (renames, deletions) and refreshes the file tree automatically
+- **Flexible dock layout** — three resizable, closable, and reorderable panels (Control · View · Hierarchy)
+- **Multiple view modes** — table, content, and icons view with vertical/horizontal layout for the file browser
+- **Rename on save** — changing the filename field renames the actual file on disk
 
 ## Usage
 
-1. Click **Open Folder** and select a directory with your photos.
-2. Select an image in the file tree on the left.
-3. Edit the metadata fields: title, description, keywords, categories.
-4. Optionally rename the file via the filename field.
-5. Click **Save** — metadata is written directly into the image file.
+See the full **[User Guide](static/Help.md)** for detailed instructions.
+
+## Platforms
+
+| OS              | Builds                                 |
+|-----------------|----------------------------------------|
+| Windows 10 / 11 | Installer (`.msi`) · Portable (`.exe`) |
+| macOS           | `.dmg`                                 |
+| Linux           | `AppImage` · `.deb`                    |
+
+Download the latest release from the [Releases](../../releases) page.
+See [CHANGELOG.md](CHANGELOG.md) for version history.
+
+## Known Limitations
+
+- Icons view mode displays only the root-level files of the opened folder (no subdirectory traversal)
+- TIFF and RAW formats are not supported
+- Auto-save is disabled in batch mode to prevent accidental overwrites
 
 ## For Developers
 

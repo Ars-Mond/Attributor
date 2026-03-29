@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.3.0] - 2026-03-28
+
+### Added
+- Multi-select files in the file browser for batch metadata editing
+- Batch keyword editing: shows which files contain each keyword; promote (●) and remove (×) per-keyword controls
+- Batch keywords: drag-to-reorder, copy/paste buttons, comma-separated bulk input
+- Alt+click on a file in batch mode previews it in the viewer without changing selection
+- Table, Content, and Icons view modes for the file browser with vertical / horizontal layout toggle
+- Icons view: full-bleed images filling the cell, hover overlay with filename tooltip
+- Word and character count shown below title and description fields; keyword count shown in the keywords header
+- About dialog with app version (read from `tauri.conf.json` at runtime), description, and license
+- Custom right-click context menu (Copy / Paste) for all text input and textarea fields
+- Reusable `MarkdownPopup` component: renders Markdown with configurable size (supports px, %, vh, vw, etc.), position, and fully styled action buttons
+- Help dialog loading `Help.md` via `MarkdownPopup`
+
+### Changed
+- FilesPanel view preferences (mode, layout, sort) extracted into a persistent Svelte store
+- Icon selection highlight switched from box-shadow to outline so it remains visible over images
+- Closed dock panels now restore to their original position and size when re-opened
+
+### Fixed
+- Icon selection highlight was hidden beneath the photo — replaced with `outline: 2px solid` overlay
+
 ## [0.2.1] - 2026-03-23
 
 ### Fixed
