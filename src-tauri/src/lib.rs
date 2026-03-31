@@ -12,7 +12,7 @@ use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Reader;
 use quick_xml::Writer;
 use serde::{Deserialize, Serialize};
-use std::io::Cursor;
+use std::io::{BufReader, Cursor, Read, Seek, SeekFrom};
 use std::sync::{Mutex, OnceLock};
 
 // ── Keyword dictionary ─────────────────────────────────────────────────────
@@ -122,7 +122,7 @@ pub struct SaveRequest {
 }
 
 /// XMP fields returned when reading an image.
-#[derive(Serialize, Default)]
+#[derive(Serialize, Default, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadResult {
     pub title: String,
@@ -209,7 +209,7 @@ fn build_xmp(req: &SaveRequest) -> Result<Bytes, quick_xml::Error> {
 // ── XMP parsing ───────────────────────────────────────────────────────────
 
 /// Extract XMP fields from a raw XMP packet (UTF-8 XML bytes).
-fn parse_xmp(xmp_bytes: &[u8]) -> ReadResult {
+pub fn parse_xmp(xmp_bytes: &[u8]) -> ReadResult {
     #[derive(Clone, Copy, PartialEq)]
     enum Ctx {
         None,
@@ -303,13 +303,6 @@ fn parse_xmp(xmp_bytes: &[u8]) -> ReadResult {
 
 const JPEG_XMP_HEADER: &[u8] = b"http://ns.adobe.com/xap/1.0/\0";
 
-fn get_jpeg_xmp(jpeg: &Jpeg) -> Option<Bytes> {
-    jpeg.segments()
-        .iter()
-        .find(|seg| seg.marker() == markers::APP1 && seg.contents().starts_with(JPEG_XMP_HEADER))
-        .map(|seg| seg.contents().slice(JPEG_XMP_HEADER.len()..))
-}
-
 fn set_jpeg_xmp(jpeg: &mut Jpeg, xmp: Bytes) {
     jpeg.segments_mut().retain(|seg| {
         !(seg.marker() == markers::APP1 && seg.contents().starts_with(JPEG_XMP_HEADER))
@@ -326,12 +319,6 @@ const PNG_XMP_KEYWORD: &[u8] = b"XML:com.adobe.xmp";
 // iTXt header size: keyword + \0 + flags(2) + lang\0 + trans\0 = keyword_len + 5
 const PNG_XMP_HEADER_LEN: usize = PNG_XMP_KEYWORD.len() + 5;
 
-fn get_png_xmp(png: &Png) -> Option<Bytes> {
-    png.chunk_by_type(PNG_ITXT)
-        .filter(|chunk| chunk.contents().starts_with(PNG_XMP_KEYWORD))
-        .map(|chunk| chunk.contents().slice(PNG_XMP_HEADER_LEN..))
-}
-
 fn set_png_xmp(png: &mut Png, xmp: Bytes) {
     // Remove only the XMP iTXt chunk; other iTXt chunks (copyright, comments, etc.) are preserved.
     png.chunks_mut().retain(|chunk| {
@@ -346,38 +333,152 @@ fn set_png_xmp(png: &mut Png, xmp: Bytes) {
     png.chunks_mut().insert(pos, chunk);
 }
 
-fn get_webp_xmp(webp: &WebP) -> Option<Bytes> {
-    webp.chunk_by_id(CHUNK_XMP)
-        .and_then(|chunk| chunk.content().data().cloned())
-}
-
 fn set_webp_xmp(webp: &mut WebP, xmp: Bytes) {
     webp.remove_chunks_by_id(CHUNK_XMP);
     let chunk = img_parts::riff::RiffChunk::new(CHUNK_XMP, RiffContent::Data(xmp));
     webp.chunks_mut().push(chunk);
 }
 
+// ── Fast XMP readers (streaming, no full-file load) ───────────────────────
+//
+// Each function reads only the metadata portion of the file:
+// JPEG  — segments up to SOS (image data); XMP is always in an early APP1 segment.
+// PNG   — chunks up to IDAT; XMP is in an iTXt chunk before image data.
+// WebP  — RIFF chunks; seeks past every non-XMP chunk.
+
+pub fn read_jpeg_xmp_fast<R: Read + Seek>(r: &mut R) -> std::io::Result<Option<Vec<u8>>> {
+    let mut b2 = [0u8; 2];
+
+    r.read_exact(&mut b2)?;
+    if b2 != [0xFF, 0xD8] {
+        return Ok(None); // not JPEG
+    }
+
+    loop {
+        r.read_exact(&mut b2)?;
+        if b2[0] != 0xFF {
+            return Ok(None); // corrupt
+        }
+        // Consume fill bytes (0xFF padding before marker code)
+        let mut m = b2[1];
+        while m == 0xFF {
+            r.read_exact(&mut b2[1..2])?;
+            m = b2[1];
+        }
+
+        // Standalone markers without a length field
+        if m == 0xD8 || m == 0xD9 || (0xD0..=0xD7).contains(&m) {
+            if m == 0xD9 { break; } // EOI
+            continue;
+        }
+        // SOS — image data starts; no more metadata segments follow
+        if m == 0xDA {
+            break;
+        }
+
+        r.read_exact(&mut b2)?;
+        let data_len = (u16::from_be_bytes(b2) as usize).saturating_sub(2);
+
+        if m == 0xE1 {
+            // APP1: may be XMP or EXIF — always small, read fully
+            let mut data = vec![0u8; data_len];
+            r.read_exact(&mut data)?;
+            if data.starts_with(JPEG_XMP_HEADER) {
+                return Ok(Some(data[JPEG_XMP_HEADER.len()..].to_vec()));
+            }
+        } else {
+            r.seek(SeekFrom::Current(data_len as i64))?;
+        }
+    }
+
+    Ok(None)
+}
+
+pub fn read_png_xmp_fast<R: Read + Seek>(r: &mut R) -> std::io::Result<Option<Vec<u8>>> {
+    let mut hdr = [0u8; 8];
+
+    r.read_exact(&mut hdr)?;
+    if hdr != [137, 80, 78, 71, 13, 10, 26, 10] {
+        return Ok(None); // not PNG
+    }
+
+    loop {
+        r.read_exact(&mut hdr)?; // length (4) + type (4)
+        let length = u32::from_be_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]) as usize;
+        let kind = &hdr[4..8];
+
+        if kind == b"IDAT" || kind == b"IEND" {
+            break; // image data starts; XMP comes before this
+        }
+
+        if kind == b"iTXt" {
+            let mut data = vec![0u8; length];
+            r.read_exact(&mut data)?;
+            r.seek(SeekFrom::Current(4))?; // skip CRC
+            if data.starts_with(PNG_XMP_KEYWORD) {
+                return Ok(Some(data[PNG_XMP_HEADER_LEN..].to_vec()));
+            }
+        } else {
+            r.seek(SeekFrom::Current(length as i64 + 4))?; // data + CRC
+        }
+    }
+
+    Ok(None)
+}
+
+pub fn read_webp_xmp_fast<R: Read + Seek>(r: &mut R) -> std::io::Result<Option<Vec<u8>>> {
+    let mut riff = [0u8; 12];
+
+    r.read_exact(&mut riff)?;
+    if &riff[0..4] != b"RIFF" || &riff[8..12] != b"WEBP" {
+        return Ok(None); // not WebP
+    }
+
+    let mut chdr = [0u8; 8]; // FourCC (4) + size (4, little-endian)
+    loop {
+        match r.read_exact(&mut chdr) {
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(e) => return Err(e),
+            Ok(()) => {}
+        }
+        let size = u32::from_le_bytes([chdr[4], chdr[5], chdr[6], chdr[7]]) as usize;
+
+        if &chdr[0..4] == b"XMP " {
+            let mut data = vec![0u8; size];
+            r.read_exact(&mut data)?;
+            return Ok(Some(data));
+        }
+        // RIFF chunks are padded to even size
+        r.seek(SeekFrom::Current((size + (size & 1)) as i64))?;
+    }
+
+    Ok(None)
+}
+
 // ── Commands ──────────────────────────────────────────────────────────────
 
 /// Read XMP metadata fields from an image file.
+/// Uses format-specific streaming readers to avoid loading the full image into memory.
 /// Returns default (empty) values if the file has no XMP.
 #[tauri::command]
 fn read_metadata(path: String) -> Result<ReadResult, String> {
     let p = std::path::Path::new(&path);
     info!("read_metadata: {}", p.display());
 
-    let raw = std::fs::read(p).map_err(|e| e.to_string())?;
-    let image = DynImage::from_bytes(Bytes::from(raw))
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Unsupported format: {}", p.display()))?;
+    let ext = p.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase());
 
-    let xmp = match &image {
-        DynImage::Jpeg(jpeg) => get_jpeg_xmp(jpeg),
-        DynImage::Png(png) => get_png_xmp(png),
-        DynImage::WebP(webp) => get_webp_xmp(webp),
+    let open = || std::fs::File::open(p).map(BufReader::new).map_err(|e| e.to_string());
+
+    let xmp_bytes: Option<Vec<u8>> = match ext.as_deref() {
+        Some("jpg") | Some("jpeg") => read_jpeg_xmp_fast(&mut open()?).map_err(|e| e.to_string())?,
+        Some("png")                => read_png_xmp_fast(&mut open()?).map_err(|e| e.to_string())?,
+        Some("webp")               => read_webp_xmp_fast(&mut open()?).map_err(|e| e.to_string())?,
+        _ => return Err(format!("Unsupported format: {}", p.display())),
     };
 
-    let result = xmp.as_deref().map(parse_xmp).unwrap_or_default();
+    let result = xmp_bytes.as_deref().map(parse_xmp).unwrap_or_default();
     debug!("read_metadata: title={:?} keywords_count={}", result.title, result.keywords.len());
     debug!("read_metadata: keywords={}", result.keywords.join(", "));
     Ok(result)
