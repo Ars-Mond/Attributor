@@ -303,6 +303,13 @@ pub fn parse_xmp(xmp_bytes: &[u8]) -> ReadResult {
 
 const JPEG_XMP_HEADER: &[u8] = b"http://ns.adobe.com/xap/1.0/\0";
 
+fn get_jpeg_xmp(jpeg: &Jpeg) -> Option<Bytes> {
+    jpeg.segments()
+        .iter()
+        .find(|seg| seg.marker() == markers::APP1 && seg.contents().starts_with(JPEG_XMP_HEADER))
+        .map(|seg| seg.contents().slice(JPEG_XMP_HEADER.len()..))
+}
+
 fn set_jpeg_xmp(jpeg: &mut Jpeg, xmp: Bytes) {
     jpeg.segments_mut().retain(|seg| {
         !(seg.marker() == markers::APP1 && seg.contents().starts_with(JPEG_XMP_HEADER))
@@ -319,6 +326,12 @@ const PNG_XMP_KEYWORD: &[u8] = b"XML:com.adobe.xmp";
 // iTXt header size: keyword + \0 + flags(2) + lang\0 + trans\0 = keyword_len + 5
 const PNG_XMP_HEADER_LEN: usize = PNG_XMP_KEYWORD.len() + 5;
 
+fn get_png_xmp(png: &Png) -> Option<Bytes> {
+    png.chunk_by_type(PNG_ITXT)
+        .filter(|chunk| chunk.contents().starts_with(PNG_XMP_KEYWORD))
+        .map(|chunk| chunk.contents().slice(PNG_XMP_HEADER_LEN..))
+}
+
 fn set_png_xmp(png: &mut Png, xmp: Bytes) {
     // Remove only the XMP iTXt chunk; other iTXt chunks (copyright, comments, etc.) are preserved.
     png.chunks_mut().retain(|chunk| {
@@ -333,10 +346,32 @@ fn set_png_xmp(png: &mut Png, xmp: Bytes) {
     png.chunks_mut().insert(pos, chunk);
 }
 
+fn get_webp_xmp(webp: &WebP) -> Option<Bytes> {
+    webp.chunk_by_id(CHUNK_XMP)
+        .and_then(|chunk| chunk.content().data().cloned())
+}
+
 fn set_webp_xmp(webp: &mut WebP, xmp: Bytes) {
     webp.remove_chunks_by_id(CHUNK_XMP);
     let chunk = img_parts::riff::RiffChunk::new(CHUNK_XMP, RiffContent::Data(xmp));
     webp.chunks_mut().push(chunk);
+}
+
+// ── Old XMP reader (full file load via DynImage) ──────────────────────────
+
+/// Original approach: load the entire file into a DynImage, then extract XMP.
+/// Kept for benchmarking comparison against the fast streaming readers.
+/// `data` should be the raw file bytes (as returned by fs::read).
+pub fn old_read_xmp(data: &[u8]) -> Option<Vec<u8>> {
+    let image = DynImage::from_bytes(Bytes::from(data.to_vec()))
+        .ok()
+        .flatten()?;
+    let xmp = match &image {
+        DynImage::Jpeg(jpeg) => get_jpeg_xmp(jpeg),
+        DynImage::Png(png)   => get_png_xmp(png),
+        DynImage::WebP(webp) => get_webp_xmp(webp),
+    };
+    xmp.map(|b| b.to_vec())
 }
 
 // ── Fast XMP readers (streaming, no full-file load) ───────────────────────
