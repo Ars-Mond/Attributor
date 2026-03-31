@@ -403,12 +403,16 @@ pub fn read_png_xmp_fast<R: Read + Seek>(r: &mut R) -> std::io::Result<Option<Ve
     }
 
     loop {
-        r.read_exact(&mut hdr)?; // length (4) + type (4)
+        match r.read_exact(&mut hdr) {
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(e) => return Err(e),
+            Ok(()) => {}
+        }
         let length = u32::from_be_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]) as usize;
         let kind = &hdr[4..8];
 
-        if kind == b"IDAT" || kind == b"IEND" {
-            break; // image data starts; XMP comes before this
+        if kind == b"IEND" {
+            break; // only stop at end-of-file marker; iTXt XMP may appear after IDAT
         }
 
         if kind == b"iTXt" {

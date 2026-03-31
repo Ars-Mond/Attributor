@@ -182,6 +182,21 @@ fn png_skips_non_xmp_chunks_before_itxt() {
     png_chunk(&mut raw, b"zTXt", b"Description\0\0compressed_data");
     png_itxt_xmp(&mut raw, TEST_XMP);
     png_chunk(&mut raw, b"IDAT", &[]);
+    png_chunk(&mut raw, b"IEND", &[]);
+    let xmp = read_png_xmp_fast(&mut Cursor::new(&raw)).unwrap().unwrap();
+    assert_eq!(xmp, TEST_XMP);
+}
+
+#[test]
+fn png_extracts_xmp_after_idat() {
+    // Real-world scenario: XMP iTXt chunk comes AFTER all IDAT chunks, just before IEND.
+    // This is valid per the PNG spec and common in files written by editors like Photoshop.
+    let mut raw = PNG_SIG.to_vec();
+    png_chunk(&mut raw, b"IHDR", &[0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0]); // 1×1 px
+    png_chunk(&mut raw, b"IDAT", b"fake_compressed_image_data");
+    png_chunk(&mut raw, b"IDAT", b"more_fake_idat_data");
+    png_itxt_xmp(&mut raw, TEST_XMP); // XMP after image data
+    png_chunk(&mut raw, b"IEND", &[]);
     let xmp = read_png_xmp_fast(&mut Cursor::new(&raw)).unwrap().unwrap();
     assert_eq!(xmp, TEST_XMP);
 }
