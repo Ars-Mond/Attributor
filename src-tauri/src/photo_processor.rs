@@ -32,6 +32,20 @@ impl PhotoProcessor {
         Self { cache_dir: cache_dir.into() }
     }
 
+    /// Check cache without processing the image.
+    /// Returns thumbnail paths from the sidecar if it exists, or `None` if the
+    /// image has not been processed yet.
+    pub fn cached_thumbs(&self, path: &Path) -> Option<ThumbnailPaths> {
+        let meta = fs::metadata(path).ok()?;
+        let key = cache_key(path, &meta);
+        let sidecar = self.cache_dir.join(format!("{key}.paths"));
+        let content = fs::read_to_string(&sidecar).ok()?;
+        let mut lines = content.lines();
+        let t360 = PathBuf::from(lines.next()?);
+        let t1920 = PathBuf::from(lines.next()?);
+        Some(ThumbnailPaths { thumb_360: t360, thumb_1920: t1920 })
+    }
+
     /// Process an image in a single file read:
     /// 1. Check `{key}.paths` sidecar — if present, stream only the XMP header (fast path).
     /// 2. Otherwise, read the full file once, extract XMP, decode, resize, write cache.
