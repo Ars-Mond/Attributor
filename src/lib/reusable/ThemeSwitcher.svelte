@@ -1,6 +1,6 @@
 <script lang="ts">
-    import {themes, applyTheme} from './themes';
-    import {saveAppState} from './store';
+    import {themes, applyTheme} from '../themes';
+    import {saveAppState} from '../store';
 
     let {current = 'dark'}: {current?: string} = $props();
 
@@ -58,7 +58,7 @@
 </div>
 
 <style lang="scss">
-    @use '../styles/mixins' as *;
+    @use '../../styles/mixins' as *;
 
     .theme-switcher {
         position: relative;

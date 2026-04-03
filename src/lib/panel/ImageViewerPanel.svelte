@@ -36,7 +36,7 @@
 </div>
 
 <style lang="scss">
-    @use '../styles/mixins' as *;
+    @use '../../styles/mixins' as *;
 
     .viewer {
         @include flex(row, center, center, 1);

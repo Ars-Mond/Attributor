@@ -113,7 +113,7 @@
 {/if}
 
 <style lang="scss">
-    @use '../styles/mixins' as *;
+    @use '../../styles/mixins' as *;
 
     .kw-suggestions {
         position: fixed;

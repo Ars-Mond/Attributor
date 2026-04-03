@@ -1,6 +1,6 @@
 <script lang="ts">
     import ConfirmDialog from './ConfirmDialog.svelte';
-    import type {DialogButton} from './types';
+    import type {DialogButton} from '../types';
 
     let {
         filename,

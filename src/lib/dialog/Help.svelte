@@ -1,6 +1,6 @@
 <script lang="ts">
     import {onMount} from 'svelte';
-    import MarkdownPopup from './MarkdownPopup.svelte';
+    import MarkdownPopup from '../reusable/MarkdownPopup.svelte';
 
     let {onClose}: {onClose: () => void} = $props();
 

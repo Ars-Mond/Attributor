@@ -3,8 +3,8 @@
     import {convertFileSrc} from "@tauri-apps/api/core";
     import {listen} from "@tauri-apps/api/event";
     import {onMount, onDestroy} from "svelte";
-    import FileTree from "./FileTree.svelte";
-    import type {FileNode} from "./types";
+    import FileTree from "../reusable/FileTree.svelte";
+    import type {FileNode} from "../types";
     import {panelState} from './filesPanelStore.svelte';
     import type {ViewMode, LayoutDir} from './filesPanelStore.svelte';
 
@@ -373,7 +373,7 @@
 </aside>
 
 <style lang="scss">
-    @use '../styles/mixins' as *;
+    @use '../../styles/mixins' as *;
 
     .panel--files {
         border-left: 1px solid $border;

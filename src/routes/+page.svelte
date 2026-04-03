@@ -2,9 +2,9 @@
     import {onMount, onDestroy} from "svelte";
     import {convertFileSrc} from "@tauri-apps/api/core";
     import {getCurrentWindow, PhysicalSize} from "@tauri-apps/api/window";
-    import MetadataPanel from "$lib/MetadataPanel.svelte";
-    import FilesPanel from "$lib/FilesPanel.svelte";
-    import UnsavedChangesDialog from "$lib/UnsavedChangesDialog.svelte";
+    import MetadataPanel from "$lib/panel/MetadataPanel.svelte";
+    import FilesPanel from "$lib/panel/FilesPanel.svelte";
+    import UnsavedChangesDialog from "$lib/dialog/UnsavedChangesDialog.svelte";
     import {loadAppState, saveAppState} from "$lib/store";
     import {themes, applyTheme, DEFAULT_THEME} from "$lib/themes";
     import DockLayout from "$lib/docking/DockLayout.svelte";
@@ -15,10 +15,10 @@
     import MenuTab from "$lib/menu/MenuTab.svelte";
     import MenuItem from "$lib/menu/MenuItem.svelte";
     import MenuSeparator from "$lib/menu/MenuSeparator.svelte";
-    import AboutDialog from "$lib/AboutDialog.svelte";
-    import HelpDialog from "$lib/HelpDialog.svelte";
-    import ImageViewerPanel from "$lib/ImageViewerPanel.svelte";
-    import InputContextMenu from "$lib/InputContextMenu.svelte";
+    import About from "$lib/dialog/About.svelte";
+    import Help from "$lib/dialog/Help.svelte";
+    import ImageViewerPanel from "$lib/panel/ImageViewerPanel.svelte";
+    import InputContextMenu from "$lib/reusable/InputContextMenu.svelte";
 
     // --- Docking ---
     const windowConfigs: WindowConfig[] = [
@@ -323,11 +323,11 @@
 <InputContextMenu />
 
 {#if showHelp}
-    <HelpDialog onClose={() => { showHelp = false; }} />
+    <Help onClose={() => { showHelp = false; }} />
 {/if}
 
 {#if showAbout}
-    <AboutDialog onClose={() => { showAbout = false; }} />
+    <About onClose={() => { showAbout = false; }} />
 {/if}
 
 {#if showDialog}

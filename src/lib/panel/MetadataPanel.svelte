@@ -2,10 +2,10 @@
     import {onMount} from "svelte";
     import {invoke} from "@tauri-apps/api/core";
     import {writeText, readText} from "@tauri-apps/plugin-clipboard-manager";
-    import KeywordSuggestions from "./KeywordSuggestions.svelte";
-    import ConfirmDialog from "./ConfirmDialog.svelte";
-    import {loadAppState, saveAppState} from "./store";
-    import type {Metadata, ReadResult} from "./types";
+    import KeywordSuggestions from "../reusable/KeywordSuggestions.svelte";
+    import ConfirmDialog from "../dialog/ConfirmDialog.svelte";
+    import {loadAppState, saveAppState} from "../store";
+    import type {Metadata, ReadResult} from "../types";
 
     // ── Bindable props ─────────────────────────────────────────────────────
 
@@ -1183,7 +1183,7 @@
 </aside>
 
 <style lang="scss">
-    @use '../styles/mixins' as *;
+    @use '../../styles/mixins' as *;
 
     // ── File info ──
     .file-info {
