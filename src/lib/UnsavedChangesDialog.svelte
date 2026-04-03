@@ -1,6 +1,6 @@
 <script lang="ts">
     import ConfirmDialog from './ConfirmDialog.svelte';
-    import type {PopupButton} from './MarkdownPopup.svelte';
+    import type {DialogButton} from './types';
 
     let {
         filename,
@@ -14,7 +14,7 @@
         onCancel: () => void;
     } = $props();
 
-    const buttons: PopupButton[] = [
+    const buttons: DialogButton[] = [
         {
             label: 'Cancel',
             onClick: onCancel,

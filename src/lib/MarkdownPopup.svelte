@@ -1,24 +1,5 @@
 <script lang="ts" module>
-    /** Button configuration for MarkdownPopup.
-     *  All color fields accept any CSS color value or CSS variable (e.g. "var(--accent)").
-     *  Omitted fields fall back through the cascade: active → hover → base → theme default.
-     */
-    export interface PopupButton {
-        label: string;
-        onClick: () => void;
-        // Base state
-        bg?: string;
-        color?: string;
-        border?: string;
-        // Hover state (falls back to base if omitted)
-        hoverBg?: string;
-        hoverColor?: string;
-        hoverBorder?: string;
-        // Active / pressed state (falls back to hover if omitted)
-        activeBg?: string;
-        activeColor?: string;
-        activeBorder?: string;
-    }
+    export type {DialogButton} from './types';
 
     /** Absolute viewport position. If omitted the popup is centered on screen. */
     export interface PopupPosition {
@@ -29,6 +10,7 @@
 
 <script lang="ts">
     import SvelteMarkdown from '@humanspeak/svelte-markdown';
+    import type {DialogButton} from './types';
 
     let {
         source,
@@ -56,7 +38,7 @@
         height?: number | string;
         /** Absolute viewport coords. Omit to centre on screen. */
         position?: PopupPosition;
-        buttons?: PopupButton[];
+        buttons?: DialogButton[];
         onClose?: () => void;
         /** Show a dimmed backdrop. Default: true. */
         backdrop?: boolean;
@@ -78,7 +60,7 @@
     );
 
     /** Build inline CSS-variable overrides for a single button. */
-    function btnStyle(btn: PopupButton): string {
+    function btnStyle(btn: DialogButton): string {
         const v: string[] = [];
         if (btn.bg)           v.push(`--_bg:${btn.bg}`);
         if (btn.color)        v.push(`--_color:${btn.color}`);

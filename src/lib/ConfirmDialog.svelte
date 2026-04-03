@@ -3,7 +3,7 @@
 </script>
 
 <script lang="ts">
-    import type {PopupButton} from './MarkdownPopup.svelte';
+    import type {DialogButton} from './types';
 
     let {
         title,
@@ -15,11 +15,11 @@
         title: string;
         body: string;
         icon?: DialogIcon;
-        buttons?: PopupButton[];
+        buttons?: DialogButton[];
         onClose?: () => void;
     } = $props();
 
-    function btnStyle(btn: PopupButton): string {
+    function btnStyle(btn: DialogButton): string {
         const v: string[] = [];
         if (btn.bg)           v.push(`--_bg:${btn.bg}`);
         if (btn.color)        v.push(`--_color:${btn.color}`);
