@@ -59,7 +59,7 @@
 </div>
 
 <style lang="scss">
-    @use '../styles/mixins' as *;
+    @use 'styles/mixins' as *;
 
     .overlay {
         position: fixed;

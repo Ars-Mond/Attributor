@@ -2,9 +2,10 @@
     import {onMount} from "svelte";
     import {invoke} from "@tauri-apps/api/core";
     import {writeText, readText} from "@tauri-apps/plugin-clipboard-manager";
-    import KeywordSuggestions from "./KeywordSuggestions.svelte";
-    import {loadAppState, saveAppState} from "./store";
-    import type {Metadata, ReadResult} from "./types";
+    import KeywordSuggestions from "$reusable/KeywordSuggestions.svelte";
+    import ConfirmDialog from "$lib/dialog/ConfirmDialog.svelte";
+    import {loadAppState, saveAppState} from "$lib/store";
+    import type {Metadata, ReadResult} from "$lib/types";
 
     // ── Bindable props ─────────────────────────────────────────────────────
 
@@ -33,6 +34,7 @@
     let autoSave = $state(false);
     let saveAttempted = $state(false);
     let saveError = $state<string | null>(null);
+    let showClearConfirm = $state(false);
 
     // ── UI preferences (persisted) ─────────────────────────────────────────
 
@@ -542,6 +544,15 @@
         for (const word of parts) addKeyword(word);
     }
 
+    function clearKeywords() {
+        if (isBatch) {
+            batchKeywordStates = [];
+        } else {
+            keywords = [];
+        }
+        showClearConfirm = false;
+    }
+
     // ── Batch keyword drag & drop ──────────────────────────────────────────
 
     let batchDragFromIndex = $state<number | null>(null);
@@ -838,6 +849,18 @@
                             </svg>
                             Paste
                         </button>
+                        <button
+                            class="kw-action-btn kw-action-btn--danger"
+                            onclick={() => { showClearConfirm = true; }}
+                            disabled={batchKeywordStates.length === 0}
+                            title="Clear all keywords"
+                        >
+                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                            </svg>
+                            Clear
+                        </button>
                         <span class="kw-count">{batchKeywordStates.length}</span>
                     </div>
                     {#if batchKeywordStates.length > 0}
@@ -968,6 +991,18 @@
                             </svg>
                             Paste
                         </button>
+                        <button
+                            class="kw-action-btn kw-action-btn--danger"
+                            onclick={() => { showClearConfirm = true; }}
+                            disabled={keywords.length === 0}
+                            title="Clear all keywords"
+                        >
+                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                            </svg>
+                            Clear
+                        </button>
                         <span class="kw-count">{keywords.length}</span>
                     </div>
                     {#if keywords.length > 0}
@@ -1078,6 +1113,29 @@
         </details>
     </div>
 
+    {#if showClearConfirm}
+        <ConfirmDialog
+            title="Clear Keywords"
+            body={isBatch
+                ? `Remove all keywords from all ${batchPaths.length} selected files?`
+                : 'Remove all keywords from this image?'}
+            icon="warning"
+            buttons={[
+                {label: 'Cancel', onClick: () => { showClearConfirm = false; }},
+                {
+                    label: 'Clear All',
+                    onClick: clearKeywords,
+                    color: 'var(--required-color)',
+                    border: 'var(--required-color)',
+                    hoverBg: 'var(--required-alpha-08)',
+                    hoverBorder: 'var(--required-color)',
+                    hoverColor: 'var(--required-color)',
+                },
+            ]}
+            onClose={() => { showClearConfirm = false; }}
+        />
+    {/if}
+
     <!-- ── Keyword suggestions dropdown ── -->
     <KeywordSuggestions
         bind:this={suggestionsComp}
@@ -1125,7 +1183,7 @@
 </aside>
 
 <style lang="scss">
-    @use '../styles/mixins' as *;
+    @use 'styles/mixins' as *;
 
     // ── File info ──
     .file-info {
@@ -1221,6 +1279,12 @@
         &:disabled {
             opacity: 0.35;
             cursor: not-allowed;
+        }
+
+        &--danger:hover:not(:disabled) {
+            background: var(--required-alpha-08);
+            color: var(--required-color);
+            border-color: var(--required-color);
         }
     }
 

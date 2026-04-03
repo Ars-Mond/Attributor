@@ -33,7 +33,7 @@
 </nav>
 
 <style lang="scss">
-    @use '../../styles/mixins' as *;
+    @use 'styles/mixins' as *;
 
     .menu-bar {
         @include flex(row, flex-start, stretch);

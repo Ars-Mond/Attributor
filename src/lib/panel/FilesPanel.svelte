@@ -3,8 +3,8 @@
     import {convertFileSrc} from "@tauri-apps/api/core";
     import {listen} from "@tauri-apps/api/event";
     import {onMount, onDestroy} from "svelte";
-    import FileTree from "./FileTree.svelte";
-    import type {FileNode} from "./types";
+    import FileTree from "$reusable/FileTree.svelte";
+    import type {FileNode} from "$lib/types";
     import {panelState} from './filesPanelStore.svelte';
     import type {ViewMode, LayoutDir} from './filesPanelStore.svelte';
 
@@ -333,7 +333,7 @@
         {#if panelState.fileTree}
             {#if panelState.viewMode === 'icons'}
                 <!-- Flat list of image files from the root level only -->
-                {#each panelState.fileTree.children.filter(c => !c.is_dir && isImageFile(c.name)) as node (node.path)}
+                {#each panelState.fileTree.children.filter((c: FileNode) => !c.is_dir && isImageFile(c.name)) as node (node.path)}
                     <button
                         class="icon-item"
                         class:selected={panelState.selectedPaths.has(node.path)}
@@ -373,7 +373,7 @@
 </aside>
 
 <style lang="scss">
-    @use '../styles/mixins' as *;
+    @use 'styles/mixins' as *;
 
     .panel--files {
         border-left: 1px solid $border;

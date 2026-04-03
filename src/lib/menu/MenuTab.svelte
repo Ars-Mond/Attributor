@@ -145,7 +145,7 @@
 {/if}
 
 <style lang="scss">
-    @use '../../styles/mixins' as *;
+    @use 'styles/mixins' as *;
 
     .menu-tab-trigger {
         @include btn-reset;

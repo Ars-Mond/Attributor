@@ -44,7 +44,7 @@
 </li>
 
 <style lang="scss">
-    @use '../../styles/mixins' as *;
+    @use 'styles/mixins' as *;
 
     .menu-item {
         padding: 5px 12px;

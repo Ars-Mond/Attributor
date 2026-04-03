@@ -2,7 +2,7 @@
     import {untrack} from "svelte";
     import {convertFileSrc} from "@tauri-apps/api/core";
     import FileTree from "./FileTree.svelte";
-    import type {FileNode} from "./types";
+    import type {FileNode} from "$lib/types";
 
     let {
         node,
@@ -100,7 +100,7 @@
 </div>
 
 <style lang="scss">
-    @use '../styles/mixins' as *;
+    @use 'styles/mixins' as *;
 
     .tree-node {
         width: 100%;

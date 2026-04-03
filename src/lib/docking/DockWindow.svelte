@@ -61,7 +61,7 @@
 </div>
 
 <style lang="scss">
-    @use '../../styles/mixins' as *;
+    @use 'styles/mixins' as *;
 
     .dock-window {
         @include flex(column, flex-start, stretch);

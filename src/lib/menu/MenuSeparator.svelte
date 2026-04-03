@@ -1,7 +1,7 @@
 <li class="menu-separator" role="separator"></li>
 
 <style lang="scss">
-    @use '../../styles/mixins' as *;
+    @use 'styles/mixins' as *;
 
     .menu-separator {
         height: 1px;
