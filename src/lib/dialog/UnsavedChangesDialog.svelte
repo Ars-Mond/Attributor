@@ -1,6 +1,6 @@
 <script lang="ts">
     import ConfirmDialog from './ConfirmDialog.svelte';
-    import type {DialogButton} from '../types';
+    import type {DialogButton} from '$lib/types';
 
     let {
         filename,
@@ -17,11 +17,11 @@
     const buttons: DialogButton[] = [
         {
             label: 'Cancel',
-            onClick: onCancel,
+            onClick: () => onCancel(),
         },
         {
             label: 'Discard',
-            onClick: onDiscard,
+            onClick: () => onDiscard(),
             border: 'var(--required-color)',
             color: 'var(--required-color)',
             hoverBg: 'var(--required-alpha-08)',
@@ -30,7 +30,7 @@
         },
         {
             label: 'Save',
-            onClick: onSave,
+            onClick: () => onSave(),
             bg: 'var(--accent)',
             color: '#fff',
             border: 'var(--accent)',

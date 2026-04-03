@@ -237,7 +237,7 @@
 </div>
 
 <style lang="scss">
-    @use '../../styles/mixins' as *;
+    @use 'styles/mixins' as *;
 
     .dock-layout {
         flex: 1;

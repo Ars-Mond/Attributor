@@ -340,7 +340,7 @@
 {/if}
 
 <style lang="scss">
-    @use '../styles/mixins' as *;
+    @use 'styles/mixins' as *;
 
     .app {
         @include flex(column, flex-start, stretch);

@@ -1,4 +1,4 @@
-import type {FileNode} from './types';
+import type {FileNode} from '$lib/types';
 
 export type ViewMode = 'table' | 'content' | 'icons';
 export type LayoutDir = 'vertical' | 'horizontal';

@@ -109,7 +109,7 @@
 {/if}
 
 <style lang="scss">
-    @use '../../styles/mixins' as *;
+    @use 'styles/mixins' as *;
 
     .ctx-menu {
         position: fixed;

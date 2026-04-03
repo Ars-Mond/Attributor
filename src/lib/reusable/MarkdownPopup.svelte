@@ -1,5 +1,5 @@
 <script lang="ts" module>
-    export type {DialogButton} from '../types';
+    export type {DialogButton} from '$lib/types';
 
     /** Absolute viewport position. If omitted the popup is centered on screen. */
     export interface PopupPosition {
@@ -10,7 +10,7 @@
 
 <script lang="ts">
     import SvelteMarkdown from '@humanspeak/svelte-markdown';
-    import type {DialogButton} from '../types';
+    import type {DialogButton} from '$lib/types';
 
     let {
         source,
@@ -116,7 +116,7 @@
 </div>
 
 <style lang="scss">
-    @use '../../styles/mixins' as *;
+    @use 'styles/mixins' as *;
 
     // ── Backdrop ──────────────────────────────────────────────────────────────
 

@@ -3,7 +3,7 @@
 </script>
 
 <script lang="ts">
-    import type {DialogButton} from '../types';
+    import type {DialogButton} from '$lib/types';
 
     let {
         title,
@@ -99,7 +99,7 @@
 </div>
 
 <style lang="scss">
-    @use '../../styles/mixins' as *;
+    @use 'styles/mixins' as *;
 
     .overlay {
         position: fixed;
