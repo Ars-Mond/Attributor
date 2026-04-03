@@ -1,5 +1,6 @@
 mod filetree;
 mod keywords;
+mod photo_processor;
 mod types;
 mod xmp;
 
