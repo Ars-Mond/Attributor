@@ -15,8 +15,8 @@
     import MenuTab from "$lib/menu/MenuTab.svelte";
     import MenuItem from "$lib/menu/MenuItem.svelte";
     import MenuSeparator from "$lib/menu/MenuSeparator.svelte";
-    import About from "$lib/dialog/About.svelte";
-    import Help from "$lib/dialog/Help.svelte";
+    import AboutDialog from "$lib/dialog/AboutDialog.svelte";
+    import HelpDialog from "$lib/dialog/HelpDialog.svelte";
     import ImageViewerPanel from "$lib/panel/ImageViewerPanel.svelte";
     import InputContextMenu from "$lib/reusable/InputContextMenu.svelte";
     import SettingsDialog from "$lib/settings/SettingsDialog.svelte";
@@ -329,11 +329,11 @@
 <InputContextMenu />
 
 {#if showHelp}
-    <Help onClose={() => { showHelp = false; }} />
+    <HelpDialog onClose={() => { showHelp = false; }} />
 {/if}
 
 {#if showAbout}
-    <About onClose={() => { showAbout = false; }} />
+    <AboutDialog onClose={() => { showAbout = false; }} />
 {/if}
 
 <SettingsDialog open={showSettings} onClose={() => {showSettings = false;}} />
