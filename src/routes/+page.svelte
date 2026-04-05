@@ -19,6 +19,8 @@
     import Help from "$lib/dialog/Help.svelte";
     import ImageViewerPanel from "$lib/panel/ImageViewerPanel.svelte";
     import InputContextMenu from "$lib/reusable/InputContextMenu.svelte";
+    import SettingsDialog from "$lib/settings/SettingsDialog.svelte";
+    import {settings} from "$lib/settings";
 
     // --- Docking ---
     const windowConfigs: WindowConfig[] = [
@@ -79,7 +81,8 @@
     let isDirty = $state(false);
     let isLoading = $state(false);
     let showAbout = $state(false);
-    let showHelp  = $state(false);
+    let showHelp = $state(false);
+    let showSettings = $state(false);
     let currentTheme = $state(DEFAULT_THEME);
     let batchPaths = $state<string[]>([]);
 
@@ -227,10 +230,13 @@
             }
         }
 
-        // 4. Show window after full UI init
+        // 4. Load user settings before showing window
+        await settings.load();
+
+        // 5. Show window after full UI init
         await win.show();
 
-        // Save window size whenever it changes (debounced)
+        // 6. Save window size whenever it changes (debounced)
         unlistenResize = await win.onResized(async () => {
             if (winResizeTimer) clearTimeout(winResizeTimer);
             winResizeTimer = setTimeout(async () => {
@@ -265,7 +271,7 @@
                 {/each}
             </MenuTab>
             <MenuSeparator />
-            <!--<MenuItem label="Settings" onClick={() => {}} />-->
+            <MenuItem label="Settings" onClick={() => {showSettings = true;}} />
         </MenuTab>
         <MenuTab label="Windows">
             <MenuItem
@@ -329,6 +335,8 @@
 {#if showAbout}
     <About onClose={() => { showAbout = false; }} />
 {/if}
+
+<SettingsDialog open={showSettings} onClose={() => {showSettings = false;}} />
 
 {#if showDialog}
     <UnsavedChangesDialog

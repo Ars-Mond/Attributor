@@ -5,6 +5,7 @@
     import KeywordSuggestions from "$reusable/KeywordSuggestions.svelte";
     import ConfirmDialog from "$lib/dialog/ConfirmDialog.svelte";
     import {loadAppState, saveAppState} from "$lib/store";
+    import {settings} from "$lib/settings";
     import type {Metadata, ReadResult} from "$lib/types";
 
     // ── Bindable props ─────────────────────────────────────────────────────
@@ -31,7 +32,7 @@
     let keywords = $state<string[]>([]);
     let categories = $state('');
     let releaseFilename = $state('');
-    let autoSave = $state(false);
+    const autoSave = $derived(settings.subscribe('editor.autosave')());
     let saveAttempted = $state(false);
     let saveError = $state<string | null>(null);
     let showClearConfirm = $state(false);
@@ -119,7 +120,8 @@
     $effect(() => {
         filename; title; description; keywords; categories; releaseFilename;
         if (!autoSave || !isDirtyComputed || hasErrors) return;
-        const timer = setTimeout(() => { doSave().catch(() => {}); }, 1000);
+        const delay = settings.get<number>('editor.autosave_delay');
+        const timer = setTimeout(() => { doSave().catch(() => {}); }, delay);
         return () => clearTimeout(timer);
     });
 
@@ -1169,7 +1171,11 @@
                 </button>
             {:else}
                 <label class="autosave-toggle">
-                    <input type="checkbox" bind:checked={autoSave} />
+                    <input
+                        type="checkbox"
+                        checked={autoSave as boolean}
+                        onchange={(e) => settings.set('editor.autosave', e.currentTarget.checked)}
+                    />
                     <span>Auto-save</span>
                 </label>
                 <button
