@@ -2,21 +2,18 @@
     import {onDestroy} from 'svelte';
     import {settings} from './index';
     import type {SettingDescriptor} from './types';
+    import type {SettingsSection} from './SettingsSection';
 
     let {open, onClose}: {open: boolean; onClose: () => void} = $props();
 
-    const sections = settings.getSections();
-    let activeSection = $state(sections[0] ?? '');
-    const fields = $derived(settings.getBySection(activeSection));
+    const allSections = settings.getAllSections();
+    let activeSectionId = $state(allSections[0]?.id ?? '');
+    const activeSection = $derived<SettingsSection | undefined>(
+        allSections.find(s => s.id === activeSectionId) ?? allSections[0]
+    );
 
     function handleKeydown(e: KeyboardEvent) {
         if (e.key === 'Escape') onClose();
-    }
-
-    function resetSection() {
-        for (const d of fields) {
-            settings.set(d.key, d.default);
-        }
     }
 
     // ── Int stepper ───────────────────────────────────────────────────────
@@ -52,7 +49,7 @@
                 const interval = Math.round(1000 - progress * 800);
                 nextTickId = setTimeout(tick, interval);
             }
-            // First auto-repeat fires 1 second after the hold is detected
+            // First auto-repeat fires 1 second after hold is detected
             nextTickId = setTimeout(tick, 1000);
         }, 300);
     }
@@ -81,121 +78,144 @@
 
             <div class="dlg-body">
                 <nav class="sidebar">
-                    {#each sections as section}
+                    {#each allSections as section}
                         <button
                             class="section-btn"
-                            class:active={activeSection === section}
-                            onclick={() => { activeSection = section; }}
-                        >{section}</button>
+                            class:active={activeSectionId === section.id}
+                            onclick={() => { activeSectionId = section.id; }}
+                        >{section.label}</button>
                     {/each}
                 </nav>
 
                 <div class="fields-panel">
-                    {#each fields as descriptor (descriptor.key)}
-                        <div class="field">
-                            {#if descriptor.type === 'boolean'}
-                                <label class="field-label field-label--inline">
-                                    <input
-                                        type="checkbox"
-                                        class="field-checkbox"
-                                        checked={settings.get<boolean>(descriptor.key)}
-                                        onchange={(e) => settings.set(descriptor.key, e.currentTarget.checked)}
-                                    />
-                                    {descriptor.label}
-                                </label>
+                    {#if activeSection}
+                        {#if activeSection.component}
+                            {@const SectionComp = activeSection.component}
+                            <SectionComp
+                                section={activeSection}
+                                resetSection={() => settings.resetSection(activeSection.id)}
+                            />
+                        {/if}
+
+                        {#each activeSection.fields as descriptor (descriptor.key || descriptor.label)}
+                            {#if descriptor.type === 'custom' && descriptor.render}
+                                {@const FieldComp = descriptor.render}
+                                <FieldComp
+                                    {descriptor}
+                                    get={() => settings.get(descriptor.key)}
+                                    set={(v) => settings.set(descriptor.key, v)}
+                                    resetToDefault={() => settings.reset(descriptor.key)}
+                                />
                             {:else}
-                                <label class="field-label" for="setting-{descriptor.key}">
-                                    {descriptor.label}
-                                </label>
+                                <div class="field">
+                                    {#if descriptor.type === 'boolean'}
+                                        <label class="field-label field-label--inline">
+                                            <input
+                                                type="checkbox"
+                                                class="field-checkbox"
+                                                checked={settings.get<boolean>(descriptor.key)}
+                                                onchange={(e) => settings.set(descriptor.key, e.currentTarget.checked)}
+                                            />
+                                            {descriptor.label}
+                                        </label>
+                                    {:else}
+                                        <label class="field-label" for="setting-{descriptor.key}">
+                                            {descriptor.label}
+                                        </label>
 
-                                {#if descriptor.type === 'int'}
-                                    <div class="stepper">
-                                        <button
-                                            class="step-btn"
-                                            aria-label="Decrease"
-                                            onpointerdown={() => startStepper(descriptor.key, -1, descriptor)}
-                                            onpointerup={stopStepper}
-                                            onpointerleave={stopStepper}
-                                            onpointercancel={stopStepper}
-                                        >−</button>
-                                        <input
-                                            id="setting-{descriptor.key}"
-                                            type="number"
-                                            class="field-input stepper-input"
-                                            value={settings.get<number>(descriptor.key)}
-                                            min={descriptor.min}
-                                            max={descriptor.max}
-                                            step={descriptor.step ?? 1}
-                                            onchange={(e) => {
-                                                const v = parseInt(e.currentTarget.value, 10);
-                                                if (!isNaN(v)) {
-                                                    let clamped = v;
-                                                    if (descriptor.min !== undefined) clamped = Math.max(descriptor.min, clamped);
-                                                    if (descriptor.max !== undefined) clamped = Math.min(descriptor.max, clamped);
-                                                    settings.set(descriptor.key, clamped);
-                                                }
-                                            }}
-                                        />
-                                        <button
-                                            class="step-btn"
-                                            aria-label="Increase"
-                                            onpointerdown={() => startStepper(descriptor.key, 1, descriptor)}
-                                            onpointerup={stopStepper}
-                                            onpointerleave={stopStepper}
-                                            onpointercancel={stopStepper}
-                                        >+</button>
-                                    </div>
+                                        {#if descriptor.type === 'int'}
+                                            <div class="stepper">
+                                                <button
+                                                    class="step-btn"
+                                                    aria-label="Decrease"
+                                                    onpointerdown={() => startStepper(descriptor.key, -1, descriptor)}
+                                                    onpointerup={stopStepper}
+                                                    onpointerleave={stopStepper}
+                                                    onpointercancel={stopStepper}
+                                                >−</button>
+                                                <input
+                                                    id="setting-{descriptor.key}"
+                                                    type="number"
+                                                    class="field-input stepper-input"
+                                                    value={settings.get<number>(descriptor.key)}
+                                                    min={descriptor.min}
+                                                    max={descriptor.max}
+                                                    step={descriptor.step ?? 1}
+                                                    onchange={(e) => {
+                                                        const v = parseInt(e.currentTarget.value, 10);
+                                                        if (!isNaN(v)) {
+                                                            let clamped = v;
+                                                            if (descriptor.min !== undefined) clamped = Math.max(descriptor.min, clamped);
+                                                            if (descriptor.max !== undefined) clamped = Math.min(descriptor.max, clamped);
+                                                            settings.set(descriptor.key, clamped);
+                                                        }
+                                                    }}
+                                                />
+                                                <button
+                                                    class="step-btn"
+                                                    aria-label="Increase"
+                                                    onpointerdown={() => startStepper(descriptor.key, 1, descriptor)}
+                                                    onpointerup={stopStepper}
+                                                    onpointerleave={stopStepper}
+                                                    onpointercancel={stopStepper}
+                                                >+</button>
+                                            </div>
 
-                                {:else if descriptor.type === 'float'}
-                                    <input
-                                        id="setting-{descriptor.key}"
-                                        type="number"
-                                        class="field-input"
-                                        value={settings.get<number>(descriptor.key)}
-                                        min={descriptor.min}
-                                        max={descriptor.max}
-                                        step={descriptor.step ?? 0.1}
-                                        onchange={(e) => {
-                                            const v = parseFloat(e.currentTarget.value);
-                                            if (!isNaN(v)) settings.set(descriptor.key, v);
-                                        }}
-                                    />
+                                        {:else if descriptor.type === 'float'}
+                                            <input
+                                                id="setting-{descriptor.key}"
+                                                type="number"
+                                                class="field-input"
+                                                value={settings.get<number>(descriptor.key)}
+                                                min={descriptor.min}
+                                                max={descriptor.max}
+                                                step={descriptor.step ?? 0.1}
+                                                onchange={(e) => {
+                                                    const v = parseFloat(e.currentTarget.value);
+                                                    if (!isNaN(v)) settings.set(descriptor.key, v);
+                                                }}
+                                            />
 
-                                {:else if descriptor.options}
-                                    <select
-                                        id="setting-{descriptor.key}"
-                                        class="field-input field-select"
-                                        onchange={(e) => settings.set(descriptor.key, e.currentTarget.value)}
-                                    >
-                                        {#each descriptor.options as opt}
-                                            <option
-                                                value={opt.value}
-                                                selected={opt.value === settings.get<string>(descriptor.key)}
-                                            >{opt.label}</option>
-                                        {/each}
-                                    </select>
+                                        {:else if descriptor.options}
+                                            <select
+                                                id="setting-{descriptor.key}"
+                                                class="field-input field-select"
+                                                onchange={(e) => settings.set(descriptor.key, e.currentTarget.value)}
+                                            >
+                                                {#each descriptor.options as opt}
+                                                    <option
+                                                        value={opt.value}
+                                                        selected={opt.value === settings.get<string>(descriptor.key)}
+                                                    >{opt.label}</option>
+                                                {/each}
+                                            </select>
 
-                                {:else}
-                                    <input
-                                        id="setting-{descriptor.key}"
-                                        type="text"
-                                        class="field-input"
-                                        value={settings.get<string>(descriptor.key)}
-                                        oninput={(e) => settings.set(descriptor.key, e.currentTarget.value)}
-                                    />
-                                {/if}
+                                        {:else}
+                                            <input
+                                                id="setting-{descriptor.key}"
+                                                type="text"
+                                                class="field-input"
+                                                value={settings.get<string>(descriptor.key)}
+                                                oninput={(e) => settings.set(descriptor.key, e.currentTarget.value)}
+                                            />
+                                        {/if}
+                                    {/if}
+
+                                    {#if descriptor.description}
+                                        <p class="field-desc">{descriptor.description}</p>
+                                    {/if}
+                                </div>
                             {/if}
-
-                            {#if descriptor.description}
-                                <p class="field-desc">{descriptor.description}</p>
-                            {/if}
-                        </div>
-                    {/each}
+                        {/each}
+                    {/if}
                 </div>
             </div>
 
             <div class="dlg-footer">
-                <button class="reset-btn" onclick={resetSection}>Reset to defaults</button>
+                <button
+                    class="reset-btn"
+                    onclick={() => settings.resetSection(activeSection?.id ?? '')}
+                >Reset to defaults</button>
             </div>
         </div>
     </div>

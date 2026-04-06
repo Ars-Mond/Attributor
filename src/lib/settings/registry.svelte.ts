@@ -1,5 +1,6 @@
 import {load, type Store} from '@tauri-apps/plugin-store';
-import type {SettingDescriptor} from './types';
+import type {SettingDescriptor, SettingsSectionConfig} from './types';
+import {SettingsSection} from './SettingsSection';
 
 let _store: Store | null = null;
 
@@ -8,15 +9,30 @@ async function getStore(): Promise<Store> {
 }
 
 class SettingsRegistry {
+    #sections = new Map<string, SettingsSection>();
     #descriptors = new Map<string, SettingDescriptor>();
     #values = $state<Record<string, unknown>>({});
     #saveTimer: ReturnType<typeof setTimeout> | null = null;
 
-    register<T>(descriptor: SettingDescriptor<T>): void {
-        this.#descriptors.set(descriptor.key, descriptor as SettingDescriptor);
-        // Keep any value already loaded via load() (called before register in edge cases)
-        if (!(descriptor.key in this.#values)) {
-            this.#values[descriptor.key] = descriptor.default;
+    registerSection(config: SettingsSectionConfig): void {
+        if (!this.#sections.has(config.id)) {
+            this.#sections.set(config.id, new SettingsSection(config, this.#sections.size));
+        }
+    }
+
+    register<T>(sectionId: string, descriptor: SettingDescriptor<T>): void {
+        // Auto-create section if not explicitly registered
+        if (!this.#sections.has(sectionId)) {
+            this.registerSection({id: sectionId, label: sectionId});
+        }
+        const section = this.#sections.get(sectionId)!;
+        section.fields.push(descriptor as SettingDescriptor);
+
+        if (descriptor.key) {
+            this.#descriptors.set(descriptor.key, descriptor as SettingDescriptor);
+            if (!(descriptor.key in this.#values)) {
+                this.#values[descriptor.key] = descriptor.default;
+            }
         }
     }
 
@@ -36,13 +52,39 @@ class SettingsRegistry {
         return () => this.get<T>(key);
     }
 
+    reset(key: string): void {
+        if (!key) return;
+        const d = this.#descriptors.get(key);
+        if (d) {
+            this.#values[key] = d.default;
+            this.#scheduleSave();
+        }
+    }
+
+    resetSection(sectionId: string): void {
+        const section = this.#sections.get(sectionId);
+        if (!section) return;
+        for (const d of section.fields) {
+            if (d.key) this.#values[d.key] = d.default;
+        }
+        this.#scheduleSave();
+    }
+
+    getSection(id: string): SettingsSection | undefined {
+        return this.#sections.get(id);
+    }
+
+    getAllSections(): SettingsSection[] {
+        return [...this.#sections.values()].sort((a, b) => a.order - b.order);
+    }
+
     async load(): Promise<void> {
         try {
             const s = await getStore();
             const stored = await s.get<Record<string, unknown>>('settings');
             if (stored && typeof stored === 'object') {
                 for (const [k, v] of Object.entries(stored)) {
-                    if (this.#descriptors.has(k)) {
+                    if (k && this.#descriptors.has(k)) {
                         this.#values[k] = v;
                     }
                 }
@@ -54,22 +96,6 @@ class SettingsRegistry {
 
     async save(): Promise<void> {
         await this.#doSave();
-    }
-
-    getSections(): string[] {
-        const seen = new Set<string>();
-        const result: string[] = [];
-        for (const d of this.#descriptors.values()) {
-            if (!seen.has(d.section)) {
-                seen.add(d.section);
-                result.push(d.section);
-            }
-        }
-        return result;
-    }
-
-    getBySection(section: string): SettingDescriptor[] {
-        return [...this.#descriptors.values()].filter(d => d.section === section);
     }
 
     #scheduleSave(): void {
@@ -85,7 +111,7 @@ class SettingsRegistry {
             const s = await getStore();
             const data: Record<string, unknown> = {};
             for (const k of this.#descriptors.keys()) {
-                data[k] = this.#values[k];
+                if (k) data[k] = this.#values[k];
             }
             await s.set('settings', data);
             await s.save();
