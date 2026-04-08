@@ -1,5 +1,6 @@
 <script lang="ts">
-    import {onMount} from 'svelte';
+    import {onMount, onDestroy} from 'svelte';
+    import {shortcuts} from '$lib/shortcuts';
     import {getVersion} from '@tauri-apps/api/app';
 
     let {onClose}: {onClose: () => void} = $props();
@@ -7,7 +8,12 @@
     let version = $state('...');
 
     onMount(async () => {
+        shortcuts.activateLayer('dialog');
         version = await getVersion();
+    });
+
+    onDestroy(() => {
+        shortcuts.deactivateLayer('dialog');
     });
 </script>
 

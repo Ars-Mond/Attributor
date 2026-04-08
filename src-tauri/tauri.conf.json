@@ -15,7 +15,8 @@
         "title": "Attributor",
         "minWidth": 1280,
         "minHeight": 720,
-        "visible": false
+        "visible": false,
+        "browserAcceleratorKeys": false
       }
     ],
     "security": {

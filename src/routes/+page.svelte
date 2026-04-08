@@ -21,6 +21,7 @@
     import InputContextMenu from "$lib/reusable/InputContextMenu.svelte";
     import SettingsDialog from "$lib/settings/SettingsDialog.svelte";
     import {settings} from "$lib/settings";
+    import {shortcuts} from "$lib/shortcuts";
 
     // --- Docking ---
     const windowConfigs: WindowConfig[] = [
@@ -186,7 +187,12 @@
     let unlistenResize: (() => void) | null = null;
     let winResizeTimer: ReturnType<typeof setTimeout> | null = null;
 
+    function handleGlobalKeyDown(e: KeyboardEvent) {
+        if (shortcuts.handleKeyDown(e)) e.preventDefault();
+    }
+
     onMount(async () => {
+        window.addEventListener('keydown', handleGlobalKeyDown);
         const win = getCurrentWindow();
         const state = await loadAppState();
 
@@ -230,10 +236,16 @@
             }
         }
 
-        // 4. Load user settings before showing window
+        // 4. Load user settings and shortcuts before showing window
         await settings.load();
+        await shortcuts.load();
 
-        // 5. Show window after full UI init
+        // 5. Bind shortcut handlers (panel refs available after mount)
+        shortcuts.setHandler('file.open_folder', () => filesPanel?.openFolderDialog());
+        shortcuts.setHandler('file.settings',    () => { showSettings = true; });
+        shortcuts.setHandler('editor.save',      () => metaPanel?.save());
+
+        // 6. Show window after full UI init
         await win.show();
 
         // 6. Save window size whenever it changes (debounced)
@@ -252,6 +264,7 @@
     });
 
     onDestroy(() => {
+        window.removeEventListener('keydown', handleGlobalKeyDown);
         unlistenResize?.();
         if (winResizeTimer) clearTimeout(winResizeTimer);
     });
@@ -260,7 +273,7 @@
 <div class="app">
     <MenuBar>
         <MenuTab label="File">
-            <MenuItem label="Open directory..." onClick={() => filesPanel?.openFolderDialog()} />
+            <MenuItem label="Open directory..." shortcut={shortcuts.getEffectiveBinding('file.open_folder') ?? undefined} onClick={() => filesPanel?.openFolderDialog()} />
             <MenuSeparator />
             <MenuTab label="Theme">
                 {#each themes as t}
@@ -271,7 +284,7 @@
                 {/each}
             </MenuTab>
             <MenuSeparator />
-            <MenuItem label="Settings" onClick={() => {showSettings = true;}} />
+            <MenuItem label="Settings" shortcut={shortcuts.getEffectiveBinding('file.settings') ?? undefined} onClick={() => {showSettings = true;}} />
         </MenuTab>
         <MenuTab label="Windows">
             <MenuItem

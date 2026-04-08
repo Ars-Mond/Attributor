@@ -3,7 +3,9 @@
 </script>
 
 <script lang="ts">
+    import {onMount, onDestroy} from 'svelte';
     import type {DialogButton} from '$lib/types';
+    import {shortcuts} from '$lib/shortcuts';
 
     let {
         title,
@@ -32,6 +34,9 @@
         if (btn.activeBorder) v.push(`--_active-border:${btn.activeBorder}`);
         return v.join(';');
     }
+
+    onMount(() => { shortcuts.activateLayer('dialog'); });
+    onDestroy(() => { shortcuts.deactivateLayer('dialog'); });
 
     function handleKeydown(e: KeyboardEvent) {
         if (e.key === 'Escape') onClose?.();

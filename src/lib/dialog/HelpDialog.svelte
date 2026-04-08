@@ -1,18 +1,24 @@
 <script lang="ts">
-    import {onMount} from 'svelte';
+    import {onMount, onDestroy} from 'svelte';
     import MarkdownPopup from '$reusable/MarkdownPopup.svelte';
+    import {shortcuts} from '$lib/shortcuts';
 
     let {onClose}: {onClose: () => void} = $props();
 
     let source = $state('');
 
     onMount(async () => {
+        shortcuts.activateLayer('dialog');
         try {
             const res = await fetch('/Help.md');
             source = await res.text();
         } catch {
             source = '_Failed to load help content._';
         }
+    });
+
+    onDestroy(() => {
+        shortcuts.deactivateLayer('dialog');
     });
 </script>
 

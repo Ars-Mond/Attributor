@@ -1,4 +1,5 @@
 import {settings} from './registry.svelte';
+import ShortcutsPage from '$lib/shortcuts/ShortcutsPage.svelte';
 
 export {settings};
 
@@ -77,3 +78,10 @@ settings.register('appearance',
         max: 24
     }
 );
+
+settings.registerSection({
+    id: 'shortcuts',
+    label: 'Shortcuts',
+    order: 99,
+    component: ShortcutsPage
+});

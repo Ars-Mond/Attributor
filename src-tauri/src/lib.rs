@@ -55,7 +55,7 @@ pub fn run() {
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(if cfg!(debug_assertions) {
-                    log::LevelFilter::Debug
+                    log::LevelFilter::Trace
                 } else {
                     log::LevelFilter::Info
                 })

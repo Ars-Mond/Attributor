@@ -1,6 +1,7 @@
 <script lang="ts">
     import {onDestroy} from 'svelte';
     import {settings} from './index';
+    import {shortcuts} from '$lib/shortcuts';
     import type {SettingDescriptor} from './types';
     import type {SettingsSection} from './SettingsSection';
 
@@ -11,6 +12,14 @@
     const activeSection = $derived<SettingsSection | undefined>(
         allSections.find(s => s.id === activeSectionId) ?? allSections[0]
     );
+
+    $effect(() => {
+        if (open) {
+            shortcuts.activateLayer('dialog');
+        } else {
+            shortcuts.deactivateLayer('dialog');
+        }
+    });
 
     function handleKeydown(e: KeyboardEvent) {
         if (e.key === 'Escape') onClose();

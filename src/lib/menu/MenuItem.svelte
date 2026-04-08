@@ -5,10 +5,12 @@
         label,
         onClick,
         disabled = false,
+        shortcut,
     }: {
         label: string;
         onClick: () => void;
         disabled?: boolean;
+        shortcut?: string;
     } = $props();
 
     const menuBar = getContext<{setOpenTabId: (id: string | null) => void} | undefined>('menu-bar');
@@ -41,12 +43,18 @@
     onmouseenter={handleMouseEnter}
 >
     {label}
+    {#if shortcut}
+        <span class="shortcut">{shortcut}</span>
+    {/if}
 </li>
 
 <style lang="scss">
     @use 'styles/mixins' as *;
 
     .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 16px;
         padding: 5px 12px;
         font-size: $fs-small;
         color: $text-secondary;
@@ -64,5 +72,11 @@
             opacity: 0.4;
             cursor: default;
         }
+    }
+
+    .shortcut {
+        margin-left: auto;
+        font-size: $fs-footnote1;
+        color: $text-muted;
     }
 </style>
