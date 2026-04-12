@@ -25,6 +25,7 @@ tauri-plugin-store = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-clipboard-manager = "2.3.2"
+tauri-plugin-prevent-default = { version = "4.0.4", features = ["platform-windows"]}
 img-parts = "0.4.0"
 quick-xml = "0.39.2"
 bytes = "1"

@@ -5,6 +5,7 @@ mod keywords;
 mod photo_processor;
 mod types;
 mod xmp;
+mod exif;
 
 // Re-exports required by integration tests (tests/xmp_read.rs)
 pub use types::ReadResult;
@@ -12,6 +13,7 @@ pub use xmp::{parse_xmp, read_jpeg_xmp_fast, read_png_xmp_fast, read_webp_xmp_fa
 
 use filetree::{FileNode, WatcherState};
 use std::sync::Mutex;
+use tauri_plugin_prevent_default::Flags;
 use types::SaveRequest;
 
 // ── Tauri command mirrors ─────────────────────────────────────────────────
@@ -70,6 +72,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_prevent_default::Builder::new()
+            .with_flags(Flags::all().difference(Flags::RELOAD))
+            .build())
         .invoke_handler(tauri::generate_handler![
             read_metadata,
             save_metadata,
