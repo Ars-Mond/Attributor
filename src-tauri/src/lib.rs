@@ -11,6 +11,11 @@ mod metadata;
 pub use types::ReadResult;
 pub use xmp::{parse_xmp, read_jpeg_xmp_fast, read_png_xmp_fast, read_webp_xmp_fast};
 
+// Re-exports for tests/metadata_test.rs
+pub mod photo_metadata {
+    pub use super::metadata::{read_metadata, write_metadata, Metadata};
+}
+
 use filetree::{FileNode, WatcherState};
 use std::sync::Mutex;
 use tauri_plugin_prevent_default::Flags;
