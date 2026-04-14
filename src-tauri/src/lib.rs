@@ -5,7 +5,7 @@ mod keywords;
 mod photo_processor;
 mod types;
 mod xmp;
-mod exif;
+mod metadata;
 
 // Re-exports required by integration tests (tests/xmp_read.rs)
 pub use types::ReadResult;

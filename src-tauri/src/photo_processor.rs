@@ -153,7 +153,7 @@ fn read_xmp<R: std::io::Read + std::io::Seek>(
 }
 
 /// Returns `None` if the image's longest side is already within `target` pixels.
-/// Otherwise returns a resized copy that fits in a `target × target` box
+/// Otherwise, returns a resized copy that fits in a `target × target` box
 /// with the original aspect ratio preserved.
 fn make_thumbnail(img: &DynamicImage, target: u32) -> Option<DynamicImage> {
     if img.width().max(img.height()) <= target {
