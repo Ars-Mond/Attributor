@@ -1,0 +1,105 @@
+@startuml feature-deferred-metadata-cache
+title Attributor — Deferred-Write Metadata Cache (feature)
+
+' ── Global look & feel ───────────────────────────────────────────────
+skinparam linetype ortho
+skinparam nodesep 55
+skinparam ranksep 70
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam ArrowColor #3A3A3A
+skinparam ArrowThickness 1.2
+
+skinparam rectangle {
+  BorderColor #3A3A3A
+  FontColor #1A1A1A
+  roundCorner 12
+}
+skinparam database {
+  BorderColor #3A3A3A
+  FontColor #1A1A1A
+}
+skinparam queue {
+  BorderColor #3A3A3A
+  FontColor #1A1A1A
+}
+
+' ── Colour legend (pastel fills, dark borders) ───────────────────────
+' Frontend  : #BBDEFB (blue)
+' IPC        : #FFE0B2 (orange)
+' Backend    : #C8E6C9 (green)
+' Storage    : #E1BEE7 (purple)
+' Disk       : #FFF9C4 (yellow)
+
+' ── Frontend ─────────────────────────────────────────────────────────
+package "Frontend (SvelteKit / Svelte 5)" {
+  rectangle "MetadataPanel\n.svelte" as MP #BBDEFB
+  rectangle "FilesPanel\n.svelte" as FP #BBDEFB
+  rectangle "folderLoader\n.svelte.ts" as FL #BBDEFB
+  rectangle "metadataStore\n.svelte.ts" as MS #BBDEFB
+}
+
+' ── IPC surface ──────────────────────────────────────────────────────
+package "Tauri IPC (lib.rs commands)" {
+  rectangle "read_folder" as C_READ #FFE0B2
+  rectangle "save_metadata_cached" as C_SAVE #FFE0B2
+  rectangle "save_metadata_cached_batch" as C_BATCH #FFE0B2
+  rectangle "get_cached_metadata" as C_GET #FFE0B2
+  queue "event:\nmetadata-status" as EV #FFE0B2
+}
+
+' ── Backend classify pipeline ────────────────────────────────────────
+package "Backend (Rust)" {
+  rectangle "folder_processor\nscan + rayon fan-out\nclassify_and_emit" as FPROC #C8E6C9
+  rectangle "photo_processor\nclassify(path, cache)\n→ FileState" as PP #C8E6C9
+  rectangle "hash\nstat() Stage-1\nfingerprint() Stage-2" as HASH #C8E6C9
+  rectangle "metadata\nread_metadata (XMP/EXIF/IPTC)\nvia little_exif" as MD #C8E6C9
+  rectangle "build_edit_entry\n(edited=true, keep fingerprint)" as BEE #C8E6C9
+}
+
+' ── Storage + disk ───────────────────────────────────────────────────
+database "CacheStore (SQLite, WAL)\nphoto_cache + schema_meta\nsize·mtime·hash·metadata\nreader_version·edited·exported_at" as DB #E1BEE7
+rectangle "Photo files on disk\n(JPEG / PNG / WebP)\nREAD-ONLY in this feature" as DISK #FFF9C4
+
+' ── Open-folder flow (classify) ──────────────────────────────────────
+FP --> C_READ : open folder
+C_READ --> FPROC : scan + spawn_blocking
+FPROC --> PP : per photo (rayon)
+PP --> HASH : Stage-1 stat / Stage-2 hash
+PP --> MD : read on Stage-2 miss
+HASH ..> DISK : stat / stream bytes
+MD ..> DISK : parse metadata
+PP --> DB : get row / upsert seed
+PP --> EV : FileState → MetadataStatus
+EV --> FL : stream per photo
+FL --> MS : dispatch by state
+MS --> FP : tile state (Fresh/Conflict/Missing/Unreadable)
+MS --> MP : selected photo metadata
+
+' ── Edit flow (deferred write) ───────────────────────────────────────
+MP --> C_SAVE : autosave (debounced)
+MP --> C_BATCH : multi-select edit
+MP --> C_GET : read current (batch)
+C_SAVE --> BEE
+C_BATCH --> BEE
+BEE --> DB : upsert (1 txn for batch)
+C_GET --> DB : SELECT metadata
+
+' Hard rule: edits never touch the file
+BEE -[#B00020,dashed]-> DISK : FR-014 — NO write
+
+legend right
+  | Colour | Layer |
+  |<#BBDEFB>   | Frontend (Svelte) |
+  |<#FFE0B2>   | Tauri IPC commands / events |
+  |<#C8E6C9>   | Backend Rust modules |
+  |<#E1BEE7>   | SQLite cache |
+  |<#FFF9C4>   | Photo files on disk |
+  ----
+  Solid = call/data flow
+  Dotted = filesystem read
+  Red dashed = forbidden (deferred-write)
+endlegend
+
+@enduml
