@@ -1,8 +1,6 @@
 mod events;
 mod filetree;
-mod folder_processor;
 mod keywords;
-mod photo_processor;
 mod types;
 mod xmp;
 mod metadata;
