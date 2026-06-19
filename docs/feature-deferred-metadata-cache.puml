@@ -1,5 +1,5 @@
 @startuml feature-deferred-metadata-cache
-title Attributor — Deferred-Write Metadata Cache\nSource: specs/001-deferred-metadata-cache (spec.md, data-model.md, contracts/)
+title Attributor — Deferred-Write Metadata Cache\nSource
 
 ' ── Global look & feel ───────────────────────────────────────────────
 skinparam linetype ortho

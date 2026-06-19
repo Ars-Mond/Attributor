@@ -1,5 +1,5 @@
 @startuml feature-classify-state-machine
-title Attributor — classify(path, cache) state machine\nSource: specs/001-deferred-metadata-cache/data-model.md §State transitions + Reader-version gate (FR-015)
+title Attributor — classify(path, cache) state machine\nSource State transitions + Reader-version gate
 
 ' ── Look & feel ──────────────────────────────────────────────────────
 skinparam linetype ortho

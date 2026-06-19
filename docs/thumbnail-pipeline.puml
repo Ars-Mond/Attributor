@@ -1,0 +1,95 @@
+@startuml thumbnail-pipeline
+title Attributor — Thumbnail & Cache Pipeline\nfolder_processor.rs (orchestration + worker pool) + photo_processor.rs (per-file work)
+
+' ── Global look & feel ───────────────────────────────────────────────
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam ArrowColor #3A3A3A
+skinparam ArrowThickness 1.1
+skinparam sequence {
+  LifeLineBorderColor #9E9E9E
+  LifeLineBackgroundColor #ECECEC
+  ParticipantBorderColor #3A3A3A
+  ParticipantFontColor #1A1A1A
+  ParticipantBackgroundColor #FFFFFF
+  GroupBorderColor #9E9E9E
+  GroupFontColor #555555
+  GroupHeaderFontColor #1A1A1A
+  DividerBackgroundColor #ECECEC
+  DividerFontColor #1A1A1A
+}
+
+' Layer colours: Frontend #BBDEFB · Backend Rust #C8E6C9 · Sync #FFE0B2 · Cache #E1BEE7 · Disk #FFF9C4
+actor       "Frontend\nSvelteKit / events" as FE  #BBDEFB
+participant "FolderProcessor\norchestrator + pool" as FP #C8E6C9
+queue       "WorkQueue\nMutex + Condvar" as Q      #FFE0B2
+participant "Worker thread(s)\nworker_loop" as W    #C8E6C9
+participant "PhotoProcessor\nprocess()" as PP       #C8E6C9
+database    "Thumbnail cache\n{key}.paths · _360 · _1920" as CA #E1BEE7
+collections "Photo files\nJPEG / PNG / WebP" as DK  #FFF9C4
+
+== Startup — FolderProcessor::new ==
+FE  ->  FP : new(cache_dir, placeholder, app, num_workers)
+FP  ->  W  : spawn N background threads
+W   ->  Q  : wait_while(items empty && !shutdown)
+note right of W : parked on Condvar\nuntil work or shutdown
+
+== open_folder() — synchronous, returns instantly ==
+FE  ->  FP : open_folder(folder)
+FP  ->  DK : scan_images() — read_dir + filter + sort
+loop per image file
+  FP ->  PP : cached_thumbs(path)
+  PP ->  CA : read {key}.paths sidecar
+  PP --> FP : Some(paths) | None
+end
+FP  ->  Q  : clear() + enqueue uncached · notify_all()
+Q   --> W  : wake workers
+FP  --> FE : Vec<FolderEntry>\ncached → real thumbs · uncached → placeholder + original
+note over FE : gallery renders immediately\n(placeholders shown for uncached files)
+
+== Background processing — emits one ThumbnailReady per uncached file ==
+W   ->  Q  : pop_front()
+activate W
+W   ->  PP : process(path)
+activate PP
+alt {key}.paths sidecar exists — fast path
+  PP -> CA : read cached thumb paths
+  PP -> DK : open + stream XMP header only
+else no sidecar — slow path (single full read)
+  PP -> DK : fs::read() whole file once
+  PP -> PP : extract XMP in-memory + decode
+  PP -> PP : make_thumbnail 360 / 1920\nLanczos3, or reference original if already small
+  PP -> CA : write _360.jpg / _1920.jpg + {key}.paths
+end
+PP  --> W  : ProcessResult{metadata, thumbnails}
+deactivate PP
+W   ->  FE : emit ThumbnailReady{path, thumb_360, thumb_1920}
+note over FE : tile swaps placeholder → real thumbnail
+W   ->  Q  : loop back to wait_while
+deactivate W
+
+== prioritize() — user selects / hovers a tile ==
+FE  ->  FP : prioritize(path)
+FP  ->  Q  : move path to front · notify_one()
+
+== Shutdown — Drop for FolderProcessor ==
+FE  ->  FP : drop()
+FP  ->  Q  : shutdown = true · notify_all()
+FP  ->  W  : join() all workers
+destroy W
+
+legend right
+  | Colour | Layer |
+  |<#BBDEFB>   | Frontend (Svelte + events) |
+  |<#C8E6C9>   | Backend Rust |
+  |<#FFE0B2>   | Sync primitive (work queue) |
+  |<#E1BEE7>   | Thumbnail cache (sidecar + JPEGs) |
+  |<#FFF9C4>   | Photo files on disk |
+  ----
+  Solid = call · Dashed = return / wake
+  Cache key = hash(path + mtime + size) → invalidates when the file changes
+  Worker count default = min(available_parallelism, 4); HDD → prefer 1
+endlegend
+
+@enduml
