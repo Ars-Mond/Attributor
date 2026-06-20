@@ -11,10 +11,11 @@ use std::path::Path;
 use log::{debug, info};
 
 use little_exif::exif_tag::ExifTag;
+use little_exif::filetype::FileExtension;
 use little_exif::iptc::IptcData;
 use little_exif::metadata::Metadata as LeMetadata;
 
-use super::xmp::{parse_xmp_fields, read_xmp_from_path};
+use super::xmp::{parse_xmp_fields, read_jpeg_meta_prefix, read_xmp_from_path};
 use super::{non_empty, split_semicolons, unique_keywords, Metadata, Photo};
 
 // IPTC record 2 dataset numbers (decimal)
@@ -92,9 +93,14 @@ struct ExifIptc {
 }
 
 fn read_exif_iptc(path: &Path) -> ExifIptc {
-    // `new_from_path` is all-or-nothing: a JPEG without EXIF errors before IPTC is
-    // read. Treat any failure as "no EXIF/IPTC" — XMP still carries the fields.
-    let le = match LeMetadata::new_from_path(path) {
+    // Read only the JPEG metadata prefix (segments before SOS) and parse that small buffer,
+    // so little_exif never walks the entropy-coded image data — keeps reads partial and fast
+    // even on large JPEGs. `new_from_vec` is all-or-nothing (errors if no EXIF); treat any
+    // failure as "no EXIF/IPTC" — XMP still carries the fields.
+    let Some(prefix) = read_jpeg_meta_prefix(path) else {
+        return ExifIptc::default();
+    };
+    let le = match LeMetadata::new_from_vec(&prefix, FileExtension::JPEG) {
         Ok(le) => le,
         Err(e) => {
             debug!("read_metadata: no EXIF/IPTC for {}: {e}", path.display());
