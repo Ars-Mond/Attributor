@@ -1,20 +1,19 @@
 mod events;
 mod filetree;
 mod keywords;
+mod photo;
 mod types;
-mod xmp;
-mod metadata;
 
-// Re-exports required by integration tests (tests/xmp_read.rs)
+// Re-exports required by integration tests (tests/metadata_test.rs)
 pub use types::ReadResult;
-pub use xmp::{parse_xmp, read_jpeg_xmp_fast, read_png_xmp_fast, read_webp_xmp_fast};
 
-// Re-exports for tests/metadata_test.rs
 pub mod photo_metadata {
-    pub use super::metadata::{read_metadata, write_metadata, Metadata};
+    pub use super::photo::{read_metadata, write_metadata, Metadata, Photo};
 }
 
 use filetree::{FileNode, WatcherState};
+use log::{error, info};
+use std::path::Path;
 use std::sync::Mutex;
 use tauri_plugin_prevent_default::Flags;
 use types::SaveRequest;
@@ -28,12 +27,87 @@ fn search_keywords(query: String, limit: Option<usize>) -> Vec<String> {
 
 #[tauri::command]
 fn read_metadata(path: String) -> Result<ReadResult, String> {
-    xmp::read_metadata_impl(path)
+    let meta = photo::read_metadata(path)?;
+    Ok(ReadResult {
+        title: meta.title,
+        description: meta.description,
+        keywords: meta.keywords,
+        categories: meta.category,
+        release_filename: String::new(),
+    })
 }
 
 #[tauri::command]
 fn save_metadata(metadata: SaveRequest) -> Result<String, String> {
-    xmp::save_metadata_impl(metadata)
+    let filepath = metadata.filepath.clone();
+    let filename = metadata.filename.clone();
+    let orig_path = Path::new(&filepath);
+    info!("save_metadata: {}", orig_path.display());
+
+    let meta = photo::Metadata {
+        title: metadata.title,
+        description: metadata.description,
+        keywords: metadata.keywords,
+        category: metadata.categories,
+    };
+
+    // ── Determine target path (rename if the stem changed) ──
+    let orig_stem = orig_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let new_stem = {
+        let s = filename.trim();
+        Path::new(s).file_stem().and_then(|s| s.to_str()).unwrap_or(s).to_string()
+    };
+
+    let final_path = if !new_stem.is_empty() && new_stem != orig_stem {
+        let ext = orig_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        let new_name = if ext.is_empty() {
+            new_stem.clone()
+        } else {
+            format!("{}.{}", new_stem, ext)
+        };
+        orig_path.parent().unwrap_or(orig_path).join(&new_name)
+    } else {
+        orig_path.to_path_buf()
+    };
+
+    if final_path != orig_path {
+        // Atomically create the new file (O_CREAT|O_EXCL), copy original bytes,
+        // splice metadata into the copy, then delete the original.
+        use std::io::Write as _;
+        {
+            let mut src = std::fs::File::open(orig_path).map_err(|e| e.to_string())?;
+            let mut dst = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&final_path)
+                .map_err(|e| {
+                    let msg = if e.kind() == std::io::ErrorKind::AlreadyExists {
+                        format!(
+                            "File already exists: {}",
+                            final_path.file_name().unwrap_or_default().to_string_lossy()
+                        )
+                    } else {
+                        e.to_string()
+                    };
+                    error!("Failed to create {}: {msg}", final_path.display());
+                    msg
+                })?;
+            std::io::copy(&mut src, &mut dst).map_err(|e| e.to_string())?;
+            dst.flush().map_err(|e| e.to_string())?;
+        }
+
+        photo::write_metadata(final_path.to_string_lossy().to_string(), meta)?;
+
+        if let Err(e) = std::fs::remove_file(orig_path) {
+            error!("Failed to delete original {}: {e}", orig_path.display());
+        }
+        info!("renamed: {} → {}", orig_path.display(), final_path.display());
+    } else {
+        photo::write_metadata(filepath.clone(), meta)?;
+    }
+
+    info!("save_metadata: done → {}", final_path.display());
+    Ok(final_path.to_string_lossy().to_string())
 }
 
 #[tauri::command]

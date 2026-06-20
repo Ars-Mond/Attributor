@@ -26,9 +26,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-clipboard-manager = "2.3.2"
 tauri-plugin-prevent-default = { version = "4.0.4", features = ["platform-windows"] }
-img-parts = "0.4.0"
 quick-xml = "0.39.2"
-bytes = "1"
 tauri-plugin-log = "2.8.0"
 log = "0.4.29"
 notify = "6"
@@ -36,12 +34,4 @@ tokio = { version = "1", features = ["sync"] }
 nucleo-matcher = "0.3.1"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 little_exif = { git = "https://github.com/Ars-Mond/little_exif.git" }
-
-[dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
-
-[[bench]]
-name = "bench_xmp"
-path = "tests/bench_xmp.rs"
-harness = false
 
