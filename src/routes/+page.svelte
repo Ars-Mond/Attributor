@@ -88,7 +88,7 @@
             imageSrc = convertFileSrc(thumbs.high);
         } catch {
             if (token !== viewerToken) return;
-            showInViewer(path); // graceful fallback to the original
+            imageSrc = convertFileSrc(path); // graceful fallback to the original
         } finally {
             if (token === viewerToken) viewerLoading = false;
         }
