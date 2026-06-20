@@ -21,6 +21,11 @@ fork (rev `ba71e6a`, v0.6.23) under `~/.cargo/git/checkouts/little_exif-*/ba71e6
 - **Note on writes**: `write_to_file` necessarily reads and rewrites the container to splice metadata.
   The "no whole-file read" rule targets reads/scans; a rewrite on save is inherent and acceptable, and
   pixel data is preserved (FR-006).
+- **Note on reads (post-implementation correction)**: `new_from_path` is all-or-nothing — for a file
+  without EXIF (XMP-only PNG, or a non-VP8X WebP) it returns `Err` before IPTC/XMP are read. So the
+  implementation reads XMP with a dedicated tolerant streaming scanner for every format, and uses
+  `new_from_path` for EXIF/IPTC on JPEG only. This keeps XMP-only PNG/WebP readable and avoids the
+  fork's internal "No metadata found" error logs.
 
 ## 2. Conflict precedence on merge — EXIF > IPTC > XMP
 

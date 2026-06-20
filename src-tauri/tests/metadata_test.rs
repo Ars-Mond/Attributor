@@ -247,3 +247,25 @@ fn test_png_round_trip() {
 fn test_webp_round_trip() {
     round_trip_generated("webp");
 }
+
+// ── Regression: XMP-only files that little_exif's new_from_path rejects ────────
+
+#[test]
+fn test_read_xmp_only_png() {
+    // Real stock PNG: XMP-dc present, no EXIF, XMP chunk located after IDAT.
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../test_images/1662451436_803a15.png");
+    let m = read_metadata(path.to_str().unwrap().to_string()).expect("read should succeed");
+    assert!(m.title.contains("Honey bee"), "title was: {:?}", m.title);
+    assert!(!m.description.is_empty(), "description should be read");
+    assert!(m.keywords.iter().any(|k| k == "honey"), "keywords should include 'honey'");
+}
+
+#[test]
+fn test_read_xmp_only_webp() {
+    // Real stock WebP: simple VP8 container (not VP8X) carrying XMP-dc.
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../test_images/1662451436_e25f90.webp");
+    let m = read_metadata(path.to_str().unwrap().to_string()).expect("read should succeed");
+    assert!(m.title.contains("Honey pouring"), "title was: {:?}", m.title);
+    assert!(!m.description.is_empty(), "description should be read");
+    assert!(m.keywords.iter().any(|k| k == "herbal tea"), "keywords should include 'herbal tea'");
+}
