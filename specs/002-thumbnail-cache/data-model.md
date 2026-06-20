@@ -32,6 +32,17 @@ location and thumbnail names.
 A directory at `source.parent()/_thumbnail`, created on demand, holding that folder's thumbnails.
 Excluded from the browsable hierarchy (FR-008).
 
+### FileNode (extended)
+
+The folder-scan tree node gains two optional fields, populated during `scan_dir` for image files:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `thumb_low` | `Option<String>` | Low thumbnail path; `None` for non-images or on generation failure |
+| `thumb_high` | `Option<String>` | High thumbnail path; `None` likewise |
+
+Serialized snake_case (matching the existing `is_dir`); the frontend reads `node.thumb_low` / `node.thumb_high`.
+
 ## Derivation rules (deterministic, FR-012)
 
 ```text
@@ -57,24 +68,33 @@ Aspect ratio is preserved; output is JPG (rgb8), strong compression.
 
 ## State / lifecycle
 
+Triggered per image **during `scan_dir`** (results stored on the `FileNode`); the `get_thumbnails`
+command is a viewer fallback for files opened outside a scan.
+
 ```text
-needed(photo, ...) ──► thumb_dir exists? ── no ─► create _thumbnail
-        │                     │ yes
-        ▼                     ▼
-   for each variant:  file exists & non-empty (valid)?
+ensure_thumbnails(photo) ──► thumb_dir exists? ── no ─► create _thumbnail
+        │                          │ yes
+        ▼                          ▼
+   for each variant:  file exists & valid?
         ├─ yes ─► reuse path
-        └─ no  ─► decode source → resize (longest side) → encode JPG → write → path
+        └─ no  ─► decode source → resize (longest side) → encode JPG
+                  → write atomically (temp file in _thumbnail, then rename) → path
    return { low, high }
 ```
 
 A subsequent failure to load a "present" thumbnail (FR-011) demotes it to invalid → regenerate.
 
-## Command mapping (integration boundary)
+## Integration boundary
+
+Primary path: `scan_dir` calls `photo::thumbnail::ensure_thumbnails(&Path)` per image and stores
+`{ low, high }` into `FileNode.thumb_low` / `thumb_high`. The frontend reads those directly — the
+tree (content mode) renders `convertFileSrc(node.thumb_low)`; the viewer renders
+`convertFileSrc(node.thumb_high)`.
+
+Fallback IPC (viewer only, files opened outside a scan):
 
 | IPC | In | Out | Maps to |
 |-----|----|-----|---------|
-| `get_thumbnails` | `path: String` (source photo) | `Result<Thumbnails, String>` | `photo::thumbnail::ensure_thumbnails(&Path)` then serialize `{ low, high }` |
+| `get_thumbnails` | `path: String` | `Result<Thumbnails, String>` | `ensure_thumbnails(&Path)` then serialize `{ low, high }`; viewer shows a loading indicator until it resolves |
 
-Frontend use: file tree (content mode) renders `convertFileSrc(thumbs.low)`; viewer renders
-`convertFileSrc(thumbs.high)` after the call resolves, showing a loading indicator until then.
-No path is persisted; an in-memory runes map dedupes calls per session only.
+No path is persisted to any database or index file (FR-007).

@@ -131,11 +131,11 @@ no new files are written and the preview appears immediately.
 
 ## Assumptions
 
-- **Generation trigger**: Both variants are generated together on first need, where "need" is the photo being shown in the file hierarchy or opened in the viewer (per clarification). Generation runs without blocking the UI; each photo is generated at most once.
+- **Generation trigger**: Both variants are generated together on first need (per clarification). In practice the backend generates them during the folder scan (each image as the hierarchy is built) and via a viewer fallback for files opened outside a scan. Generation runs off the UI thread (inside the scan); each photo is generated at most once. Bounding generation for deep recursive trees is deferred — folder open is correspondingly slower for now.
 - **Resize rule**: Scale by the longest side to the target (low 360, high 1920), preserve aspect ratio, never upscale; the shorter side follows proportionally.
 - **Naming**: Deterministic, derived from the source file name (including its extension to avoid collisions between same-stem files) plus the variant, inside `_thumbnail`; this is how "does a thumbnail exist" is checked.
-- **Invalidation**: Existence-and-validity based this iteration — a present, readable thumbnail is reused; there is no modification-time or content-hash staleness check. If a source photo is replaced in place, a stale thumbnail may persist (out of scope for now).
+- **Invalidation**: Existence-and-validity based this iteration — a present, readable thumbnail is reused; there is no modification-time or content-hash staleness check. Thumbnails are written atomically (temp file then rename), so a present thumbnail is never half-written. If a source photo is replaced in place, a stale thumbnail may persist (out of scope for now).
 - **Compression**: A single strong-compression JPG quality level is used for both variants, chosen to keep files small while acceptable for the size.
 - **No path store**: Per the request, no database or index file records thumbnail/photo paths; locations are recomputed by convention each time.
 - **Foundation**: Builds on the existing photo abstraction and its image-decode capability; thumbnails are produced from the decoded source. No new external dependency is assumed beyond what the project already provides.
-- **Scope**: Generating, caching, locating, and displaying thumbnails. Out of scope: cache eviction/cleanup, a global cache location, background pre-generation of entire folders ahead of display, and persisting any path index.
+- **Scope**: Generating, caching, locating, and displaying thumbnails. Out of scope: cache eviction/cleanup, a global cache location, bounding/throttling generation for deep recursive folder trees (deferred to a future feature), and persisting any path index.

@@ -12,8 +12,10 @@ produced together on first need (a photo shown in the file hierarchy or opened i
 viewer) and reused afterward; existing valid thumbnails are never regenerated. The file
 tree shows the low thumbnail (replacing today's full-original-in-an-`<img>`), the viewer
 shows the high thumbnail with a loading indicator until ready, `_thumbnail` folders are
-hidden from the tree, and no path index is persisted. Decode/resize/encode run in Rust; a
-single typed command hands the frontend the thumbnail paths.
+hidden from the tree, and no path index is persisted. Decode/resize/encode run in Rust
+**during the folder scan** (`scan_dir`), which writes each image's thumbnail paths into its
+`FileNode` (`thumb_low`/`thumb_high`); the tree and viewer read those paths. A thin
+`get_thumbnails` command remains as a viewer fallback for files opened outside a scan.
 
 ## Technical Context
 
@@ -31,7 +33,7 @@ single typed command hands the frontend the thumbnail paths.
 
 **Performance Goals**: Cached high preview shown in <200 ms; first-time generation of both variants <1.5 s for a ≤50 MP photo; UI never freezes
 
-**Constraints**: Longest-side fit (low 360 / high 1920), never upscale; JPG strong compression; `_thumbnail` sibling folder; both variants generated per trigger; no DB/index of paths; generation off the UI thread
+**Constraints**: Longest-side fit (low 360 / high 1920), never upscale; JPG strong compression (atomic temp-then-rename writes); `_thumbnail` sibling folder; both variants generated per trigger; no DB/index of paths; generation runs during the folder scan off the UI thread (sequential, no semaphore/rayon — bounding deep-recursion generation is deferred to a future feature)
 
 **Scale/Scope**: Single-user desktop; per-photo on-demand generation over the current folder
 
@@ -48,7 +50,7 @@ single typed command hands the frontend the thumbnail paths.
 | V | Reuse UI Primitives | PASS | Extend existing `ImageViewerPanel` and `FileTree`; no parallel components |
 | VI | Mandatory Logging | PASS | Generation failures logged via `log` at error sites (English, concise) |
 | VII | Phase-Based Commits | PASS | One commit per phase via `/speckit-git-commit` |
-| VIII | Rust Performance First | PASS | Decode/resize/encode in Rust on `spawn_blocking`; one IPC call per photo (no hot-loop IPC); `rayon` available if a batch command is added |
+| VIII | Rust Performance First | PASS | Decode/resize/encode in Rust during the scan's `spawn_blocking` (off the UI thread); paths delivered via `FileNode` (no per-row IPC). Deep-recursion bulk generation slows folder open — an accepted, explicitly deferred tradeoff, not a principle violation |
 | IX | Typed Tauri IPC | PASS | `get_thumbnails` returns `Result<Thumbnails, String>`, `#[serde(rename_all = "camelCase")]`, never panics |
 | X | Fixed Stack | PASS | Reuses already-declared `image`/`tokio`; no new dependency |
 | XI | Code Style | PASS | English identifiers/comments; no inner-brace spaces in TS; no field alignment |
@@ -78,26 +80,30 @@ specs/002-thumbnail-cache/
 src-tauri/src/
 ├── photo/
 │   ├── mod.rs           # Re-export thumbnail API (ensure_thumbnails, Thumbnails)
-│   └── thumbnail.rs     # NEW: longest-side resize + JPEG encode + cache/ensure logic
-├── lib.rs               # NEW command get_thumbnails; register in invoke_handler
-├── filetree.rs          # Exclude `_thumbnail` directories from scan_dir
-└── types.rs             # (Thumbnails DTO lives in thumbnail.rs; no change unless shared)
+│   └── thumbnail.rs     # NEW: longest-side resize + JPEG encode (atomic write) + cache/ensure logic
+├── lib.rs               # get_thumbnails command kept as viewer fallback; register in invoke_handler
+├── filetree.rs          # scan_dir: generate per image via ensure_thumbnails, fill FileNode.thumb_*, exclude _thumbnail
+└── types.rs             # (Thumbnails DTO lives in thumbnail.rs)
 
 src-tauri/tests/
-└── thumbnail_test.rs    # NEW: geometry (longest side), no-upscale, JPG output, reuse, _thumbnail folder
+└── thumbnail_test.rs    # NEW: geometry (longest side), no-upscale, JPG, reuse, formats, errors, _thumbnail excluded
 
 src/lib/
-├── reusable/FileTree.svelte        # Content mode: use low thumbnail path (not the original)
+├── types.ts                        # FileNode gains thumb_low? / thumb_high?
+├── reusable/FileTree.svelte        # Content mode: use node.thumb_low (not the original)
 ├── panel/ImageViewerPanel.svelte   # Show high thumbnail + loading indicator (FR-014)
-├── panel/thumbnailCache.svelte.ts  # NEW (optional): in-memory map path→{low,high} to dedupe invokes
-└── routes/+page.svelte             # Wire viewer source to the high thumbnail + loading state
+└── routes/+page.svelte             # Viewer source from active node.thumb_high; get_thumbnails fallback + loading
 ```
 
 **Structure Decision**: Thumbnail generation lives in a new `photo/thumbnail.rs` submodule that
-reuses the existing decode capability and the `image` crate, exposed through one async Tauri
-command `get_thumbnails`. The file tree and viewer are extended in place (Principle V). An
-optional small in-memory frontend cache (runes) dedupes repeated command calls during tree
-re-renders; it persists nothing to disk (consistent with FR-007).
+reuses the existing decode capability and the `image` crate. The folder scan (`scan_dir`) calls
+`ensure_thumbnails` per image and records the resulting paths on each `FileNode`
+(`thumb_low`/`thumb_high`), so the tree and viewer read paths directly with no per-row IPC.
+Generation is sequential inside the scan's existing `spawn_blocking` (off the UI thread); a
+`get_thumbnails` command is retained only as a viewer fallback for files opened outside a scan.
+The file tree and viewer are extended in place (Principle V). Bounding generation for deep
+recursive trees is deferred (no semaphore/rayon added now). Nothing is persisted to a path index
+(FR-007).
 
 ## Complexity Tracking
 

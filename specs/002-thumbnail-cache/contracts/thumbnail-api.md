@@ -1,7 +1,8 @@
 # Contract: Thumbnail Module API (Rust)
 
-Module `crate::photo::thumbnail`. Internal backend contract (not an IPC surface). Fallible calls
-return `Result<_, String>`, never panic; errors are logged at the call site.
+Module `crate::photo::thumbnail`. Internal backend contract (not an IPC surface). Called by
+`scan_dir` per image (primary) and by the `get_thumbnails` fallback command. Fallible calls return
+`Result<_, String>`, never panic; errors are logged at the call site.
 
 ## Types & constants
 
@@ -25,7 +26,7 @@ enum Variant { Low, High }   // internal; max() -> LOW_MAX / HIGH_MAX
 | Function | Signature | Behavior |
 |----------|-----------|----------|
 | ensure_thumbnails | `fn ensure_thumbnails(source: &Path) -> Result<Thumbnails, String>` | Compute `_thumbnail` paths; create the folder if missing; for each variant reuse a valid existing file or generate it; return both paths. |
-| (internal) generate | `fn generate(src: &DynamicImage, dst: &Path, max: u32) -> Result<(), String>` | Longest-side resize (no upscale) → `rgb8` → `JpegEncoder` at `JPEG_QUALITY` → write `dst`. |
+| (internal) generate | `fn generate(src: &DynamicImage, dst: &Path, max: u32) -> Result<(), String>` | Longest-side resize (no upscale) → `rgb8` → `JpegEncoder` at `JPEG_QUALITY` → write **atomically** (temp file in `_thumbnail`, then rename to `dst`) — no half-written thumbnails. |
 | (internal) is_valid | `fn is_valid(path: &Path) -> bool` | True if the file exists and is non-empty (and decodes when later loaded — FR-011). |
 
 ## Guarantees (map to FR / SC)
