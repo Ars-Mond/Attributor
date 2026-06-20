@@ -39,7 +39,7 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Create `src-tauri/src/photo/thumbnail.rs` (constants `LOW_MAX=360`, `HIGH_MAX=1920`, `JPEG_QUALITY=75`; `Thumbnails { low, high }` with `#[serde(rename_all = "camelCase")]`; `ensure_thumbnails(&Path)` stub) and declare `mod thumbnail;` + re-export `ensure_thumbnails`/`Thumbnails` in `src-tauri/src/photo/mod.rs`
+- [x] T001 Create `src-tauri/src/photo/thumbnail.rs` (constants `LOW_MAX=360`, `HIGH_MAX=1920`, `JPEG_QUALITY=75`; `Thumbnails { low, high }` with `#[serde(rename_all = "camelCase")]`; `ensure_thumbnails(&Path)` stub) and declare `mod thumbnail;` + re-export `ensure_thumbnails`/`Thumbnails` in `src-tauri/src/photo/mod.rs`
 
 ---
 
@@ -49,10 +49,10 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 Implement `generate(src, dst, max)` — longest-side resize (Lanczos3, no upscale), convert to `rgb8`, encode JPG at `JPEG_QUALITY`, **write atomically (temp file in `_thumbnail` then rename into place)** so a crash/concurrent write never leaves a half-written thumbnail — in `src-tauri/src/photo/thumbnail.rs`
-- [ ] T003 Implement path derivation (`<dir>/_thumbnail/<file_name>.<low|high>.jpg`), `_thumbnail` folder creation, `is_valid`, and `ensure_thumbnails` (reuse valid / else generate both) in `src-tauri/src/photo/thumbnail.rs`
-- [ ] T004 Integrate generation into the folder scan: add `thumb_low: Option<String>` / `thumb_high: Option<String>` to `FileNode` (and `src/lib/types.ts`), call `ensure_thumbnails` per image in `scan_dir` populating those fields (on failure: log + leave `None`), and exclude child directories named `_thumbnail` from the scan — in `src-tauri/src/filetree.rs` and `src/lib/types.ts`. No semaphore/rayon (recursion bounding deferred).
-- [ ] T005 Keep `get_thumbnails(path) -> Result<Thumbnails, String>` (async, `spawn_blocking`) as a viewer fallback and register it in the `invoke_handler` in `src-tauri/src/lib.rs`
+- [x] T002 Implement `generate(src, dst, max)` — longest-side resize (Lanczos3, no upscale), convert to `rgb8`, encode JPG at `JPEG_QUALITY`, **write atomically (temp file in `_thumbnail` then rename into place)** so a crash/concurrent write never leaves a half-written thumbnail — in `src-tauri/src/photo/thumbnail.rs`
+- [x] T003 Implement path derivation (`<dir>/_thumbnail/<file_name>.<low|high>.jpg`), `_thumbnail` folder creation, `is_valid`, and `ensure_thumbnails` (reuse valid / else generate both) in `src-tauri/src/photo/thumbnail.rs`
+- [x] T004 Integrate generation into the folder scan: add `thumb_low: Option<String>` / `thumb_high: Option<String>` to `FileNode` (and `src/lib/types.ts`), call `ensure_thumbnails` per image in `scan_dir` populating those fields (on failure: log + leave `None`), and exclude child directories named `_thumbnail` from the scan — in `src-tauri/src/filetree.rs` and `src/lib/types.ts`. No semaphore/rayon (recursion bounding deferred).
+- [x] T005 Keep `get_thumbnails(path) -> Result<Thumbnails, String>` (async, `spawn_blocking`) as a viewer fallback and register it in the `invoke_handler` in `src-tauri/src/lib.rs`
 
 **Checkpoint**: A folder scan returns a tree whose image nodes carry valid `thumb_low`/`thumb_high`; `_thumbnail` is hidden.
 
@@ -64,9 +64,9 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **Independent Test**: Open a scanned photo → high preview appears from `node.thumb_high`. Open a non-scanned file → loading indicator, then the high preview via fallback.
 
-- [ ] T006 [P] [US1] Add high-variant tests — longest side = 1920, no upscale when shorter, valid JPG, **across JPEG/PNG/WebP sources** — in `src-tauri/tests/thumbnail_test.rs`
-- [ ] T007 [US1] Add a `loading` state and a loading indicator (styled with `_mixins`/`_themes` tokens) to `src/lib/panel/ImageViewerPanel.svelte`
-- [ ] T008 [US1] Drive the viewer from the active node's `thumb_high` (`convertFileSrc`); if absent, fall back to the `get_thumbnails` command showing the loading indicator until resolved, with graceful error fallback — in `src/routes/+page.svelte`
+- [x] T006 [P] [US1] Add high-variant tests — longest side = 1920, no upscale when shorter, valid JPG, **across JPEG/PNG/WebP sources** — in `src-tauri/tests/thumbnail_test.rs`
+- [x] T007 [US1] Add a `loading` state and a loading indicator (styled with `_mixins`/`_themes` tokens) to `src/lib/panel/ImageViewerPanel.svelte`
+- [x] T008 [US1] Drive the viewer from the active node's `thumb_high` (`convertFileSrc`); if absent, fall back to the `get_thumbnails` command showing the loading indicator until resolved, with graceful error fallback — in `src/routes/+page.svelte`
 
 **Checkpoint**: The viewer shows high previews from the cache, with a loading indicator on the fallback path.
 
@@ -78,8 +78,8 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **Independent Test**: Show a folder in content view → each photo shows a small preview from `node.thumb_low`; re-display reuses the cached files.
 
-- [ ] T009 [P] [US2] Add low-variant tests — longest side = 360, `_thumbnail` folder created, **across JPEG/PNG/WebP sources** — in `src-tauri/tests/thumbnail_test.rs`
-- [ ] T010 [US2] In content mode, render `convertFileSrc(node.thumb_low)` (placeholder when `None`) instead of `convertFileSrc(node.path)` in `src/lib/reusable/FileTree.svelte`
+- [x] T009 [P] [US2] Add low-variant tests — longest side = 360, `_thumbnail` folder created, **across JPEG/PNG/WebP sources** — in `src-tauri/tests/thumbnail_test.rs`
+- [x] T010 [US2] In content mode, render `convertFileSrc(node.thumb_low)` (placeholder when `None`) instead of `convertFileSrc(node.path)` in `src/lib/reusable/FileTree.svelte`
 
 **Checkpoint**: Browsing in content view shows lightweight low previews; US1 and US2 both work.
 
@@ -91,8 +91,8 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **Independent Test**: Generate, restart, rescan → no new files written; a 0-byte thumbnail regenerates; a corrupt source or read-only `_thumbnail` yields an error without crashing; a `_thumbnail` folder never appears in the tree.
 
-- [ ] T011 [P] [US3] Add tests: reuse (2nd `ensure_thumbnails` regenerates nothing), regenerate-on-invalid (0-byte file), **graceful failure (corrupt source → `Err`, read-only `_thumbnail` dir → `Err`, no panic)**, and `_thumbnail` excluded from the `FileNode` tree — in `src-tauri/tests/thumbnail_test.rs`
-- [ ] T012 [US3] Harden `is_valid` to reject empty/undecodable thumbnail files so invalid ones regenerate (FR-011) in `src-tauri/src/photo/thumbnail.rs`
+- [x] T011 [P] [US3] Add tests: reuse (2nd `ensure_thumbnails` regenerates nothing), regenerate-on-invalid (0-byte file), **graceful failure (corrupt source → `Err`, read-only `_thumbnail` dir → `Err`, no panic)**, and `_thumbnail` excluded from the `FileNode` tree — in `src-tauri/tests/thumbnail_test.rs`
+- [x] T012 [US3] Harden `is_valid` to reject empty/undecodable thumbnail files so invalid ones regenerate (FR-011) in `src-tauri/src/photo/thumbnail.rs`
 
 **Checkpoint**: All three user stories are independently functional.
 
@@ -100,9 +100,9 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T013 [P] Logging audit — error-site logging (incl. per-image generation failures in `scan_dir`), concise English, no `println!`/`dbg!` — in `src-tauri/src/photo/thumbnail.rs` and `src-tauri/src/filetree.rs`
-- [ ] T014 [P] Run `npx svelte-check --tsconfig ./tsconfig.json` for the changed frontend files and resolve any issues
-- [ ] T015 Run `cargo test` (all green), validate the `quickstart.md` scenarios, and tune `JPEG_QUALITY` to meet SC-003 (low < 50 KB, high < 500 KB)
+- [x] T013 [P] Logging audit — error-site logging (incl. per-image generation failures in `scan_dir`), concise English, no `println!`/`dbg!` — in `src-tauri/src/photo/thumbnail.rs` and `src-tauri/src/filetree.rs`
+- [x] T014 [P] Run `npx svelte-check --tsconfig ./tsconfig.json` for the changed frontend files and resolve any issues
+- [x] T015 Run `cargo test` (all green), validate the `quickstart.md` scenarios, and tune `JPEG_QUALITY` to meet SC-003 (low < 50 KB, high < 500 KB)
 
 ---
 

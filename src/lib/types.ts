@@ -3,6 +3,8 @@ export interface FileNode {
     path: string;
     is_dir: boolean;
     children: FileNode[];
+    thumb_low?: string;     // cached low (360px longest side) thumbnail path
+    thumb_high?: string;    // cached high (1920px longest side) thumbnail path
 }
 
 export interface Metadata {

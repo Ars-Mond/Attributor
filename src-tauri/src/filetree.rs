@@ -11,6 +11,10 @@ pub struct FileNode {
     pub path: String,
     pub is_dir: bool,
     pub children: Vec<FileNode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumb_low: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumb_high: Option<String>,
 }
 
 /// Re-scan a folder path (called by the frontend after a `folder-changed` event).
@@ -109,6 +113,8 @@ fn scan_dir(path: &std::path::Path) -> std::io::Result<FileNode> {
         .to_string();
 
     let mut children = Vec::new();
+    let mut thumb_low = None;
+    let mut thumb_high = None;
 
     // Cache is_dir from metadata to avoid repeated syscalls per entry.
     let is_dir = path.metadata().map(|m| m.is_dir()).unwrap_or(false);
@@ -133,12 +139,25 @@ fn scan_dir(path: &std::path::Path) -> std::io::Result<FileNode> {
         for entry in entries {
             let child = entry.path();
             let child_is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            // Hide the thumbnail cache folder from the hierarchy.
+            if child_is_dir && entry.file_name().to_str() == Some("_thumbnail") {
+                continue;
+            }
             if child_is_dir || is_supported_image(&child) {
                 match scan_dir(&child) {
                     Ok(node) => children.push(node),
                     Err(err) => warn!("scan_dir: skipping {}: {err}", child.display()),
                 }
             }
+        }
+    } else if is_supported_image(path) {
+        // Scan-time trigger: generate/locate both thumbnails and record their paths.
+        match crate::photo::ensure_thumbnails(path) {
+            Ok(t) => {
+                thumb_low = Some(t.low);
+                thumb_high = Some(t.high);
+            }
+            Err(e) => warn!("thumbnail generation failed for {}: {e}", path.display()),
         }
     }
 
@@ -147,6 +166,8 @@ fn scan_dir(path: &std::path::Path) -> std::io::Result<FileNode> {
         path: path.to_string_lossy().to_string(),
         is_dir,
         children,
+        thumb_low,
+        thumb_high,
     })
 }
 
@@ -158,4 +179,29 @@ fn is_supported_image(path: &std::path::Path) -> bool {
             .as_deref(),
         Some("jpg" | "jpeg" | "png" | "webp")
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scan_dir;
+    use std::fs;
+
+    #[test]
+    fn scan_dir_excludes_thumbnail_folder() {
+        let base = std::env::temp_dir()
+            .join(format!("attributor_ft_{:?}", std::thread::current().id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(base.join("_thumbnail")).unwrap();
+        fs::create_dir_all(base.join("sub")).unwrap();
+
+        let node = scan_dir(&base).expect("scan_dir");
+
+        assert!(node.children.iter().any(|c| c.name == "sub"), "regular subfolder kept");
+        assert!(
+            !node.children.iter().any(|c| c.name == "_thumbnail"),
+            "_thumbnail folder must be excluded from the hierarchy"
+        );
+
+        let _ = fs::remove_dir_all(&base);
+    }
 }

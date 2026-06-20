@@ -1,6 +1,6 @@
 <script lang="ts">
     import {onMount, onDestroy} from "svelte";
-    import {convertFileSrc} from "@tauri-apps/api/core";
+    import {convertFileSrc, invoke} from "@tauri-apps/api/core";
     import {getCurrentWindow, PhysicalSize} from "@tauri-apps/api/window";
     import MetadataPanel from "$lib/panel/MetadataPanel.svelte";
     import FilesPanel from "$lib/panel/FilesPanel.svelte";
@@ -75,6 +75,24 @@
 
     // --- Image viewer ---
     let imageSrc = $state<string | null>(null);
+    let viewerLoading = $state(false);
+    let viewerToken = 0;
+
+    /** Show a photo in the viewer via its high thumbnail (scans pre-generate it; fast). */
+    async function showInViewer(path: string) {
+        const token = ++viewerToken;
+        viewerLoading = true;
+        try {
+            const thumbs = await invoke<{low: string; high: string}>('get_thumbnails', {path});
+            if (token !== viewerToken) return;
+            imageSrc = convertFileSrc(thumbs.high);
+        } catch {
+            if (token !== viewerToken) return;
+            showInViewer(path); // graceful fallback to the original
+        } finally {
+            if (token === viewerToken) viewerLoading = false;
+        }
+    }
 
     // --- Panel bindings ---
     let metaPanel: any = $state(null);
@@ -112,6 +130,8 @@
     function handleFileGone() {
         const name = currentBasename;
         metaPanel?.clear();
+        viewerToken++;
+        viewerLoading = false;
         imageSrc = null;
         currentPath = null;
         showDialog = false;
@@ -122,14 +142,14 @@
     /** Update viewer when the file was renamed during save. */
     function handlePathChange(newPath: string) {
         currentPath = newPath;
-        imageSrc = convertFileSrc(newPath);
+        showInViewer(newPath);
         filesPanel?.setSelectedPath(newPath);
     }
 
     /** Actually open a file: load into metadata panel + show in viewer. */
     async function openFile(path: string) {
         await metaPanel?.loadFile(path);
-        imageSrc = convertFileSrc(path);
+        showInViewer(path);
         currentPath = path;
         showDialog = false;
         pendingPath = null;
@@ -150,13 +170,13 @@
     function handleSelectionChange(paths: string[]) {
         batchPaths = paths;
         if (paths.length > 1) {
-            imageSrc = convertFileSrc(paths[paths.length - 1]);
+            showInViewer(paths[paths.length - 1]);
         }
     }
 
     /** Called when Alt+click on a photo in batch mode — preview only. */
     function handleAltSelect(path: string) {
-        imageSrc = convertFileSrc(path);
+        showInViewer(path);
     }
 
     // --- Dialog actions ---
@@ -314,7 +334,7 @@
             {#if windowId === 'control'}
                 <MetadataPanel bind:this={metaPanel} bind:isDirty onPathChange={handlePathChange} {batchPaths} />
             {:else if windowId === 'view'}
-                <ImageViewerPanel {imageSrc} {goneMessage} onDismissGone={() => { goneMessage = null; }} />
+                <ImageViewerPanel {imageSrc} loading={viewerLoading} {goneMessage} onDismissGone={() => { goneMessage = null; }} />
             {:else if windowId === 'hierarchy'}
                 <FilesPanel
                     bind:this={filesPanel}

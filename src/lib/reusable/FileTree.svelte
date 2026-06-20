@@ -31,7 +31,7 @@
         /\.(jpg|jpeg|png|webp)$/i.test(node.name)
     );
 
-    const showThumb = $derived(viewMode === 'content' && isImage);
+    const showThumb = $derived(viewMode === 'content' && isImage && !!node.thumb_low);
 </script>
 
 <div class="tree-node" class:tree-node--h={layoutDir === 'horizontal'}>
@@ -81,7 +81,7 @@
             onclick={(e) => onSelect(node.path, e)}
         >
             {#if showThumb}
-                <img class="thumb" src={convertFileSrc(node.path)} alt="" loading="lazy" />
+                <img class="thumb" src={convertFileSrc(node.thumb_low!)} alt="" loading="lazy" />
             {:else if isImage}
                 <!-- Image file icon -->
                 <svg class="icon image-icon" viewBox="0 0 16 16" fill="currentColor">

@@ -1,17 +1,18 @@
 <script lang="ts">
     interface Props {
         imageSrc: string | null;
+        loading?: boolean;
         goneMessage: string | null;
         onDismissGone: () => void;
     }
 
-    let {imageSrc, goneMessage, onDismissGone}: Props = $props();
+    let {imageSrc, loading = false, goneMessage, onDismissGone}: Props = $props();
 </script>
 
 <div class="viewer">
     {#if imageSrc}
         <img class="image" src={imageSrc} alt="Preview" />
-    {:else}
+    {:else if !loading}
         <div class="placeholder">
             <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
                 <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -19,6 +20,12 @@
                 <path d="M21 15l-5-5L5 21" />
             </svg>
             <p>No image open</p>
+        </div>
+    {/if}
+
+    {#if loading}
+        <div class="loading-overlay" aria-label="Loading preview">
+            <div class="spinner"></div>
         </div>
     {/if}
 
@@ -61,6 +68,27 @@
 
         svg {opacity: 0.4;}
         p {font-size: $fs-regular;}
+    }
+
+    .loading-overlay {
+        position: absolute;
+        inset: 0;
+        @include flex(row, center, center);
+        background: var(--overlay-loading);
+        backdrop-filter: blur(2px);
+    }
+
+    .spinner {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 2.5px solid var(--spinner-track);
+        border-top-color: var(--spinner-color);
+        animation: spin 0.65s linear infinite;
+    }
+
+    @keyframes spin {
+        to {transform: rotate(360deg);}
     }
 
     .gone-toast {
