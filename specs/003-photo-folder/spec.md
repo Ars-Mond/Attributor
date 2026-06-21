@@ -8,6 +8,14 @@
 
 **Input**: User description: "Create a dedicated class for working with 'photo folders' in the project. It must implement reading a folder, reading subfolders, assembling photo paths, searching photo paths, searching thumbnails, creating thumbnails, and more. Thumbnail creation must use a producer–consumer approach over a thread pool (multithreaded). This class owns opening the folder the user selected and all folder operations in the project. It must not take on other responsibilities, e.g. those of the photo class."
 
+## Clarifications
+
+### Session 2026-06-21
+
+- Q: How does the frontend receive thumbnails as they become ready (structure shown first, thumbnails in the background)? → A: The backend emits a per-photo "thumbnail ready" event; the frontend updates that item's preview when it arrives. Deterministic thumbnail paths are already on the structure node (no polling).
+- Q: What is the generation scope when a folder opens? → A: Prioritize the currently visible folder level first, then generate deeper subfolders' thumbnails in the background.
+- Q: How is the producer–consumer thread pool implemented? → A: A hand-rolled bounded pool — a fixed set of standard worker threads fed by a channel — with no new external dependency.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Open a folder and browse immediately (Priority: P1)
@@ -91,7 +99,7 @@ supported photo (excluding `_thumbnail`); add a photo on disk → it appears and
 
 - **FR-001**: System MUST provide a single folder abstraction that owns all folder operations — open a user-selected folder, read the folder and its subfolders, enumerate photo paths, search photos and thumbnails, create thumbnails, and watch for changes.
 - **FR-002**: Opening a folder MUST read it and its subfolders and present the structure (folders and photos) without waiting for thumbnails to be created.
-- **FR-003**: Thumbnail creation for a folder's photos MUST use a producer–consumer model over a bounded thread pool — a producer feeds photos needing thumbnails to multiple worker threads that generate them in parallel.
+- **FR-003**: Thumbnail creation MUST use a producer–consumer model over a bounded, hand-rolled thread pool — a fixed set of standard worker threads fed by a channel — generating in parallel, with no new external dependency.
 - **FR-004**: Concurrent generation MUST be bounded (a limited number of workers) so the machine and UI stay responsive, and it MUST NOT block folder browsing.
 - **FR-005**: System MUST reuse existing valid thumbnails and generate only the missing ones.
 - **FR-006**: The folder abstraction MUST delegate per-photo work (creating a single photo's thumbnails, reading a single photo's metadata, decoding) to the photo abstraction and MUST NOT reimplement those single-photo responsibilities.
@@ -103,12 +111,14 @@ supported photo (excluding `_thumbnail`); add a photo on disk → it appears and
 - **FR-012**: Switching to a different folder MUST stop or supersede pending thumbnail work for the previous folder.
 - **FR-013**: Thumbnails MUST become visible progressively as they are produced, without freezing the UI.
 - **FR-014**: All folder operations MUST behave identically across Windows, Linux, and macOS.
+- **FR-015**: System MUST notify the UI as each thumbnail becomes ready, via a per-photo event, so the corresponding preview updates without polling; each photo's thumbnail paths are known (deterministic) from the moment the structure is shown.
+- **FR-016**: Generation MUST prioritize the currently visible folder level, then process deeper subfolders in the background.
 
 ### Key Entities *(include if feature involves data)*
 
 - **Photo Folder**: The opened user-selected folder. Owns the folder structure, the list of photos, the thumbnail-generation pipeline, and the change watcher. The single entry point for folder operations.
 - **Folder Structure**: The tree of folders and photos under the open folder, excluding `_thumbnail` cache folders.
-- **Thumbnail Pipeline**: The producer–consumer work pipeline — a producer enumerating photos that need thumbnails and a bounded pool of workers generating them in parallel (each via the photo abstraction).
+- **Thumbnail Pipeline**: The producer–consumer work pipeline — a producer enumerating photos that need thumbnails (visible level first) and a bounded pool of standard worker threads, fed by a channel, generating them in parallel (each via the photo abstraction) and emitting a "ready" event per completed thumbnail.
 - **Photo (delegated)**: The existing per-photo abstraction the folder uses for single-photo work; not reimplemented here.
 
 ## Success Criteria *(mandatory)*
@@ -122,14 +132,15 @@ supported photo (excluding `_thumbnail`); add a photo on disk → it appears and
 - **SC-005**: After switching folders, work for the previous folder stops within 1 second and no longer consumes CPU.
 - **SC-006**: Enumerating photos returns 100% of supported photos in the tree and 0% of `_thumbnail` entries.
 - **SC-007**: Behavior is identical across Windows, Linux, and macOS.
+- **SC-008**: Thumbnails for the currently visible folder level appear before those of deeper subfolders, and each preview updates the moment its thumbnail is ready (event-driven, no polling).
 
 ## Assumptions
 
-- **Tree first, thumbnails async**: Opening a folder returns the structure immediately; thumbnails are generated in the background and surface progressively. (Alternative — block the open until all thumbnails exist — is rejected; it is the slow behavior this feature removes.)
-- **Eager folder-wide generation**: When a folder opens, thumbnails for all its photos are scheduled for generation (missing ones), processed concurrently by the pool. (On-demand-only generation is out of scope here.)
+- **Tree first, thumbnails async**: Opening a folder returns the structure immediately; thumbnails are generated in the background and surface progressively via a per-photo "ready" event (no polling); deterministic thumbnail paths are present on the structure from the start. (Alternative — block the open until all thumbnails exist — is rejected; it is the slow behavior this feature removes.)
+- **Visible-first generation**: When a folder opens, missing thumbnails are scheduled for concurrent generation, prioritizing the currently visible folder level, then deeper subfolders in the background. (On-demand-only generation is out of scope here.)
 - **Bounded concurrency**: The worker count is bounded relative to available CPU cores so the machine stays responsive; the exact size is an implementation detail.
 - **Reuse the photo abstraction**: Per-photo thumbnail creation and metadata are delegated to the existing photo component; this folder component performs no single-photo decode/metadata logic itself (single responsibility, per the request).
 - **Consolidation**: This becomes the single owner of folder operations in the project; existing folder behaviors (scan, hierarchy, watching, scan-time thumbnail generation) are routed through it, replacing the scattered/inline logic and the previous single-threaded folder-open generation.
 - **Thumbnails definition**: Low/high thumbnail sizes, format, naming, and the `_thumbnail` location are as already established for photos; this feature reuses them.
 - **Search scope**: "Searching" photos/thumbnails means locating them within the currently open folder tree (by path/name/existence), not a global or content-based search.
-- **No new external dependency** beyond what the project already provides is assumed; the concurrency uses the project's existing capabilities.
+- **No new external dependency**: the producer–consumer pool is hand-rolled with standard threads and a channel; the concurrency uses the standard library, not a new crate.
