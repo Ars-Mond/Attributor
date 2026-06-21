@@ -2,9 +2,11 @@
 
 ## Entities
 
-### Photo Folder (FolderState — managed)
+### PhotoFolder (the class) & FolderState
 
-The single owner of the open folder's live resources.
+`PhotoFolder` is the struct that owns all folder operations (the "class", mirroring `Photo`):
+open/scan/enumerate/search/locate, and driving the watcher and thumbnail pipeline. `FolderState`
+is the Tauri-managed runtime state it uses, holding the open folder's live resources:
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -47,11 +49,11 @@ Change vs feature 002: paths are computed at scan (no generation during scan).
 `photo::ensure_thumbnails(&Path)` / `photo::thumbnail::thumbnail_paths(&Path)` /
 `photo::read_metadata` — single-photo work the folder module calls but does not reimplement.
 
-## Operations (folder module public surface)
+## Operations (PhotoFolder public surface)
 
 | Operation | Shape | Notes |
 |-----------|-------|-------|
-| open | `open(app, path) -> FileNode` | scan tree (fast) + start watcher + start pipeline; return tree |
+| open | `PhotoFolder::open(app, state, path) -> FileNode` | scan tree (fast) + start watcher + start pipeline; return tree |
 | rescan | `scan(path) -> FileNode` | re-scan after a change; schedule missing thumbnails |
 | enumerate photos | `photo_paths(&FileNode) -> Vec<String>` | all supported photos, `_thumbnail` excluded |
 | locate thumbnails | via `FileNode.thumb_*` / `photo::thumbnail::thumbnail_paths` | deterministic |

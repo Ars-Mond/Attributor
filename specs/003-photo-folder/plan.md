@@ -50,12 +50,12 @@ replaces the inline single-threaded generation from feature 002.
 | V | Reuse UI Primitives | PASS | Reuses `photo`, `FileNode`, `FileTree`, the watcher/event pattern; **consolidates** scattered folder logic rather than duplicating |
 | VI | Mandatory Logging | PASS | Worker/scan/watch failures logged at the error site |
 | VII | Phase-Based Commits | PASS | One commit per phase |
-| VIII | Rust Performance First | PASS* | Heavy batch (decode/resize/encode) parallelized in Rust off the UI thread; coarse per-photo events, no hot-loop IPC. *Uses a hand-rolled producer–consumer pool instead of `rayon` — see Complexity Tracking |
+| VIII | Rust Performance First | PASS | Heavy batch (decode/resize/encode) parallelized in Rust off the UI thread; coarse per-photo events, no hot-loop IPC. Constitution v1.1.0 §VIII permits an equivalent thread pool for such workloads, so the hand-rolled producer–consumer pool is compliant |
 | IX | Typed Tauri IPC | PASS | Commands keep `Result<T, String>`; the `thumbnail-ready` event payload is a `serde` type with `#[serde(rename_all = "camelCase")]` |
 | X | Fixed Stack | PASS | No new dependency (standard library concurrency) |
 | XI | Code Style | PASS | English identifiers/comments; no inner-brace spaces in TS; no field alignment |
 
-**Result**: PASS — one justified deviation recorded in Complexity Tracking (no blocking violations).
+**Result**: PASS — no violations (the thread-pool choice is permitted by constitution v1.1.0 §VIII).
 
 ## Project Structure
 
@@ -80,7 +80,7 @@ specs/003-photo-folder/
 ```text
 src-tauri/src/
 ├── folder/                 # NEW module (replaces filetree.rs): owns all folder operations
-│   ├── mod.rs              # FileNode, FolderState (managed), open/rescan orchestration, queries
+│   ├── mod.rs              # PhotoFolder struct (the class) + FileNode + FolderState (managed); open/rescan/query methods
 │   ├── scan.rs             # scan_dir → tree + deterministic thumb paths; excludes _thumbnail (no inline generation)
 │   ├── pipeline.rs         # producer–consumer pool (std threads + mpsc), visible-first, cancellation, emits thumbnail-ready
 │   └── watch.rs            # notify watcher (moved from filetree.rs)
@@ -102,7 +102,8 @@ src/lib/
 ```
 
 **Structure Decision**: A new `folder/` module becomes the single owner of folder operations,
-replacing `filetree.rs` (scan + watcher move in). The scan builds the tree quickly and records
+replacing `filetree.rs` (scan + watcher move in), exposing a `PhotoFolder` struct (the class,
+mirroring `Photo`) as the entry point. The scan builds the tree quickly and records
 deterministic thumbnail paths (via a new paths-only `photo::thumbnail::thumbnail_paths`); a
 `pipeline` submodule runs the producer–consumer pool that calls `photo::ensure_thumbnails`
 per photo (visible-first), emits `thumbnail-ready`, and is cancelled on folder switch. The
@@ -111,6 +112,7 @@ frontend marks photos ready from the event and renders their low thumbnail then.
 
 ## Complexity Tracking
 
-| Deviation | Why needed | Simpler/alternative rejected because |
-|-----------|------------|--------------------------------------|
-| Hand-rolled producer–consumer pool (`std::thread` + `mpsc`) instead of `rayon` (named in Principle VIII for batches) | The feature explicitly requires a producer–consumer model with per-item progress events and mid-run cancellation on folder switch; a channel + worker threads expresses this directly | `rayon` would add a new dependency (tension with Principle X) and its parallel-iterator model fits batch map/reduce, not a cancellable producer–consumer with per-item event emission. Heavy work is still parallelized in Rust off the UI thread, satisfying Principle VIII's intent |
+> No Constitution Check violations. The hand-rolled producer–consumer pool (`std::thread` + `mpsc`)
+> was a deviation from the original §VIII "use rayon" wording; constitution **v1.1.0** amended §VIII
+> to permit an equivalent thread pool for concurrent workloads like thumbnail generation. It is now
+> compliant and adds no new dependency (Principle X).

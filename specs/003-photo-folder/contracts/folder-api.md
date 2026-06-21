@@ -8,12 +8,16 @@ Fallible calls return `Result<_, String>`, never panic; errors are logged at the
 ```rust
 pub struct FileNode { /* name, path, is_dir, children, thumb_low, thumb_high */ }  // moved here
 
-pub struct FolderState {                 // Tauri-managed (Mutex)
+pub struct PhotoFolder;                  // the class: entry point for folder operations (mirrors `Photo`)
+
+pub struct FolderState {                 // Tauri-managed (Mutex) runtime state PhotoFolder drives
     current: Option<PathBuf>,
     watcher: Option<notify::RecommendedWatcher>,
     cancel:  Option<Arc<AtomicBool>>,
 }
 ```
+
+Functions below are `PhotoFolder` methods / associated functions (the module's public surface).
 
 ## Functions
 
