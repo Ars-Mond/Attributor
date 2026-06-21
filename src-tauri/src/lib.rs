@@ -8,7 +8,9 @@ mod types;
 pub use types::ReadResult;
 
 pub mod photo_metadata {
-    pub use super::photo::{read_metadata, write_metadata, Metadata, Photo};
+    pub use super::photo::{
+        ensure_thumbnails, read_metadata, write_metadata, Metadata, Photo, Thumbnails,
+    };
 }
 
 use filetree::{FileNode, WatcherState};
@@ -110,6 +112,16 @@ fn save_metadata(metadata: SaveRequest) -> Result<String, String> {
     Ok(final_path.to_string_lossy().to_string())
 }
 
+/// Viewer fallback: ensure both thumbnails for a single photo and return their paths.
+/// (Folder scans already populate `FileNode.thumb_low`/`thumb_high`; this serves files
+/// opened outside a scan.) CPU work runs off the UI thread.
+#[tauri::command]
+async fn get_thumbnails(path: String) -> Result<photo::Thumbnails, String> {
+    tokio::task::spawn_blocking(move || photo::ensure_thumbnails(std::path::Path::new(&path)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 async fn scan_folder(path: String) -> Result<FileNode, String> {
     filetree::scan_folder_impl(path).await
@@ -155,6 +167,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             read_metadata,
             save_metadata,
+            get_thumbnails,
             open_folder,
             open_folder_path,
             scan_folder,

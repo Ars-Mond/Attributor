@@ -3,6 +3,7 @@
 
 mod decode;
 mod read;
+mod thumbnail;
 mod write;
 mod xmp;
 
@@ -11,6 +12,8 @@ use std::path::{Path, PathBuf};
 
 use little_exif::filetype::{get_file_type, FileExtension};
 use serde::Serialize;
+
+pub use thumbnail::{ensure_thumbnails, Thumbnails};
 
 /// The four logical metadata fields the application edits and stores.
 #[derive(Serialize, Default, Debug, PartialEq, Clone)]

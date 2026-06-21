@@ -370,3 +370,74 @@ fn read_webp_xmp_fast<R: Read + Seek>(r: &mut R) -> std::io::Result<Option<Vec<u
 
     Ok(None)
 }
+
+/// Reads the JPEG metadata prefix — every marker segment before the first SOS — into a
+/// buffer, so `little_exif` can parse EXIF/IPTC/XMP from it without walking the (possibly
+/// huge) entropy-coded image data. Segments are copied by length, so an embedded EXIF
+/// thumbnail (which has its own SOS) is handled correctly. Returns `None` if not a JPEG.
+pub(crate) fn read_jpeg_meta_prefix(path: &Path) -> Option<Vec<u8>> {
+    let mut r = match File::open(path) {
+        Ok(f) => BufReader::new(f),
+        Err(e) => {
+            warn!("read_jpeg_meta_prefix: open failed for {}: {e}", path.display());
+            return None;
+        }
+    };
+
+    let mut soi = [0u8; 2];
+    if r.read_exact(&mut soi).is_err() || soi != [0xFF, 0xD8] {
+        return None; // not JPEG
+    }
+    let mut buf = vec![0xFF, 0xD8];
+
+    loop {
+        // Next marker: a 0xFF followed by a non-0xFF marker code.
+        let mut byte = [0u8; 1];
+        if r.read_exact(&mut byte).is_err() {
+            break;
+        }
+        if byte[0] != 0xFF {
+            break; // out of sync — stop with what we have
+        }
+        let mut code = [0u8; 1];
+        loop {
+            if r.read_exact(&mut code).is_err() {
+                return Some(buf);
+            }
+            if code[0] != 0xFF {
+                break; // consume any 0xFF fill bytes before the code
+            }
+        }
+        let m = code[0];
+
+        // SOS or EOI → image data / end of file; metadata is complete.
+        if m == 0xDA || m == 0xD9 {
+            break;
+        }
+        // Standalone markers without a length field.
+        if m == 0x01 || (0xD0..=0xD7).contains(&m) {
+            buf.push(0xFF);
+            buf.push(m);
+            continue;
+        }
+        // Length-prefixed segment: copy it verbatim.
+        let mut len_buf = [0u8; 2];
+        if r.read_exact(&mut len_buf).is_err() {
+            break;
+        }
+        let len = u16::from_be_bytes(len_buf) as usize;
+        if len < 2 {
+            break;
+        }
+        let mut data = vec![0u8; len - 2];
+        if r.read_exact(&mut data).is_err() {
+            break;
+        }
+        buf.push(0xFF);
+        buf.push(m);
+        buf.extend_from_slice(&len_buf);
+        buf.extend_from_slice(&data);
+    }
+
+    Some(buf)
+}
