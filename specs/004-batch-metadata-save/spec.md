@@ -8,6 +8,14 @@
 
 **Input**: User description: "Replace the frontend per-file `handleBatchSave` loop with a single list sent to the backend; save the batch multithreaded in the backend; emit status events back to the frontend (saved / not saved / …). Fix the event design: unify the event *contract* (names + payload types), not the emission, into one place — emission stays in the owning domain; the delivery mechanism is chosen by signal nature (broadcast vs per-call), not 'one for all'. Also determine whether batch mode should use `tauri::ipc::Channel<T>`."
 
+## Clarifications
+
+### Session 2026-06-23
+
+- Q: What does the frontend send to the batch command — fully-resolved per-file metadata, or an "intent" (shared fields + keyword edits) resolved by the backend? → A: Fully-resolved per-file metadata. The frontend resolves each file's final metadata from data already loaded for the batch and sends a list of resolved items; the backend writes and reads each file at most once only to preserve unrelated tags. Keyword-merge logic stays on the frontend.
+- Q: Should an in-progress batch be cancellable in this version? → A: Yes. The user can cancel a running batch; not-yet-started photos are skipped, and each item's outcome distinguishes saved / failed / cancelled.
+- Q: What degree of write parallelism? → A: `rayon` default (~all cores); the `rayon` pool bounds the thread count.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Save many photos at once, fast (Priority: P1)
@@ -50,7 +58,8 @@ updates are observed incrementally rather than only at completion.
 
 1. **Given** a running batch, **When** each photo finishes, **Then** the frontend receives an incremental progress signal and updates the UI without waiting for the whole batch.
 2. **Given** a batch where one file cannot be written, **When** the batch runs, **Then** that file is reported as failed (with a reason) and all other files are still saved.
-3. **Given** a finished batch, **When** the user inspects the result, **Then** every item in the batch has a definitive outcome (saved or failed) and none are silently dropped.
+3. **Given** a finished batch, **When** the user inspects the result, **Then** every item in the batch has a definitive outcome (saved, failed, or cancelled) and none are silently dropped.
+4. **Given** a running batch, **When** the user cancels it, **Then** photos not yet started are not written and the result distinguishes saved, failed, and cancelled items.
 
 ---
 
@@ -86,6 +95,7 @@ build/type error on the side left out of sync rather than a silent runtime misma
 - Duplicate paths appear in the list → handled without double-writing or corrupting the file.
 - A batch is started while the thumbnail pipeline from a recent folder-open is still running → both complete; the batch must not deadlock or be starved indefinitely.
 - The user navigates away, deselects, or closes the window mid-batch → the in-flight backend work resolves safely and stale progress is not applied to unrelated UI state.
+- The user cancels mid-batch → photos not yet started are skipped and reported as cancelled; a photo already being written either completes or fails but is reported accurately; the operation ends promptly rather than running to completion.
 
 ## Requirements *(mandatory)*
 
@@ -98,8 +108,8 @@ build/type error on the side left out of sync rather than a silent runtime misma
 - **FR-003**: The system MUST process the batch best-effort: a failure writing one photo MUST NOT abort the remaining photos.
 - **FR-004**: The system MUST report a definitive per-photo outcome (succeeded, or failed with a human-readable reason) for every item in the batch.
 - **FR-005**: The system MUST report incremental progress as the batch proceeds (each completion observable before the whole batch finishes), not only a single result at the end.
-- **FR-006**: The resolved per-photo metadata (shared fields merged with that file's own keywords) MUST be carried in the request so the backend does not need an extra per-file round-trip to the frontend.
-- **FR-007**: The backend MUST read each file's existing metadata at most once during a batch save (no redundant re-parsing of the same file within the operation).
+- **FR-006**: The frontend MUST resolve each photo's final metadata (shared fields merged with that file's own keywords) from data already loaded for the batch, and carry the resolved per-photo metadata in the request, so no extra per-file round-trip to the frontend is needed during the save.
+- **FR-007**: The backend MUST read each file's existing metadata at most once during a batch save (only to preserve unrelated tags); the frontend MUST NOT re-read files it already loaded for the batch when building the request.
 - **FR-008**: A metadata-only batch save MUST NOT trigger a full-folder rescan or a thumbnail pipeline restart for the files it writes (no watcher-induced churn during or immediately after the batch).
 - **FR-009**: The frontend MUST replace the existing sequential per-file save loop (`handleBatchSave`) with the single batched backend call.
 - **FR-010**: For each photo, the batch write result MUST be identical to saving that photo individually today (same multi-block write across EXIF/IPTC/XMP, same removal of cleared fields).
@@ -113,26 +123,33 @@ build/type error on the side left out of sync rather than a silent runtime misma
 - **FR-015**: The existing `folder-changed` and `thumbnail-ready` events MUST be migrated onto the unified contract with no change in observable behavior.
 - **FR-016**: A change to any event's name or payload MUST surface as a build/type error on whichever side is out of sync, preventing silent drift.
 
+#### Cancellation
+
+- **FR-017**: The user MUST be able to cancel an in-progress batch; after cancellation the system MUST stop dispatching photos that have not yet started.
+- **FR-018**: After a cancellation, every photo MUST have a definitive outcome — saved, failed, or cancelled (not started) — with no item left ambiguous; a photo already mid-write MAY complete but MUST be reported accurately.
+
 ### Key Entities *(include if feature involves data)*
 
 - **Batch Save Request**: The whole operation's input — an ordered list of items, each item being a photo's path plus its resolved target metadata (title, description, keywords, category) and target filename. Built on the frontend from the current selection and the shared-field edits.
-- **Per-File Save Result**: The outcome for one photo — its path, a status (saved or failed), and, on failure, a reason. Every request item produces exactly one result.
+- **Per-File Save Result**: The outcome for one photo — its path, a status (saved, failed, or cancelled/not-started), and, on failure, a reason. Every request item produces exactly one result.
 - **Batch Progress Update**: An incremental signal carrying how many items are complete out of the total (and optionally the latest per-file result), delivered while the batch runs.
 - **Event Contract Catalog**: The single shared definition mapping each event name to its payload type, consumed by both backend and frontend.
 - **Signal Kind**: The classification that decides delivery — a broadcast signal (ambient, of interest to any listener) versus a per-operation progress signal (scoped to one invocation).
+- **Cancellation Signal**: A user-initiated request to stop the running batch; it prevents dispatch of not-yet-started photos and drives the cancelled outcomes.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
 - **SC-001**: On a 4-core (or better) machine, saving a batch of 50 photos completes at least 3× faster than the current one-by-one flow for the same selection.
-- **SC-002**: 100% of items in a batch produce a definitive outcome (saved or failed); none are silently dropped.
+- **SC-002**: 100% of items in a batch produce a definitive outcome (saved, failed, or cancelled); none are silently dropped.
 - **SC-003**: In a batch mixing writable files with at least one unwritable file, every writable file is saved successfully and each unwritable file is reported as failed with a reason.
 - **SC-004**: Progress is observed advancing during the batch (at least one update before the final item completes), not as a single jump at the end.
 - **SC-005**: A metadata-only batch save causes 0 thumbnail regenerations and does not reload/replace the folder tree for the unchanged images.
 - **SC-006**: For every photo, the metadata fields written by batch are identical to those written by saving the photo individually.
 - **SC-007**: The event contract is defined exactly once; an intentional payload change produces a build/type-check failure on the mismatched side (0 silent drift).
 - **SC-008**: The UI stays responsive throughout a batch of at least 50 photos (no unresponsive/frozen window).
+- **SC-009**: When the user cancels a running batch, no photo that had not yet started is written, and the batch stops promptly rather than running every remaining file to completion.
 
 ## Assumptions
 
@@ -141,6 +158,6 @@ build/type error on the side left out of sync rather than a silent runtime misma
 - **Channel decision (resolves the user's question)**: Per-batch progress and per-file results are delivered over a **per-invocation typed channel** (`tauri::ipc::Channel<T>`), because that signal is scoped to one operation, is naturally ordered, and is cleaned up when the call ends — a better fit than a global broadcast. The existing ambient signals (`folder-changed`, `thumbnail-ready`) remain **global broadcast events**. This is the concrete application of FR-014.
 - **In-place writes only**: Batch writes each file in place under its own name (no rename during batch), matching current behavior; renaming remains a single-file concern.
 - **Out of scope — per-file write-path micro-optimization**: The dominant per-file backend cost (the `little_exif` whole-file entropy-coded scan on the write path, which reads avoid via a header prefix) is a separate per-photo concern. This feature mitigates total wall-clock through concurrency; optimizing the single-file write path is a candidate follow-up, not part of this feature.
-- **Out of scope — cancellation**: Cancelling an in-progress batch is not included in this version; it can be a later enhancement.
+- **Cancellation (in scope)**: The user can cancel a running batch; not-yet-started photos are skipped and reported as cancelled (resolved in clarification). The cancel signal is delivered out-of-band from the progress channel (mechanism deferred to the plan).
 - **No persistence**: Consistent with the project, no database or stored batch state is introduced; the batch is a transient operation.
 - **Single-file save unchanged**: The existing single-file save command and its semantics remain available and unchanged.
