@@ -1,8 +1,12 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: (unversioned template) -> 1.0.0
-Bump rationale: Initial ratification of the project constitution. All template
+Version change: 1.0.0 -> 1.1.0
+Bump rationale (1.1.0, MINOR): Principle VIII amended — batch photo processing in the
+app's logic uses `rayon`, but other concurrent workloads (e.g. background thumbnail
+generation) MAY use an equivalent thread pool (producer–consumer over standard threads).
+Clarifies `rayon` is not the sole permitted concurrency tool. No template changes required.
+Prior — 1.0.0: Initial ratification of the project constitution. All template
 placeholders replaced with concrete, project-specific principles.
 
 Principles (11, defined from maintainer input):
@@ -117,7 +121,10 @@ each phase independently reviewable and revertible.
 
 All heavy work — parsing, decoding, directory scanning, and batch processing —
 MUST run in Rust, never in TypeScript. IPC MUST NOT be invoked inside hot loops;
-batch the work and cross the boundary once. Batch operations use `rayon`.
+batch the work and cross the boundary once. Batch photo processing within the app's
+logic uses `rayon`; other concurrent workloads (e.g. background thumbnail generation)
+MAY instead use an equivalent thread pool, such as a producer–consumer pool over
+standard threads.
 
 Rationale: Rust delivers the throughput these workloads need; chatty IPC and JS-side
 computation become the bottleneck and stall the UI.
@@ -184,4 +191,4 @@ codebase readable to every contributor.
   adherence. Any violation MUST be justified in the plan's Complexity Tracking
   table or remediated before merge.
 
-**Version**: 1.0.0 | **Ratified**: 2026-06-18 | **Last Amended**: 2026-06-18
+**Version**: 1.1.0 | **Ratified**: 2026-06-18 | **Last Amended**: 2026-06-22

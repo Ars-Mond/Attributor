@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use little_exif::filetype::{get_file_type, FileExtension};
 use serde::Serialize;
 
-pub use thumbnail::{ensure_thumbnails, Thumbnails};
+pub use thumbnail::{ensure_thumbnails, thumbnail_paths, Thumbnails};
 
 /// The four logical metadata fields the application edits and stores.
 #[derive(Serialize, Default, Debug, PartialEq, Clone)]

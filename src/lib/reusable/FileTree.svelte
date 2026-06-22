@@ -12,6 +12,7 @@
         viewMode = 'table' as 'table' | 'content',
         layoutDir = 'vertical' as 'vertical' | 'horizontal',
         onSelect,
+        readyThumbs,
     }: {
         node: FileNode;
         depth?: number;
@@ -20,6 +21,7 @@
         viewMode?: 'table' | 'content';
         layoutDir?: 'vertical' | 'horizontal';
         onSelect: (path: string, e: MouseEvent) => void;
+        readyThumbs: Set<string>;
     } = $props();
 
     // untrack: depth is a static prop per node instance; we only need its
@@ -31,7 +33,7 @@
         /\.(jpg|jpeg|png|webp)$/i.test(node.name)
     );
 
-    const showThumb = $derived(viewMode === 'content' && isImage && !!node.thumb_low);
+    const showThumb = $derived(viewMode === 'content' && isImage && !!node.thumb_low && readyThumbs.has(node.path));
 </script>
 
 <div class="tree-node" class:tree-node--h={layoutDir === 'horizontal'}>
@@ -64,6 +66,7 @@
                     {viewMode}
                     {layoutDir}
                     {onSelect}
+                    {readyThumbs}
                 />
             {/each}
         {/if}

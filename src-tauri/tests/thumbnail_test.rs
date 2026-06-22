@@ -129,3 +129,40 @@ fn test_corrupt_source_errors_gracefully() {
     let result = ensure_thumbnails(&src);
     assert!(result.is_err(), "corrupt source must return Err (no panic)");
 }
+
+// ── Concurrency: two producers racing on the same photo (viewer ↔ pipeline) ────
+
+#[test]
+fn test_concurrent_generation_same_photo_is_safe() {
+    let dir = TempDir::new("concurrent");
+    let src = make_source(dir.path(), "race.jpg", 2400, 1200);
+
+    // Many threads generate the SAME photo's thumbnails at once — this mirrors the viewer's
+    // get_thumbnails racing the folder pipeline (or a rescan overlapping the prior run). Each
+    // call must succeed with a valid result; the unique temp name + rename tolerance prevent a
+    // shared-temp corruption / lost-rename race between concurrent writers.
+    let results = std::thread::scope(|s| {
+        let handles: Vec<_> = (0..8).map(|_| s.spawn(|| ensure_thumbnails(&src))).collect();
+        handles.into_iter().map(|h| h.join().unwrap()).collect::<Vec<_>>()
+    });
+
+    for r in &results {
+        let t = r.as_ref().expect("every concurrent ensure_thumbnails must succeed");
+        for p in [&t.low, &t.high] {
+            let mut magic = [0u8; 2];
+            fs::File::open(p).unwrap().read_exact(&mut magic).unwrap();
+            assert_eq!(magic, [0xFF, 0xD8], "concurrent output must be a valid JPEG: {p}");
+        }
+    }
+
+    // Destination geometry is intact (no half-written/interleaved thumbnail).
+    assert_eq!(dims(&results[0].as_ref().unwrap().high), (1920, 960), "high geometry under concurrency");
+
+    // Every writer cleaned up its unique temp — no leftovers in the cache folder.
+    let leftovers: Vec<_> = fs::read_dir(dir.path().join("_thumbnail"))
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+        .collect();
+    assert!(leftovers.is_empty(), "no leftover .tmp files: {leftovers:?}");
+}
