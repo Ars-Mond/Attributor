@@ -59,6 +59,15 @@ fn thumb_path(source: &Path, variant: Variant) -> PathBuf {
     thumb_dir(source).join(format!("{name}.{}.jpg", variant.suffix()))
 }
 
+/// Deterministic thumbnail paths for a source photo — computed only, no file I/O.
+/// Lets callers (e.g. the folder scanner) record paths before the files exist.
+pub fn thumbnail_paths(source: &Path) -> Thumbnails {
+    Thumbnails {
+        low: thumb_path(source, Variant::Low).to_string_lossy().into_owned(),
+        high: thumb_path(source, Variant::High).to_string_lossy().into_owned(),
+    }
+}
+
 /// A thumbnail is valid if it exists and begins with the JPEG SOI marker (`FF D8`).
 /// Cheap (2-byte read) — suitable for checking every photo during a folder scan, and
 /// enough to reject empty/garbage files so they get regenerated (FR-011).

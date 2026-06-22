@@ -49,6 +49,7 @@
     // ── Folder watching ──────────────────────────────────────────────────
 
     let unlisten: (() => void) | null = null;
+    let unlistenThumb: (() => void) | null = null;
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
     /** Collect all non-directory paths from the tree recursively. */
@@ -161,6 +162,9 @@
 
     onMount(async () => {
         window.addEventListener('keydown', handleKeyDown);
+        unlistenThumb = await listen<{path: string}>("thumbnail-ready", (e) => {
+            panelState.readyThumbs.add(e.payload.path);
+        });
         unlisten = await listen<string>("folder-changed", () => {
             // Debounce: rapid fs events collapse into one refresh
             if (refreshTimer) clearTimeout(refreshTimer);
@@ -196,6 +200,7 @@
     onDestroy(() => {
         window.removeEventListener('keydown', handleKeyDown);
         unlisten?.();
+        unlistenThumb?.();
         if (refreshTimer) clearTimeout(refreshTimer);
     });
 
@@ -343,7 +348,11 @@
                         title={node.name}
                         onclick={(e) => handleTreeSelect(node.path, e)}
                     >
-                        <img class="icon-thumb" src={convertFileSrc(node.path)} alt={node.name} />
+                        {#if node.thumb_low && panelState.readyThumbs.has(node.path)}
+                            <img class="icon-thumb" src={convertFileSrc(node.thumb_low)} alt={node.name} />
+                        {:else}
+                            <div class="icon-thumb icon-thumb--placeholder"></div>
+                        {/if}
                         <span class="icon-overlay">{node.name}</span>
                     </button>
                 {/each}
@@ -358,6 +367,7 @@
                         viewMode={panelState.viewMode}
                         layoutDir={panelState.layoutDir}
                         onSelect={handleTreeSelect}
+                        readyThumbs={panelState.readyThumbs}
                     />
                 {/each}
             {/if}
@@ -504,6 +514,12 @@
             width: auto;
             height: 100%;
         }
+    }
+
+    // Square placeholder shown until the low thumbnail is ready (no full-original load).
+    .icon-thumb--placeholder {
+        aspect-ratio: 1;
+        background: var(--hover-bg);
     }
 
     .icon-overlay {

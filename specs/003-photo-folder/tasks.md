@@ -31,7 +31,7 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Create the `folder/` module: `src-tauri/src/folder/mod.rs` skeleton (`PhotoFolder` struct, `FileNode` moved here, `FolderState`, `mod scan; mod pipeline; mod watch;` declarations) and declare `mod folder;` in `src-tauri/src/lib.rs`
+- [x] T001 Create the `folder/` module: `src-tauri/src/folder/mod.rs` skeleton (`PhotoFolder` struct, `FileNode` moved here, `FolderState`, `mod scan; mod pipeline; mod watch;` declarations) and declare `mod folder;` in `src-tauri/src/lib.rs`
 
 ---
 
@@ -41,8 +41,8 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 [P] Add `pub fn thumbnail_paths(source: &Path) -> Thumbnails` (deterministic paths, no file I/O) in `src-tauri/src/photo/thumbnail.rs`, refactor `ensure_thumbnails` to reuse it, and re-export from `src-tauri/src/photo/mod.rs`
-- [ ] T003 [P] Define the `PhotoFolder` struct (entry point for folder ops), `FileNode` (with `thumb_low`/`thumb_high`), and `FolderState` (`current`, `watcher`, `cancel: Option<Arc<AtomicBool>>`) in `src-tauri/src/folder/mod.rs`
+- [x] T002 [P] Add `pub fn thumbnail_paths(source: &Path) -> Thumbnails` (deterministic paths, no file I/O) in `src-tauri/src/photo/thumbnail.rs`, refactor `ensure_thumbnails` to reuse it, and re-export from `src-tauri/src/photo/mod.rs`
+- [x] T003 [P] Define the `PhotoFolder` struct (entry point for folder ops), `FileNode` (with `thumb_low`/`thumb_high`), and `FolderState` (`current`, `watcher`, `cancel: Option<Arc<AtomicBool>>`) in `src-tauri/src/folder/mod.rs`
 
 **Checkpoint**: Module, `PhotoFolder`, and the paths-only helper exist.
 
@@ -54,11 +54,11 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **Independent Test**: Scan a folder with subfolders → the tree is returned quickly with `_thumbnail` excluded and deterministic `thumb_low/high` set, and the scan itself creates no thumbnail files.
 
-- [ ] T004 [US1] Implement `scan_dir` in `src-tauri/src/folder/scan.rs` — build the `FileNode` tree, exclude `_thumbnail` folders, fill `thumb_low/high` from `photo::thumbnail::thumbnail_paths` (no generation)
-- [ ] T005 [US1] Move the `notify` watcher into `src-tauri/src/folder/watch.rs` (emit `folder-changed`), storing the watcher in `FolderState`
-- [ ] T006 [US1] Implement `PhotoFolder::open` / `open_path` / `rescan` in `src-tauri/src/folder/mod.rs` (cancel previous run, scan, start watcher; pipeline hook wired in US2) and register `FolderState` as managed state
-- [ ] T007 [US1] Route `open_folder` / `open_folder_path` / `scan_folder` commands to `PhotoFolder` (pass `AppHandle`, use `FolderState`) and remove `filetree.rs` + `WatcherState` in `src-tauri/src/lib.rs`
-- [ ] T008 [P] [US1] Tests: scan returns the tree with `_thumbnail` excluded, deterministic `thumb_low/high` set, and zero thumbnail files created by the scan, in `src-tauri/tests/folder_test.rs`
+- [x] T004 [US1] Implement `scan_dir` in `src-tauri/src/folder/scan.rs` — build the `FileNode` tree, exclude `_thumbnail` folders, fill `thumb_low/high` from `photo::thumbnail::thumbnail_paths` (no generation)
+- [x] T005 [US1] Move the `notify` watcher into `src-tauri/src/folder/watch.rs` (emit `folder-changed`), storing the watcher in `FolderState`
+- [x] T006 [US1] Implement `PhotoFolder::open` / `open_path` / `rescan` in `src-tauri/src/folder/mod.rs` (cancel previous run, scan, start watcher; pipeline hook wired in US2) and register `FolderState` as managed state
+- [x] T007 [US1] Route `open_folder` / `open_folder_path` / `scan_folder` commands to `PhotoFolder` (pass `AppHandle`, use `FolderState`) and remove `filetree.rs` + `WatcherState` in `src-tauri/src/lib.rs`
+- [x] T008 [P] [US1] Tests: scan returns the tree with `_thumbnail` excluded, deterministic `thumb_low/high` set, and zero thumbnail files created by the scan, in `src-tauri/tests/folder_test.rs`
 
 **Checkpoint**: Opening a folder returns the structure fast; nothing blocks on thumbnails.
 
@@ -70,11 +70,11 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **Independent Test**: Open a folder of photos → thumbnails are produced by multiple workers, files appear in `_thumbnail`, existing ones are reused, and `thumbnail-ready` events drive progressive previews; switching folders stops the previous run.
 
-- [ ] T009 [US2] Implement `src-tauri/src/folder/pipeline.rs` — producer (visible level first, then deeper subfolders) + bounded `std::thread` pool over an `mpsc` channel + `Arc<AtomicBool>` cancellation; each worker calls `photo::ensure_thumbnails`
-- [ ] T010 [US2] Emit a `thumbnail-ready` event (`{ path }`, camelCase) per completed photo and start the pipeline from `PhotoFolder::open` (new run + cancel flag) in `src-tauri/src/folder/pipeline.rs` and `src-tauri/src/folder/mod.rs`
-- [ ] T011 [P] [US2] Frontend progressive previews: add a reactive `readyThumbs` set in `src/lib/panel/filesPanelStore.svelte.ts`, listen for `thumbnail-ready` in `src/lib/panel/FilesPanel.svelte`, and render `convertFileSrc(node.thumb_low)` only once ready (placeholder before) in `src/lib/reusable/FileTree.svelte`
-- [ ] T012 [P] [US2] Tests: pipeline generates missing + reuses valid thumbnails, runs multiple workers, and stops on cancellation, in `src-tauri/tests/folder_test.rs`
-- [ ] T013 [P] [US2] Test (visible-first, FR-016): the producer enqueues the visible folder level's photos before deeper subfolders' (assert deterministic enqueue order, not timing), in `src-tauri/tests/folder_test.rs`
+- [x] T009 [US2] Implement `src-tauri/src/folder/pipeline.rs` — producer (visible level first, then deeper subfolders) + bounded `std::thread` pool over an `mpsc` channel + `Arc<AtomicBool>` cancellation; each worker calls `photo::ensure_thumbnails`
+- [x] T010 [US2] Emit a `thumbnail-ready` event (`{ path }`, camelCase) per completed photo and start the pipeline from `PhotoFolder::open` (new run + cancel flag) in `src-tauri/src/folder/pipeline.rs` and `src-tauri/src/folder/mod.rs`
+- [x] T011 [P] [US2] Frontend progressive previews: add a reactive `readyThumbs` set in `src/lib/panel/filesPanelStore.svelte.ts`, listen for `thumbnail-ready` in `src/lib/panel/FilesPanel.svelte`, and render `convertFileSrc(node.thumb_low)` only once ready (placeholder before) in `src/lib/reusable/FileTree.svelte`
+- [x] T012 [P] [US2] Tests: pipeline generates missing + reuses valid thumbnails, runs multiple workers, and stops on cancellation, in `src-tauri/tests/folder_test.rs`
+- [x] T013 [P] [US2] Test (visible-first, FR-016): the producer enqueues the visible folder level's photos before deeper subfolders' (assert deterministic enqueue order, not timing), in `src-tauri/tests/folder_test.rs`
 
 **Checkpoint**: Folder thumbnails generate concurrently and appear progressively; US1 + US2 work together.
 
@@ -86,10 +86,10 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **Independent Test**: With a folder open, enumerate all photo paths (excluding `_thumbnail`); add a photo on disk → it appears and gets a thumbnail.
 
-- [ ] T014 [US3] Implement `PhotoFolder` queries — `photo_paths(&FileNode) -> Vec<String>`, locate/search photos and their thumbnails — in `src-tauri/src/folder/mod.rs`
-- [ ] T015 [US3] On `folder-changed` rescan, schedule generation for newly added / still-missing thumbnails (reuse existing) via the pipeline in `src-tauri/src/folder/mod.rs`
-- [ ] T016 [P] [US3] Tests: `photo_paths` returns all photos and 0 `_thumbnail` entries; a corrupt photo is skipped (logged) without aborting the run, in `src-tauri/tests/folder_test.rs`
-- [ ] T017 [P] [US3] Test (FR-009): rescanning after a photo is added on disk schedules a thumbnail for it (drive the rescan→scheduling path directly, no OS watcher), in `src-tauri/tests/folder_test.rs`
+- [x] T014 [US3] Implement `PhotoFolder` queries — `photo_paths(&FileNode) -> Vec<String>`, locate/search photos and their thumbnails — in `src-tauri/src/folder/mod.rs`
+- [x] T015 [US3] On `folder-changed` rescan, schedule generation for newly added / still-missing thumbnails (reuse existing) via the pipeline in `src-tauri/src/folder/mod.rs`
+- [x] T016 [P] [US3] Tests: `photo_paths` returns all photos and 0 `_thumbnail` entries; a corrupt photo is skipped (logged) without aborting the run, in `src-tauri/tests/folder_test.rs`
+- [x] T017 [P] [US3] Test (FR-009): rescanning after a photo is added on disk schedules a thumbnail for it (drive the rescan→scheduling path directly, no OS watcher), in `src-tauri/tests/folder_test.rs`
 
 **Checkpoint**: All three user stories independently functional.
 
@@ -97,9 +97,9 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T018 [P] Logging audit across `src-tauri/src/folder/` — error-site logging (scan, worker, watcher), concise English, no `println!`/`dbg!`
-- [ ] T019 [P] Run `npx svelte-check --tsconfig ./tsconfig.json` for the changed frontend files and resolve any issues
-- [ ] T020 Run `cargo test` (all green) and validate the `quickstart.md` scenarios
+- [x] T018 [P] Logging audit across `src-tauri/src/folder/` — error-site logging (scan, worker, watcher), concise English, no `println!`/`dbg!`
+- [x] T019 [P] Run `npx svelte-check --tsconfig ./tsconfig.json` for the changed frontend files and resolve any issues
+- [x] T020 Run `cargo test` (all green) and validate the `quickstart.md` scenarios
 
 ---
 

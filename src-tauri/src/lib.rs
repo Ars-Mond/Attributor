@@ -1,5 +1,4 @@
-mod events;
-mod filetree;
+pub mod folder;
 mod keywords;
 mod photo;
 mod types;
@@ -13,10 +12,9 @@ pub mod photo_metadata {
     };
 }
 
-use filetree::{FileNode, WatcherState};
+use folder::{FileNode, FolderState, PhotoFolder};
 use log::{error, info};
 use std::path::Path;
-use std::sync::Mutex;
 use tauri_plugin_prevent_default::Flags;
 use types::SaveRequest;
 
@@ -123,18 +121,42 @@ async fn get_thumbnails(path: String) -> Result<photo::Thumbnails, String> {
 }
 
 #[tauri::command]
-async fn scan_folder(path: String) -> Result<FileNode, String> {
-    filetree::scan_folder_impl(path).await
+async fn scan_folder(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, FolderState>,
+    path: String,
+) -> Result<FileNode, String> {
+    PhotoFolder::rescan(&app, state.inner(), Path::new(&path)).await
 }
 
 #[tauri::command]
-async fn open_folder_path(app: tauri::AppHandle, path: String) -> Result<FileNode, String> {
-    filetree::open_folder_path_impl(app, path).await
+async fn open_folder_path(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, FolderState>,
+    path: String,
+) -> Result<FileNode, String> {
+    PhotoFolder::open(&app, state.inner(), Path::new(&path)).await
 }
 
 #[tauri::command]
-async fn open_folder(app: tauri::AppHandle) -> Result<Option<FileNode>, String> {
-    filetree::open_folder_impl(app).await
+async fn open_folder(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, FolderState>,
+) -> Result<Option<FileNode>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog().file().pick_folder(move |result| {
+        let _ = tx.send(result);
+    });
+    let Some(folder) = rx.await.map_err(|e| e.to_string())? else {
+        info!("open_folder: cancelled");
+        return Ok(None);
+    };
+    let path = folder.into_path().map_err(|e| e.to_string())?;
+    info!("open_folder: {}", path.display());
+    let node = PhotoFolder::open(&app, state.inner(), &path).await?;
+    Ok(Some(node))
 }
 
 // ── App entry ─────────────────────────────────────────────────────────────
@@ -142,7 +164,7 @@ async fn open_folder(app: tauri::AppHandle) -> Result<Option<FileNode>, String> 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .manage(WatcherState(Mutex::new(None)))
+        .manage(FolderState::default())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(if cfg!(debug_assertions) {
