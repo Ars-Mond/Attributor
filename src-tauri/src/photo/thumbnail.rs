@@ -6,6 +6,7 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, ExtendedColorType, ImageEncoder};
@@ -127,7 +128,13 @@ fn generate(src: &DynamicImage, dst: &Path, max: u32) -> Result<(), String> {
 
     let parent = dst.parent().ok_or_else(|| format!("no parent dir for {}", dst.display()))?;
     let fname = dst.file_name().and_then(|n| n.to_str()).unwrap_or("thumb.jpg");
-    let tmp = parent.join(format!(".{fname}.tmp"));
+    // Unique temp name per call (pid + monotonic counter): two concurrent generations of
+    // the SAME thumbnail (e.g. the viewer's get_thumbnails racing the folder pipeline, or a
+    // rescan overlapping the prior run) must not share one temp file, or their interleaved
+    // writes would corrupt it. Each writer fills its own temp, then renames into place.
+    static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
+    let uniq = format!("{}.{}", std::process::id(), TMP_SEQ.fetch_add(1, Ordering::Relaxed));
+    let tmp = parent.join(format!(".{fname}.{uniq}.tmp"));
 
     let write_result = (|| -> Result<(), String> {
         let mut file = fs::File::create(&tmp).map_err(|e| e.to_string())?;
@@ -144,10 +151,18 @@ fn generate(src: &DynamicImage, dst: &Path, max: u32) -> Result<(), String> {
         return Err(e);
     }
 
-    fs::rename(&tmp, dst).map_err(|e| {
+    fs::rename(&tmp, dst).or_else(|e| {
+        // Always drop our temp; the destination is what matters.
         let _ = fs::remove_file(&tmp);
-        let msg = format!("rename thumbnail {}: {e}", dst.display());
-        error!("{msg}");
-        msg
+        // A concurrent writer may have produced `dst` first; on Windows `rename` refuses to
+        // overwrite an existing file. If that file is a valid thumbnail, the race is benign —
+        // the other writer won, and our output is identical.
+        if is_valid(dst) {
+            Ok(())
+        } else {
+            let msg = format!("rename thumbnail {}: {e}", dst.display());
+            error!("{msg}");
+            Err(msg)
+        }
     })
 }
