@@ -30,7 +30,12 @@ pub(crate) fn start_watching(app: &tauri::AppHandle, path: &Path, state: &Folder
                 return;
             }
             use tauri::Emitter;
-            app_clone.emit("folder-changed", &watch_path).ok();
+            app_clone
+                .emit(
+                    crate::events::FOLDER_CHANGED,
+                    crate::events::FolderChanged { path: watch_path.clone() },
+                )
+                .ok();
         }
         Err(e) => warn!("watch event error for {watch_path}: {e}"),
     }) {

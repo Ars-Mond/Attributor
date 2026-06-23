@@ -30,9 +30,9 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Add `rayon = "1"` to `[dependencies]` in `src-tauri/Cargo.toml` (batch parallelism per Constitution §VIII; justified in plan Complexity Tracking)
-- [ ] T002 Create the batch module skeleton `src-tauri/src/batch/mod.rs` and declare `pub mod batch;` in `src-tauri/src/lib.rs`
-- [ ] T003 Create the event-contract module skeleton `src-tauri/src/events.rs` and declare `pub mod events;` in `src-tauri/src/lib.rs`
+- [x] T001 Add `rayon = "1"` to `[dependencies]` in `src-tauri/Cargo.toml` (batch parallelism per Constitution §VIII; justified in plan Complexity Tracking)
+- [x] T002 Create the batch module skeleton `src-tauri/src/batch/mod.rs` and declare `pub mod batch;` in `src-tauri/src/lib.rs`
+- [x] T003 Create the event-contract module skeleton `src-tauri/src/events.rs` and declare `pub mod events;` in `src-tauri/src/lib.rs`
 
 ---
 
@@ -42,9 +42,9 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T004 [P] Define the channel payload types in `src-tauri/src/events.rs`: `BatchProgress { index, status }` and `ItemStatus` enum (`Ok { path }` | `Failed { error }` | `Cancelled`), both `#[derive(Serialize, Clone)]` + `#[serde(rename_all = "camelCase")]` (tagged enum)
-- [ ] T005 [P] Define `BatchState { cancel: Mutex<Option<Arc<AtomicBool>>> }` in `src-tauri/src/batch/mod.rs` and register `.manage(BatchState::default())` in `run()` in `src-tauri/src/lib.rs`
-- [ ] T006 Extract `save_one(item: SaveRequest) -> Result<String, String>` (rename-if-changed + `photo::write_metadata`) from `save_metadata` into `src-tauri/src/batch/mod.rs`, and refactor `save_metadata` in `src-tauri/src/lib.rs` to delegate to it (guarantees FR-010)
+- [x] T004 [P] Define the channel payload types in `src-tauri/src/events.rs`: `BatchProgress { index, status }` and `ItemStatus` enum (`Ok { path }` | `Failed { error }` | `Cancelled`), both `#[derive(Serialize, Clone)]` + `#[serde(rename_all = "camelCase")]` (tagged enum)
+- [x] T005 [P] Define `BatchState { cancel: Mutex<Option<Arc<AtomicBool>>> }` in `src-tauri/src/batch/mod.rs` and register `.manage(BatchState::default())` in `run()` in `src-tauri/src/lib.rs`
+- [x] T006 Extract `save_one(item: SaveRequest) -> Result<String, String>` (rename-if-changed + `photo::write_metadata`) from `save_metadata` into `src-tauri/src/batch/mod.rs`, and refactor `save_metadata` in `src-tauri/src/lib.rs` to delegate to it (guarantees FR-010)
 
 **Checkpoint**: Types, managed cancel state, and the shared per-file write path exist.
 
@@ -56,10 +56,10 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **Independent Test**: Select N photos, apply shared fields, save once → every file has the new metadata (identical to single-file save) and wall-clock is far below the one-by-one flow.
 
-- [ ] T007 [US1] Implement `save_metadata_batch(items: Vec<SaveRequest>, on_progress: tauri::ipc::Channel<BatchProgress>, state: State<BatchState>) -> Result<Vec<ItemStatus>, String>` in `src-tauri/src/batch/mod.rs`: install a fresh cancel flag (swap-out-old idiom), `tokio::task::spawn_blocking` + `rayon` `into_par_iter().enumerate()`, per item call `save_one` → `ItemStatus`, `on_progress.send(BatchProgress { index, status })`, collect the ordered `Vec<ItemStatus>`
-- [ ] T008 [US1] Register `save_metadata_batch` in `tauri::generate_handler![…]` in `src-tauri/src/lib.rs`
-- [ ] T009 [US1] Replace the sequential loop in `handleBatchSave` (`src/lib/panel/MetadataPanel.svelte`) with a single `invoke("save_metadata_batch", { items, onProgress: ch })` using `new Channel` (`@tauri-apps/api/core`); build `items` from data already loaded by `loadBatchData` (no per-file re-read, FR-006/FR-007); add a temporary hand-written `BatchProgress`/`ItemStatus` TS type in `src/lib/types.ts` (replaced by the generated type in US3)
-- [ ] T010 [P] [US1] Test: concurrent batch correctness in `src-tauri/tests/batch_test.rs` — write N generated images via `save_metadata_batch`'s path and assert each file reads back the expected metadata, identical to a single-file save
+- [x] T007 [US1] Implement `save_metadata_batch(items: Vec<SaveRequest>, on_progress: tauri::ipc::Channel<BatchProgress>, state: State<BatchState>) -> Result<Vec<ItemStatus>, String>` in `src-tauri/src/batch/mod.rs`: install a fresh cancel flag (swap-out-old idiom), `tokio::task::spawn_blocking` + `rayon` `into_par_iter().enumerate()`, per item call `save_one` → `ItemStatus`, `on_progress.send(BatchProgress { index, status })`, collect the ordered `Vec<ItemStatus>`
+- [x] T008 [US1] Register `save_metadata_batch` in `tauri::generate_handler![…]` in `src-tauri/src/lib.rs`
+- [x] T009 [US1] Replace the sequential loop in `handleBatchSave` (`src/lib/panel/MetadataPanel.svelte`) with a single `invoke("save_metadata_batch", { items, onProgress: ch })` using `new Channel` (`@tauri-apps/api/core`); build `items` from data already loaded by `loadBatchData` (no per-file re-read, FR-006/FR-007); add a temporary hand-written `BatchProgress`/`ItemStatus` TS type in `src/lib/types.ts` (replaced by the generated type in US3)
+- [x] T010 [P] [US1] Test: concurrent batch correctness in `src-tauri/tests/batch_test.rs` — write N generated images via `save_metadata_batch`'s path and assert each file reads back the expected metadata, identical to a single-file save
 
 **Checkpoint**: Batch saving is concurrent and correct; MVP demonstrable.
 
@@ -71,10 +71,10 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **Independent Test**: Run a mixed batch (one unwritable file) → the rest save, the bad file reports failed; cancel mid-run → not-yet-started files report cancelled and every item has an outcome.
 
-- [ ] T011 [US2] Implement `cancel_batch(state: State<BatchState>)` (sync) in `src-tauri/src/batch/mod.rs`, register it in `generate_handler!` (`src-tauri/src/lib.rs`), and add the per-item cancel check in `save_metadata_batch` so not-yet-started items resolve to `ItemStatus::Cancelled` (FR-017/FR-018)
-- [ ] T012 [US2] Add progress + per-file status UI in `src/lib/panel/MetadataPanel.svelte` using `$state` (done/total derived from messages keyed by `index`), a Cancel button calling `invoke("cancel_batch")`, and best-effort result display; reuse existing button primitives and SCSS tokens (§III/§V)
-- [ ] T013 [US2] Guard against watcher churn during a batch in `src/lib/panel/FilesPanel.svelte`: while a batch is in progress, skip the `folder-changed`-driven rescan so a metadata-only batch triggers no full rescan / thumbnail-pipeline restart (FR-008)
-- [ ] T014 [P] [US2] Test: best-effort + cancellation in `src-tauri/tests/batch_test.rs` — a batch with one unwritable item saves the others and reports the failure (no panic); setting the cancel flag mid-run yields a mix of `ok`/`cancelled` with every item accounted for
+- [x] T011 [US2] Implement `cancel_batch(state: State<BatchState>)` (sync) in `src-tauri/src/batch/mod.rs`, register it in `generate_handler!` (`src-tauri/src/lib.rs`), and add the per-item cancel check in `save_metadata_batch` so not-yet-started items resolve to `ItemStatus::Cancelled` (FR-017/FR-018)
+- [x] T012 [US2] Add progress + per-file status UI in `src/lib/panel/MetadataPanel.svelte` using `$state` (done/total derived from messages keyed by `index`), a Cancel button calling `invoke("cancel_batch")`, and best-effort result display; reuse existing button primitives and SCSS tokens (§III/§V)
+- [x] T013 [US2] Guard against watcher churn during a batch in `src/lib/panel/FilesPanel.svelte`: while a batch is in progress, skip the `folder-changed`-driven rescan so a metadata-only batch triggers no full rescan / thumbnail-pipeline restart (FR-008)
+- [x] T014 [P] [US2] Test: best-effort + cancellation in `src-tauri/tests/batch_test.rs` — a batch with one unwritable item saves the others and reports the failure (no panic); setting the cancel flag mid-run yields a mix of `ok`/`cancelled` with every item accounted for
 
 **Checkpoint**: Batch is observable, resilient to per-file failure, and cancellable; US1 + US2 work together.
 
@@ -86,12 +86,12 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **Independent Test**: `folder-changed`/`thumbnail-ready` still drive the tree; changing a payload without regenerating fails the contract test (and a stale frontend type fails `svelte-check`).
 
-- [ ] T015 [US3] Add `ts-rs` (pinned major version) to `[dev-dependencies]` in `src-tauri/Cargo.toml`
-- [ ] T016 [US3] In `src-tauri/src/events.rs`: add name constants `FOLDER_CHANGED`/`THUMBNAIL_READY` and payload structs `FolderChanged { path }` / `ThumbnailReady { path }`, and add `#[cfg_attr(test, derive(ts_rs::TS))]` + `#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/events.d.ts"))]` to all contract types (`FolderChanged`, `ThumbnailReady`, `BatchProgress`, `ItemStatus`)
-- [ ] T017 [US3] Migrate emitters: `src-tauri/src/folder/pipeline.rs` uses `events::ThumbnailReady` + `events::THUMBNAIL_READY` (remove its local struct); `src-tauri/src/folder/watch.rs` emits `events::FOLDER_CHANGED` with `FolderChanged { path }` (promote from the bare `String` payload) — no observable behavior change (FR-015)
-- [ ] T018 [US3] Generate and commit `src/lib/generated/events.d.ts` (run the contract test once), and add `src/lib/events.ts` with an `EVENT` name catalog and a typed `listenEvent` wrapper over `@tauri-apps/api/event`
-- [ ] T019 [US3] Migrate frontend listeners in `src/lib/panel/FilesPanel.svelte` to `listenEvent<ThumbnailReady|FolderChanged>(EVENT.…)`, and replace the US1 hand-written batch TS type with the generated `BatchProgress`/`ItemStatus` from `src/lib/generated/events.d.ts`
-- [ ] T020 [P] [US3] Test: drift guard in `src-tauri/tests/events_contract_test.rs` — re-export the contract types to a temp dir and assert byte-equality (line endings normalized for §IV) with the committed `src/lib/generated/events.d.ts` (FR-016)
+- [x] T015 [US3] Add `ts-rs` (pinned major version) to `[dev-dependencies]` in `src-tauri/Cargo.toml`
+- [x] T016 [US3] In `src-tauri/src/events.rs`: add name constants `FOLDER_CHANGED`/`THUMBNAIL_READY` and payload structs `FolderChanged { path }` / `ThumbnailReady { path }`, and add `#[cfg_attr(test, derive(ts_rs::TS))]` + `#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/events.d.ts"))]` to all contract types (`FolderChanged`, `ThumbnailReady`, `BatchProgress`, `ItemStatus`)
+- [x] T017 [US3] Migrate emitters: `src-tauri/src/folder/pipeline.rs` uses `events::ThumbnailReady` + `events::THUMBNAIL_READY` (remove its local struct); `src-tauri/src/folder/watch.rs` emits `events::FOLDER_CHANGED` with `FolderChanged { path }` (promote from the bare `String` payload) — no observable behavior change (FR-015)
+- [x] T018 [US3] Generate and commit `src/lib/generated/events.d.ts` (run the contract test once), and add `src/lib/events.ts` with an `EVENT` name catalog and a typed `listenEvent` wrapper over `@tauri-apps/api/event`
+- [x] T019 [US3] Migrate frontend listeners in `src/lib/panel/FilesPanel.svelte` to `listenEvent<ThumbnailReady|FolderChanged>(EVENT.…)`, and replace the US1 hand-written batch TS type with the generated `BatchProgress`/`ItemStatus` from `src/lib/generated/events.d.ts`
+- [x] T020 [P] [US3] Test: drift guard in `src-tauri/tests/events_contract_test.rs` — re-export the contract types to a temp dir and assert byte-equality (line endings normalized for §IV) with the committed `src/lib/generated/events.d.ts` (FR-016)
 
 **Checkpoint**: All three user stories independently functional; event contract is drift-proof.
 
@@ -99,9 +99,9 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T021 [P] Logging audit across `src-tauri/src/batch/` and `src-tauri/src/events.rs` — per-file write failures and `Channel::send` errors logged in concise English; no `println!`/`dbg!` (§VI)
-- [ ] T022 [P] Run `npx svelte-check --tsconfig ./tsconfig.json` for the changed frontend files and resolve any issues
-- [ ] T023 Run `cargo test` (all green) and validate the `quickstart.md` scenarios S1–S5
+- [x] T021 [P] Logging audit across `src-tauri/src/batch/` and `src-tauri/src/events.rs` — per-file write failures and `Channel::send` errors logged in concise English; no `println!`/`dbg!` (§VI)
+- [x] T022 [P] Run `npx svelte-check --tsconfig ./tsconfig.json` for the changed frontend files and resolve any issues
+- [x] T023 Run `cargo test` (all green) and validate the `quickstart.md` scenarios S1–S5
 
 ---
 

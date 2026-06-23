@@ -1,12 +1,15 @@
 <script lang="ts">
     import {onMount} from "svelte";
-    import {invoke} from "@tauri-apps/api/core";
+    import {invoke, Channel} from "@tauri-apps/api/core";
     import {writeText, readText} from "@tauri-apps/plugin-clipboard-manager";
     import KeywordSuggestions from "$reusable/KeywordSuggestions.svelte";
     import ConfirmDialog from "$lib/dialog/ConfirmDialog.svelte";
     import {loadAppState, saveAppState} from "$lib/store";
     import {settings} from "$lib/settings";
     import type {Metadata, ReadResult} from "$lib/types";
+    import type {BatchProgress, ItemStatus} from "$lib/events";
+    import {SvelteMap} from "svelte/reactivity";
+    import {panelState} from "./filesPanelStore.svelte";
 
     // ── Bindable props ─────────────────────────────────────────────────────
 
@@ -175,6 +178,14 @@
     let savingTotal = $state(0);
     const isSaving = $derived(savingTotal > 0);
 
+    // Per-file metadata captured when the batch loaded — lets save resolve items without re-reading.
+    let batchFileMeta = $state<Map<string, ReadResult>>(new Map());
+    // Per-file outcomes streamed from the backend during a batch save (keyed by item index).
+    let batchResults = new SvelteMap<number, ItemStatus>();
+    let batchCancelling = $state(false);
+    const batchFailed = $derived([...batchResults.values()].filter(s => s.kind === 'failed').length);
+    const batchCancelled = $derived([...batchResults.values()].filter(s => s.kind === 'cancelled').length);
+
     // ── Field stats (depends on batch state) ──────────────────────────────
 
     const titleWords = $derived.by(() => {
@@ -234,11 +245,13 @@
             state: kwSets.every(s => s.has(word)) ? 'all' : 'some',
         }));
 
-        // Map keyword → basenames of files that contain it
+        // Map keyword → basenames of files that contain it, and cache each file's metadata.
         const fileMap = new Map<string, string[]>();
+        const metaMap = new Map<string, ReadResult>();
         for (let i = 0; i < paths.length; i++) {
             const r = results[i];
             if (!r) continue;
+            metaMap.set(paths[i], r);
             const base = paths[i].replace(/\\/g, '/').split('/').pop() ?? paths[i];
             for (const kw of r.keywords) {
                 const arr = fileMap.get(kw);
@@ -247,6 +260,7 @@
             }
         }
         kwFileMap = fileMap;
+        batchFileMeta = metaMap;
 
         batchLoading = false;
     }
@@ -331,36 +345,54 @@
     }
 
     async function handleBatchSave() {
-        savingTotal = batchPaths.length;
+        const paths = [...batchPaths];
+        savingTotal = paths.length;
         savingCount = 0;
+        batchCancelling = false;
+        batchResults.clear();
+        panelState.batchInProgress = true;
 
-        for (const path of batchPaths) {
-            try {
-                let currentMeta: ReadResult | null = null;
-                try {
-                    currentMeta = await invoke<ReadResult>('read_metadata', {path});
-                } catch { /* use empty defaults */ }
+        // Resolve each file's final metadata from data already loaded for the batch (no re-read).
+        const items: Metadata[] = paths.map(path => {
+            const cur = batchFileMeta.get(path);
+            return {
+                filepath: path,
+                filename: extractStem(path),
+                title: applyTitle ? batchTitle : (cur?.title ?? ''),
+                description: applyDescription ? batchDescription : (cur?.description ?? ''),
+                keywords: computeNewKeywords(cur?.keywords ?? []),
+                categories: applyCategories ? batchCategories : (cur?.categories ?? ''),
+                releaseFilename: cur?.releaseFilename ?? '',
+            };
+        });
 
-                const metadata: Metadata = {
-                    filepath: path,
-                    filename: extractStem(path),
-                    title: applyTitle ? batchTitle : (currentMeta?.title ?? ''),
-                    description: applyDescription ? batchDescription : (currentMeta?.description ?? ''),
-                    keywords: computeNewKeywords(currentMeta?.keywords ?? []),
-                    categories: applyCategories ? batchCategories : (currentMeta?.categories ?? ''),
-                    releaseFilename: currentMeta?.releaseFilename ?? '',
-                };
+        // One backend call writes the whole batch concurrently; progress streams over the channel.
+        const channel = new Channel<BatchProgress>();
+        channel.onmessage = (m) => {
+            batchResults.set(m.index, m.status);
+            savingCount = batchResults.size;
+        };
 
-                await invoke('save_metadata', {metadata});
-            } catch (e) {
-                console.error('Batch save failed for', path, e);
-            }
-            savingCount++;
+        try {
+            await invoke<ItemStatus[]>('save_metadata_batch', {items, onProgress: channel});
+        } catch (e) {
+            console.error('batch save failed:', e);
         }
 
         savingTotal = 0;
+        batchCancelling = false;
+        panelState.batchInProgress = false;
         // Reload to reflect saved state
         loadBatchData(batchPaths);
+    }
+
+    async function cancelBatchSave() {
+        batchCancelling = true;
+        try {
+            await invoke('cancel_batch');
+        } catch (e) {
+            console.error('cancel_batch failed:', e);
+        }
     }
 
     // ── Exported interface ─────────────────────────────────────────────────
@@ -1159,9 +1191,22 @@
             <div class="footer-errors">
                 Save failed: {saveError}
             </div>
+        {:else if isBatch && !isSaving && (batchFailed > 0 || batchCancelled > 0)}
+            <div class="footer-errors">
+                {batchFailed} failed{#if batchCancelled > 0} · {batchCancelled} cancelled{/if} of {batchResults.size}
+            </div>
         {/if}
         <div class="footer-controls">
             {#if isBatch}
+                {#if isSaving}
+                    <button
+                        class="btn-ghost"
+                        onclick={cancelBatchSave}
+                        disabled={batchCancelling}
+                    >
+                        {batchCancelling ? 'Cancelling...' : 'Cancel'}
+                    </button>
+                {/if}
                 <button
                     class="btn-primary save-btn"
                     onclick={handleBatchSave}

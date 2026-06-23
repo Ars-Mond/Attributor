@@ -1,7 +1,7 @@
 <script lang="ts">
     import {invoke} from "@tauri-apps/api/core";
     import {convertFileSrc} from "@tauri-apps/api/core";
-    import {listen} from "@tauri-apps/api/event";
+    import {listenEvent, EVENT} from "$lib/events";
     import {onMount, onDestroy} from "svelte";
     import FileTree from "$reusable/FileTree.svelte";
     import type {FileNode} from "$lib/types";
@@ -162,10 +162,13 @@
 
     onMount(async () => {
         window.addEventListener('keydown', handleKeyDown);
-        unlistenThumb = await listen<{path: string}>("thumbnail-ready", (e) => {
-            panelState.readyThumbs.add(e.payload.path);
+        unlistenThumb = await listenEvent(EVENT.thumbnailReady, (p) => {
+            panelState.readyThumbs.add(p.path);
         });
-        unlisten = await listen<string>("folder-changed", () => {
+        unlisten = await listenEvent(EVENT.folderChanged, () => {
+            // Skip the rescan while a batch metadata save runs — its writes are already known and
+            // would otherwise trigger a wasteful full rescan / thumbnail-pipeline restart (FR-008).
+            if (panelState.batchInProgress) return;
             // Debounce: rapid fs events collapse into one refresh
             if (refreshTimer) clearTimeout(refreshTimer);
             refreshTimer = setTimeout(async () => {
