@@ -8,6 +8,14 @@
 
 **Input**: User description: "Add four caching settings toggles: (1) photo caching on/off (default off) — off shows photos in the UI via direct links, on shows them via thumbnails; (2) small-thumbnail-only caching as a separate toggle (default off, independent of #1), which means small-thumbnail generation must be split from large in the logic, and when both #1 and #2 are on the conversion runs in a single file read; (3) lazy caching (default off) — generate thumbnails when a photo is opened in the viewer rather than when a folder is opened; (4) current-folder-only caching (default on) — cache only photos in the current folder, no recursion into subfolders."
 
+## Clarifications
+
+### Session 2026-06-25
+
+- Q: How do toggles #1 (Photo caching) and #2 (Cache small thumbnails) map onto preview sizes? → A: Orthogonal — "Photo caching" governs the large/viewer (high) preview; "Cache small thumbnails" governs the small/list (low) preview. When only "Cache small thumbnails" is on, only the low thumbnail is cached.
+- Q: In lazy mode, are both sizes deferred, or only the large? → A: Both, with per-size triggers — the low (list) thumbnail is generated when its item is shown in the folder hierarchy, and the high (viewer) thumbnail when the photo is opened in the viewer.
+- Q: Does "Current folder only" affect explicitly opening a subfolder photo in the viewer? → A: No — an explicit viewer-open always generates the opened photo's thumbnail (if caching is on), even from a subfolder; "Current folder only" limits only bulk/passive generation.
+
 ## User Scenarios & Testing *(mandatory)*
 
 > Stories are listed in the user's order (toggle 1–4); priorities reflect impact, not list order.
@@ -71,7 +79,7 @@ viewer → that photo's thumbnail(s) are generated.
 **Acceptance Scenarios**:
 
 1. **Given** lazy caching is on, **When** the user opens a folder, **Then** no thumbnails are generated at open time.
-2. **Given** lazy caching is on, **When** the user opens a photo in the viewer, **Then** that photo's thumbnail(s) are generated at that moment.
+2. **Given** lazy caching is on, **When** the user opens a photo in the viewer, **Then** that photo's large (high) thumbnail is generated at that moment; its small (low) thumbnail is generated when its item is shown in the folder hierarchy.
 3. **Given** lazy caching is off (default), **When** the user opens a folder, **Then** thumbnails are generated at folder-open time (subject to the other toggles).
 
 ---
@@ -98,8 +106,8 @@ only the top-level photos are cached. Turn it off → subfolder photos are cache
 ### Edge Cases
 
 - Photo caching is on but a thumbnail is not yet ready (lazy mode, or mid-generation) → the UI falls back to showing the original so no broken image appears.
-- Lazy on + small-thumbnail caching on → list previews are not pre-generated at folder open; the list falls back to the original/icon until a photo is opened (lazy applies to generation timing).
-- Current-folder-only on while the user browses into a subfolder in the tree → subfolder photos display without cached previews (the original is shown).
+- Lazy on + small-thumbnail caching on → list previews are not generated at folder open; each small thumbnail is generated when its item is shown in the hierarchy (the original/icon is shown until then), and the large thumbnail is generated on viewer-open.
+- Current-folder-only on while the user browses into a subfolder in the tree → subfolder list items are not auto-cached (the original/icon is shown), but explicitly opening a subfolder photo in the viewer still generates its large thumbnail (FR-017).
 - A toggle is changed while generation is in progress → the change takes effect for subsequent work without crashing the in-flight run.
 - A cached thumbnail already exists on disk but its governing toggle is now off → the UI shows the original (does not use the cache); the existing cache file is left intact, not deleted.
 - All toggles at defaults → photos display from originals, nothing is cached, and only the current folder would be in scope if caching were enabled.
@@ -126,12 +134,13 @@ only the top-level photos are cached. Turn it off → subfolder photos are cache
 #### Generation behavior
 
 - **FR-010**: Small (list) thumbnail generation MUST be separable from large (viewer) thumbnail generation, so each size can be produced and cached independently according to its toggle.
-- **FR-011**: When both "Photo caching" and "Cache small thumbnails" are on, producing a photo's previews MUST decode the source file a single time to create both sizes (no double decode).
+- **FR-011**: When both sizes are produced in the same operation (eager generation with both "Photo caching" and "Cache small thumbnails" on), the source file MUST be decoded a single time to create both sizes (no double decode). In lazy mode the two sizes are produced at different moments and are decoded independently.
 - **FR-012**: When "Lazy caching" is off, thumbnails (for the sizes whose toggles are on) MUST be generated when a folder is opened.
-- **FR-013**: When "Lazy caching" is on, a photo's thumbnails MUST NOT be generated at folder open; they MUST be generated when that photo is opened in the viewer.
-- **FR-014**: When "Current folder only" is on, generation MUST cover only photos directly in the opened folder and MUST NOT descend into subfolders.
+- **FR-013**: When "Lazy caching" is on, thumbnails MUST NOT be generated at folder open; instead each size is generated when first needed for display — the small (low) thumbnail when its item is shown in the folder hierarchy, and the large (high) thumbnail when the photo is opened in the viewer.
+- **FR-014**: When "Current folder only" is on, automatic generation (eager at folder open, and lazy on-hierarchy-display) MUST cover only photos directly in the opened folder and MUST NOT descend into subfolders (an explicit viewer-open is exempt — see FR-017).
 - **FR-015**: When "Current folder only" is off, generation MUST also cover photos in nested subfolders.
 - **FR-016**: Existing valid cached thumbnails MUST be reused (not regenerated) when their governing toggle is on.
+- **FR-017**: Explicitly opening a photo in the viewer MUST generate its large (high) thumbnail (when "Photo caching" is on) regardless of "Current folder only" — scope restricts only bulk/passive generation, not an explicit open.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -146,18 +155,19 @@ only the top-level photos are cached. Turn it off → subfolder photos are cache
 - **SC-001**: The settings menu shows all four toggles with the specified defaults (Photo caching off, Cache small thumbnails off, Lazy caching off, Current folder only on).
 - **SC-002**: With Photo caching off, opening a folder and a photo generates 0 viewer thumbnails and the viewer shows the original.
 - **SC-003**: With Cache small thumbnails off, the list shows 0 generated small thumbnails.
-- **SC-004**: With both Photo caching and Cache small thumbnails on, displaying a photo decodes its source file exactly once to produce both sizes.
-- **SC-005**: With Lazy caching on, opening a folder generates 0 thumbnails; opening a photo in the viewer generates that photo's thumbnail(s).
-- **SC-006**: With Current folder only on (default), opening a folder that contains subfolders caches 0 subfolder photos; with it off, subfolder photos are cached.
+- **SC-004**: With both Photo caching and Cache small thumbnails on and lazy off, eager generation of a photo's previews decodes its source file exactly once to produce both sizes.
+- **SC-005**: With Lazy caching on, opening a folder generates 0 thumbnails; showing a list item in the hierarchy generates its small thumbnail, and opening a photo in the viewer generates its large thumbnail.
+- **SC-006**: With Current folder only on (default), opening a folder with subfolders auto-caches 0 subfolder photos (an explicit viewer-open of a subfolder photo still caches its large thumbnail); with it off, subfolder photos are auto-cached.
 - **SC-007**: All four settings survive an app restart and change behavior without a restart.
 - **SC-008**: Toggling any setting deletes or corrupts 0 existing valid cached thumbnails.
 
 ## Assumptions
 
-- **Toggle-to-size mapping**: "Photo caching" governs the large/viewer preview (high thumbnail); "Cache small thumbnails" governs the small/list preview (low thumbnail). The two sizes are controlled orthogonally. (This is the working interpretation of the user's points 1–2 and should be confirmed in clarification.)
+- **Toggle-to-size mapping** (confirmed): "Photo caching" governs the large/viewer preview (high thumbnail); "Cache small thumbnails" governs the small/list preview (low thumbnail), orthogonally. With only "Cache small thumbnails" on, only the low thumbnail is cached.
+- **Lazy triggers per size** (confirmed): in lazy mode the low thumbnail is generated when its item is shown in the folder hierarchy, and the high thumbnail when the photo is opened in the viewer.
 - **"Current folder"** = the top level of the folder the user opened (not a subfolder navigated to within the tree).
 - **Cache location/format unchanged**: The existing sibling `_thumbnail` cache (its location, JPG format, and the two size targets) is unchanged; this feature changes only *whether*, *which size*, *when*, and *how deep* thumbnails are generated, and whether they are used for display.
-- **Lazy mode** relies on the existing on-viewer-open generation for the opened photo; it does not pre-populate list previews.
+- **Scope vs explicit open** (confirmed): "Current folder only" restricts automatic generation (eager + lazy-on-hierarchy) to the opened folder's top level; explicitly opening any photo in the viewer always generates its high thumbnail regardless of scope.
 - **Fallback on miss**: When a size's toggle is on but its cached thumbnail isn't ready yet, the UI shows the original for that size until the thumbnail exists.
 - **Out of scope**: cache eviction/cleanup/size limits; a "regenerate cache" action; changing thumbnail dimensions or the cache folder; per-folder (rather than global) settings.
 - Settings live in the application's existing settings store and settings menu alongside the current options.
