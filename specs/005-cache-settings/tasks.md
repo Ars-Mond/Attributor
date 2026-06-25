@@ -29,7 +29,7 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Register a "Caching" settings section and four boolean settings — `cache.photo` (default false), `cache.smallThumbnails` (default false), `cache.lazy` (default false), `cache.currentFolderOnly` (default true) — with labels/descriptions in `src/lib/settings/index.ts` (the registry auto-renders boolean fields)
+- [x] T001 Register a "Caching" settings section and four boolean settings — `cache.photo` (default false), `cache.smallThumbnails` (default false), `cache.lazy` (default false), `cache.currentFolderOnly` (default true) — with labels/descriptions in `src/lib/settings/index.ts` (the registry auto-renders boolean fields)
 
 ---
 
@@ -39,11 +39,11 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 Refactor `photo::thumbnail` to `pub fn ensure(source: &Path, low: bool, high: bool) -> Result<Thumbnails, String>` — reuse each valid cached size, decode the source once iff a requested size is missing, generate only requested missing sizes — and make `ensure_thumbnails(source) = ensure(source, true, true)`, in `src-tauri/src/photo/thumbnail.rs` (keep the `photo/mod.rs` re-export)
-- [ ] T003 Add `GenConfig { low, high, recursive }` (`#[serde(rename_all = "camelCase")]`) and parameterize `pipeline::start(app, root, cancel, low, high, recursive)` — `collect_jobs` walks only the top level when `!recursive`, the whole subtree when `recursive`; each worker calls `ensure(low, high)`, in `src-tauri/src/folder/pipeline.rs`
-- [ ] T004 Make `PhotoFolder::open` / `rescan` accept a `GenConfig` and start the pipeline only when `low || high` (otherwise scan the tree and generate nothing), in `src-tauri/src/folder/mod.rs`
-- [ ] T005 Update `open_folder` / `open_folder_path` / `scan_folder` to accept `gen: GenConfig`, add `cache_thumbnail(path: String, low: bool, high: bool) -> Result<Thumbnails, String>` (`spawn_blocking(|| ensure(..))`), and register `cache_thumbnail` in `generate_handler!` (keep `get_thumbnails` until US1 migrates the viewer), in `src-tauri/src/lib.rs`
-- [ ] T006 Derive `GenConfig` from the four settings (`low = !lazy && smallThumbnails`, `high = !lazy && photoCaching`, `recursive = !currentFolderOnly`) and pass it on the `open_folder` / `open_folder_path` / `scan_folder` invokes in `src/lib/panel/FilesPanel.svelte`
+- [x] T002 Refactor `photo::thumbnail` to `pub fn ensure(source: &Path, low: bool, high: bool) -> Result<Thumbnails, String>` — reuse each valid cached size, decode the source once iff a requested size is missing, generate only requested missing sizes — and make `ensure_thumbnails(source) = ensure(source, true, true)`, in `src-tauri/src/photo/thumbnail.rs` (keep the `photo/mod.rs` re-export)
+- [x] T003 Add `GenConfig { low, high, recursive }` (`#[serde(rename_all = "camelCase")]`) and parameterize `pipeline::start(app, root, cancel, low, high, recursive)` — `collect_jobs` walks only the top level when `!recursive`, the whole subtree when `recursive`; each worker calls `ensure(low, high)`, in `src-tauri/src/folder/pipeline.rs`
+- [x] T004 Make `PhotoFolder::open` / `rescan` accept a `GenConfig` and start the pipeline only when `low || high` (otherwise scan the tree and generate nothing), in `src-tauri/src/folder/mod.rs`
+- [x] T005 Update `open_folder` / `open_folder_path` / `scan_folder` to accept `gen: GenConfig`, add `cache_thumbnail(path: String, low: bool, high: bool) -> Result<Thumbnails, String>` (`spawn_blocking(|| ensure(..))`), and register `cache_thumbnail` in `generate_handler!` (keep `get_thumbnails` until US1 migrates the viewer), in `src-tauri/src/lib.rs`
+- [x] T006 Derive `GenConfig` from the four settings (`low = !lazy && smallThumbnails`, `high = !lazy && photoCaching`, `recursive = !currentFolderOnly`) and pass it on the `open_folder` / `open_folder_path` / `scan_folder` invokes in `src/lib/panel/FilesPanel.svelte`
 
 **Checkpoint**: Generation is per-size and config-driven; the app builds and opens folders per settings.
 
@@ -55,8 +55,8 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **Independent Test**: Toggle "Photo caching" off → opening a photo shows the original and creates no high thumbnail; toggle on → the viewer shows a cached high thumbnail.
 
-- [ ] T007 [US1] In `src/routes/+page.svelte` `showInViewer`: when `cache.photo` is on, show the high via `invoke('cache_thumbnail', {path, low: false, high: true})` (fallback to the original until ready / on error); when off, set `imageSrc = convertFileSrc(path)` directly with no generation. Remove the now-unused `get_thumbnails` command and its `generate_handler!` registration in `src-tauri/src/lib.rs`
-- [ ] T008 [P] [US1] Test: `ensure(path, false, true)` writes only the high thumbnail (low absent) and reuses a valid high without regenerating, in `src-tauri/tests/thumbnail_test.rs`
+- [x] T007 [US1] In `src/routes/+page.svelte` `showInViewer`: when `cache.photo` is on, show the high via `invoke('cache_thumbnail', {path, low: false, high: true})` (fallback to the original until ready / on error); when off, set `imageSrc = convertFileSrc(path)` directly with no generation. Remove the now-unused `get_thumbnails` command and its `generate_handler!` registration in `src-tauri/src/lib.rs`
+- [x] T008 [P] [US1] Test: `ensure(path, false, true)` writes only the high thumbnail (low absent) and reuses a valid high without regenerating, in `src-tauri/tests/thumbnail_test.rs`
 
 **Checkpoint**: Viewer display follows "Photo caching"; MVP demonstrable.
 
@@ -68,9 +68,9 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **Independent Test**: With "Cache small thumbnails" on (photo caching off), the list shows cached small previews while the viewer still shows originals.
 
-- [ ] T009 [US2] Gate the small preview on `cache.smallThumbnails` in `src/lib/reusable/FileTree.svelte` — on → show `thumb_low` when `readyThumbs` has the path (placeholder until ready); off → show the original directly (`convertFileSrc(node.path)`)
-- [ ] T010 [US2] Apply the same `cache.smallThumbnails` gating to the icons mode in `src/lib/panel/FilesPanel.svelte` (cached low when ready vs original direct)
-- [ ] T011 [P] [US2] Test: `ensure(path, true, false)` writes only the low thumbnail (high absent), and `ensure(path, true, true)` decodes once and writes both, in `src-tauri/tests/thumbnail_test.rs`
+- [x] T009 [US2] Gate the small preview on `cache.smallThumbnails` in `src/lib/reusable/FileTree.svelte` — on → show `thumb_low` when `readyThumbs` has the path (placeholder until ready); off → show the original directly (`convertFileSrc(node.path)`)
+- [x] T010 [US2] Apply the same `cache.smallThumbnails` gating to the icons mode in `src/lib/panel/FilesPanel.svelte` (cached low when ready vs original direct)
+- [x] T011 [P] [US2] Test: `ensure(path, true, false)` writes only the low thumbnail (high absent), and `ensure(path, true, true)` decodes once and writes both, in `src-tauri/tests/thumbnail_test.rs`
 
 **Checkpoint**: List display follows "Cache small thumbnails", independent of US1.
 
@@ -82,9 +82,9 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **Independent Test**: Lazy on → opening a folder generates 0 thumbnails; showing a list item generates its small; opening a photo generates its large.
 
-- [ ] T012 [US3] Lazy low trigger in `src/lib/reusable/FileTree.svelte` (and icons mode in `src/lib/panel/FilesPanel.svelte`): when `cache.smallThumbnails && cache.lazy` and an image item is shown but its low isn't ready, invoke `cache_thumbnail(path, true, false)` once and add `path` to `readyThumbs` on success
-- [ ] T013 [US3] Verify lazy disables eager generation: with `cache.lazy` on, the `GenConfig` derivation (T006) yields `low = high = false` so the pipeline is not started, while the viewer still generates the high on open (T007), in `src/lib/panel/FilesPanel.svelte`
-- [ ] T014 [P] [US3] Test: `pipeline::start` with `low = false, high = false` performs no work (no jobs enqueued), in `src-tauri/tests/folder_test.rs`
+- [x] T012 [US3] Lazy low trigger in `src/lib/reusable/FileTree.svelte` (and icons mode in `src/lib/panel/FilesPanel.svelte`): when `cache.smallThumbnails && cache.lazy` and an image item is shown but its low isn't ready, invoke `cache_thumbnail(path, true, false)` once and add `path` to `readyThumbs` on success
+- [x] T013 [US3] Verify lazy disables eager generation: with `cache.lazy` on, the `GenConfig` derivation (T006) yields `low = high = false` so the pipeline is not started, while the viewer still generates the high on open (T007), in `src/lib/panel/FilesPanel.svelte`
+- [x] T014 [P] [US3] Test: `pipeline::start` with `low = false, high = false` performs no work (no jobs enqueued), in `src-tauri/tests/folder_test.rs`
 
 **Checkpoint**: Generation timing follows "Lazy caching"; US1 + US2 + US3 work together.
 
@@ -96,8 +96,8 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 **Independent Test**: Current-folder-only on (default) → opening a folder with subfolders auto-caches only top-level photos; opening a subfolder photo in the viewer still caches its large thumbnail.
 
-- [ ] T015 [US4] Verify `recursive = !cache.currentFolderOnly` flows from settings through `GenConfig` (T006) to `pipeline::start`, and that the explicit viewer-open path (`cache_thumbnail`, T007) is unaffected by scope (FR-017), in `src/lib/panel/FilesPanel.svelte`
-- [ ] T016 [P] [US4] Test: `pipeline::start(..., recursive = false)` enqueues only top-level photos while `recursive = true` enqueues subfolder photos too, in `src-tauri/tests/folder_test.rs`
+- [x] T015 [US4] Verify `recursive = !cache.currentFolderOnly` flows from settings through `GenConfig` (T006) to `pipeline::start`, and that the explicit viewer-open path (`cache_thumbnail`, T007) is unaffected by scope (FR-017), in `src/lib/panel/FilesPanel.svelte`
+- [x] T016 [P] [US4] Test: `pipeline::start(..., recursive = false)` enqueues only top-level photos while `recursive = true` enqueues subfolder photos too, in `src-tauri/tests/folder_test.rs`
 
 **Checkpoint**: Generation scope follows "Current folder only"; all four stories independently functional.
 
@@ -105,9 +105,9 @@ Backend Rust under `src-tauri/src/`; integration tests under `src-tauri/tests/`;
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T017 [P] Cleanup/logging audit across `src-tauri/src/photo/thumbnail.rs`, `src-tauri/src/folder/`, and `src-tauri/src/lib.rs` — `ensure`/`cache_thumbnail` error paths log in concise English, no leftover `get_thumbnails`, no `println!`/`dbg!` (§VI)
-- [ ] T018 [P] Run `npx svelte-check --tsconfig ./tsconfig.json` for the changed frontend files and resolve any issues
-- [ ] T019 Run `cargo test` (all green) and validate the `quickstart.md` scenarios S1–S7
+- [x] T017 [P] Cleanup/logging audit across `src-tauri/src/photo/thumbnail.rs`, `src-tauri/src/folder/`, and `src-tauri/src/lib.rs` — `ensure`/`cache_thumbnail` error paths log in concise English, no leftover `get_thumbnails`, no `println!`/`dbg!` (§VI)
+- [x] T018 [P] Run `npx svelte-check --tsconfig ./tsconfig.json` for the changed frontend files and resolve any issues
+- [x] T019 Run `cargo test` (all green) and validate the `quickstart.md` scenarios S1–S7
 
 ---
 

@@ -80,6 +80,48 @@ settings.register('appearance',
 );
 
 settings.registerSection({
+    id: 'caching',
+    label: 'Caching',
+    order: 3
+});
+settings.register('caching',
+    {
+        key: 'cache.photo',
+        type: 'boolean',
+        default: false,
+        label: 'Photo caching',
+        description: 'Show the viewed photo via a cached thumbnail (off shows the original directly).'
+    }
+);
+settings.register('caching',
+    {
+        key: 'cache.smallThumbnails',
+        type: 'boolean',
+        default: false,
+        label: 'Cache small thumbnails',
+        description: 'Show list previews via cached small thumbnails (off shows the original directly).'
+    }
+);
+settings.register('caching',
+    {
+        key: 'cache.lazy',
+        type: 'boolean',
+        default: false,
+        label: 'Lazy caching',
+        description: 'Generate thumbnails on display instead of when a folder is opened.'
+    }
+);
+settings.register('caching',
+    {
+        key: 'cache.currentFolderOnly',
+        type: 'boolean',
+        default: true,
+        label: 'Current folder only',
+        description: 'Cache only the current folder; do not recurse into subfolders.'
+    }
+);
+
+settings.registerSection({
     id: 'shortcuts',
     label: 'Shortcuts',
     order: 99,

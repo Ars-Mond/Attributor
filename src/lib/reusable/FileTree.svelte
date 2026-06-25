@@ -1,6 +1,7 @@
 <script lang="ts">
     import {untrack} from "svelte";
-    import {convertFileSrc} from "@tauri-apps/api/core";
+    import {convertFileSrc, invoke} from "@tauri-apps/api/core";
+    import {settings} from "$lib/settings";
     import FileTree from "./FileTree.svelte";
     import type {FileNode} from "$lib/types";
 
@@ -33,7 +34,25 @@
         /\.(jpg|jpeg|png|webp)$/i.test(node.name)
     );
 
-    const showThumb = $derived(viewMode === 'content' && isImage && !!node.thumb_low && readyThumbs.has(node.path));
+    const cacheSmall = $derived(settings.subscribe<boolean>('cache.smallThumbnails')());
+    const cacheLazy = $derived(settings.subscribe<boolean>('cache.lazy')());
+    const contentImage = $derived(viewMode === 'content' && isImage);
+    const lowReady = $derived(!!node.thumb_low && readyThumbs.has(node.path));
+
+    // Lazy small-thumbnail generation: when this image is shown in the tree and small caching is
+    // lazy, generate its low thumbnail on demand and mark it ready. Fires once per node.
+    let lazyTriggered = false;
+    $effect(() => {
+        if (contentImage && cacheSmall && cacheLazy && !!node.thumb_low && !lowReady && !lazyTriggered) {
+            lazyTriggered = true;
+            invoke('cache_thumbnail', {path: node.path, low: true, high: false})
+                .then(() => readyThumbs.add(node.path))
+                .catch((e) => {
+                    lazyTriggered = false;
+                    console.error('lazy low failed:', e);
+                });
+        }
+    });
 </script>
 
 <div class="tree-node" class:tree-node--h={layoutDir === 'horizontal'}>
@@ -83,8 +102,12 @@
             data-path={node.path}
             onclick={(e) => onSelect(node.path, e)}
         >
-            {#if showThumb}
+            {#if contentImage && cacheSmall && lowReady}
                 <img class="thumb" src={convertFileSrc(node.thumb_low!)} alt="" loading="lazy" />
+            {:else if contentImage && cacheSmall}
+                <div class="thumb thumb--placeholder"></div>
+            {:else if contentImage}
+                <img class="thumb" src={convertFileSrc(node.path)} alt="" loading="lazy" />
             {:else if isImage}
                 <!-- Image file icon -->
                 <svg class="icon image-icon" viewBox="0 0 16 16" fill="currentColor">
@@ -160,6 +183,10 @@
         border-radius: $radius-sm;
         flex-shrink: 0;
         display: block;
+    }
+
+    .thumb--placeholder {
+        background: var(--hover-bg);
     }
 
     .chevron {

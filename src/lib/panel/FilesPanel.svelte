@@ -2,6 +2,7 @@
     import {invoke} from "@tauri-apps/api/core";
     import {convertFileSrc} from "@tauri-apps/api/core";
     import {listenEvent, EVENT} from "$lib/events";
+    import {settings} from "$lib/settings";
     import {onMount, onDestroy} from "svelte";
     import FileTree from "$reusable/FileTree.svelte";
     import type {FileNode} from "$lib/types";
@@ -32,6 +33,39 @@
     function isImageFile(name: string): boolean {
         return /\.(jpg|jpeg|png|webp)$/i.test(name);
     }
+
+    // ── Cache settings ─────────────────────────────────────────────────────
+
+    const cacheSmall = $derived(settings.subscribe<boolean>('cache.smallThumbnails')());
+    const cacheLazy = $derived(settings.subscribe<boolean>('cache.lazy')());
+
+    /** Eager-generation config sent to the backend, derived from the cache settings. */
+    function cacheGenConfig() {
+        const lazy = settings.get<boolean>('cache.lazy');
+        return {
+            low: !lazy && settings.get<boolean>('cache.smallThumbnails'),
+            high: !lazy && settings.get<boolean>('cache.photo'),
+            recursive: !settings.get<boolean>('cache.currentFolderOnly'),
+        };
+    }
+
+    // Lazy small-thumbnail generation for the icons view: when an image is shown and small caching
+    // is lazy, generate its low thumbnail on demand and mark it ready. Fires once per path.
+    const lazyRequested = new Set<string>();
+    $effect(() => {
+        if (!cacheLazy || !cacheSmall || panelState.viewMode !== 'icons' || !panelState.fileTree) return;
+        for (const node of panelState.fileTree.children) {
+            if (node.is_dir || !isImageFile(node.name) || !node.thumb_low) continue;
+            if (panelState.readyThumbs.has(node.path) || lazyRequested.has(node.path)) continue;
+            lazyRequested.add(node.path);
+            invoke('cache_thumbnail', {path: node.path, low: true, high: false})
+                .then(() => panelState.readyThumbs.add(node.path))
+                .catch((e) => {
+                    lazyRequested.delete(node.path);
+                    console.error('lazy low failed:', e);
+                });
+        }
+    });
 
     // Horizontal wheel scroll for content/icons modes
     $effect(() => {
@@ -174,7 +208,7 @@
             refreshTimer = setTimeout(async () => {
                 if (panelState.fileTree) {
                     try {
-                        const updated = await invoke<FileNode>("scan_folder", {path: panelState.fileTree.path});
+                        const updated = await invoke<FileNode>("scan_folder", {path: panelState.fileTree.path, gen: cacheGenConfig()});
                         panelState.fileTree = updated;
 
                         const allPaths = flatFilePaths(updated);
@@ -212,7 +246,7 @@
     async function openFolder() {
         onBusy?.(true);
         try {
-            const result = await invoke<FileNode | null>("open_folder");
+            const result = await invoke<FileNode | null>("open_folder", {gen: cacheGenConfig()});
             if (result) {
                 panelState.fileTree = result;
                 onFolderOpen?.(result.path);
@@ -230,7 +264,7 @@
     /** Open a folder by path without a dialog (used to restore last session). */
     export async function openFolderByPath(path: string): Promise<boolean> {
         try {
-            const result = await invoke<FileNode>("open_folder_path", {path});
+            const result = await invoke<FileNode>("open_folder_path", {path, gen: cacheGenConfig()});
             panelState.fileTree = result;
             return true;
         } catch {
@@ -351,10 +385,12 @@
                         title={node.name}
                         onclick={(e) => handleTreeSelect(node.path, e)}
                     >
-                        {#if node.thumb_low && panelState.readyThumbs.has(node.path)}
+                        {#if cacheSmall && node.thumb_low && panelState.readyThumbs.has(node.path)}
                             <img class="icon-thumb" src={convertFileSrc(node.thumb_low)} alt={node.name} />
-                        {:else}
+                        {:else if cacheSmall}
                             <div class="icon-thumb icon-thumb--placeholder"></div>
+                        {:else}
+                            <img class="icon-thumb" src={convertFileSrc(node.path)} alt={node.name} loading="lazy" />
                         {/if}
                         <span class="icon-overlay">{node.name}</span>
                     </button>

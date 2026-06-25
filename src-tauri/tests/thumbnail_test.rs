@@ -1,4 +1,4 @@
-use attributor_lib::photo_metadata::ensure_thumbnails;
+use attributor_lib::photo_metadata::{ensure, ensure_thumbnails};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -165,4 +165,56 @@ fn test_concurrent_generation_same_photo_is_safe() {
         .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
         .collect();
     assert!(leftovers.is_empty(), "no leftover .tmp files: {leftovers:?}");
+}
+
+// ── Per-size generation (feature 005: ensure(low, high)) ──────────────────────
+
+#[test]
+fn test_ensure_high_only() {
+    let dir = TempDir::new("high_only");
+    let src = make_source(dir.path(), "h.jpg", 2000, 1000);
+    let t = ensure(&src, false, true).expect("ensure high");
+
+    assert!(Path::new(&t.high).is_file(), "high generated");
+    assert!(!Path::new(&t.low).exists(), "low NOT generated");
+    assert_eq!(dims(&t.high), (1920, 960));
+
+    // A valid high is reused, not regenerated.
+    let m1 = fs::metadata(&t.high).unwrap().modified().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let t2 = ensure(&src, false, true).expect("ensure high again");
+    let m2 = fs::metadata(&t2.high).unwrap().modified().unwrap();
+    assert_eq!(m1, m2, "valid high reused, not regenerated");
+}
+
+#[test]
+fn test_ensure_low_only() {
+    let dir = TempDir::new("low_only");
+    let src = make_source(dir.path(), "l.jpg", 2000, 1000);
+    let t = ensure(&src, true, false).expect("ensure low");
+
+    assert!(Path::new(&t.low).is_file(), "low generated");
+    assert!(!Path::new(&t.high).exists(), "high NOT generated");
+    assert_eq!(dims(&t.low), (360, 180));
+}
+
+#[test]
+fn test_ensure_both() {
+    let dir = TempDir::new("both");
+    let src = make_source(dir.path(), "b.jpg", 2000, 1000);
+    let t = ensure(&src, true, true).expect("ensure both");
+
+    assert!(Path::new(&t.low).is_file() && Path::new(&t.high).is_file(), "both generated");
+    assert_eq!(dims(&t.low), (360, 180));
+    assert_eq!(dims(&t.high), (1920, 960));
+}
+
+#[test]
+fn test_ensure_none_is_noop() {
+    let dir = TempDir::new("none");
+    let src = make_source(dir.path(), "n.jpg", 800, 600);
+    let t = ensure(&src, false, false).expect("ensure none");
+
+    assert!(!Path::new(&t.low).exists() && !Path::new(&t.high).exists(), "nothing generated");
+    assert!(!dir.path().join("_thumbnail").exists(), "no _thumbnail folder created");
 }

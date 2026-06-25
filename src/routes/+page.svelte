@@ -81,9 +81,15 @@
     /** Show a photo in the viewer via its high thumbnail (scans pre-generate it; fast). */
     async function showInViewer(path: string) {
         const token = ++viewerToken;
+        // Photo caching off → show the original directly, no thumbnail generation.
+        if (!settings.get<boolean>('cache.photo')) {
+            imageSrc = convertFileSrc(path);
+            viewerLoading = false;
+            return;
+        }
         viewerLoading = true;
         try {
-            const thumbs = await invoke<{low: string; high: string}>('get_thumbnails', {path});
+            const thumbs = await invoke<{low: string; high: string}>('cache_thumbnail', {path, low: false, high: true});
             if (token !== viewerToken) return;
             imageSrc = convertFileSrc(thumbs.high);
         } catch {

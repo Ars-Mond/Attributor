@@ -82,13 +82,16 @@ fn is_valid(path: &Path) -> bool {
     }
 }
 
-/// Reuse valid existing thumbnails or generate the missing ones; return both paths.
-pub fn ensure_thumbnails(source: &Path) -> Result<Thumbnails, String> {
-    let low = thumb_path(source, Variant::Low);
-    let high = thumb_path(source, Variant::High);
+/// Ensure only the requested sizes: reuse each valid cached size, decode the source at most
+/// once (iff a requested size is missing), and generate only the requested missing sizes.
+/// Returns both deterministic paths regardless of which were generated. Requesting neither
+/// size touches no files.
+pub fn ensure(source: &Path, low: bool, high: bool) -> Result<Thumbnails, String> {
+    let low_path = thumb_path(source, Variant::Low);
+    let high_path = thumb_path(source, Variant::High);
 
-    let need_low = !is_valid(&low);
-    let need_high = !is_valid(&high);
+    let need_low = low && !is_valid(&low_path);
+    let need_high = high && !is_valid(&high_path);
 
     if need_low || need_high {
         let dir = thumb_dir(source);
@@ -101,18 +104,23 @@ pub fn ensure_thumbnails(source: &Path) -> Result<Thumbnails, String> {
         })?;
 
         if need_low {
-            generate(&img, &low, Variant::Low.max())?;
+            generate(&img, &low_path, Variant::Low.max())?;
         }
         if need_high {
-            generate(&img, &high, Variant::High.max())?;
+            generate(&img, &high_path, Variant::High.max())?;
         }
-        debug!("ensure_thumbnails: generated for {}", source.display());
+        debug!("ensure: generated for {} (low={need_low}, high={need_high})", source.display());
     }
 
     Ok(Thumbnails {
-        low: low.to_string_lossy().into_owned(),
-        high: high.to_string_lossy().into_owned(),
+        low: low_path.to_string_lossy().into_owned(),
+        high: high_path.to_string_lossy().into_owned(),
     })
+}
+
+/// Ensure both sizes (the folder-scan default). Equivalent to `ensure(source, true, true)`.
+pub fn ensure_thumbnails(source: &Path) -> Result<Thumbnails, String> {
+    ensure(source, true, true)
 }
 
 /// Longest-side resize (no upscale) → rgb8 → JPEG at `JPEG_QUALITY`, written atomically
