@@ -3,7 +3,7 @@
     import {convertFileSrc} from "@tauri-apps/api/core";
     import {listenEvent, EVENT} from "$lib/events";
     import {settings} from "$lib/settings";
-    import {onMount, onDestroy} from "svelte";
+    import {onMount, onDestroy, untrack} from "svelte";
     import FileTree from "$reusable/FileTree.svelte";
     import type {FileNode} from "$lib/types";
     import {panelState} from './filesPanelStore.svelte';
@@ -73,6 +73,10 @@
     async function refreshThumbnailsIfMissing() {
         const tree = panelState.fileTree;
         if (!tree || !cacheSmall || panelState.viewMode === 'table') return;
+        // In lazy mode a missing _thumbnail folder is the expected initial state (nothing is
+        // generated until shown); the per-item lazy effects regenerate on display. Only treat a
+        // missing folder as an external deletion to recover from when generation is eager.
+        if (settings.get<boolean>('cache.lazy')) return;
         try {
             const exists = await invoke<boolean>("thumbnail_dir_exists", {path: tree.path});
             if (exists) return;
@@ -89,7 +93,10 @@
     $effect(() => {
         const mode = panelState.viewMode;
         if (mode === 'content' || mode === 'icons') {
-            refreshThumbnailsIfMissing();
+            // untrack: re-run only on a viewMode change, not on the fileTree/cacheSmall reads inside
+            // refreshThumbnailsIfMissing — otherwise each rescan reassigns fileTree and re-runs this
+            // effect, firing redundant checks and self-feeding the recovery rescan.
+            untrack(() => refreshThumbnailsIfMissing());
         }
     });
 

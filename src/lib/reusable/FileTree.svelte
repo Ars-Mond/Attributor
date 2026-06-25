@@ -36,14 +36,19 @@
 
     const cacheSmall = $derived(settings.subscribe<boolean>('cache.smallThumbnails')());
     const cacheLazy = $derived(settings.subscribe<boolean>('cache.lazy')());
+    const currentFolderOnly = $derived(settings.subscribe<boolean>('cache.currentFolderOnly')());
     const contentImage = $derived(viewMode === 'content' && isImage);
     const lowReady = $derived(!!node.thumb_low && readyThumbs.has(node.path));
+    // A photo is in cache scope only at the top level when "Current folder only" is on; out-of-scope
+    // subfolder photos are neither generated nor shown as a cached/placeholder tile (they show the
+    // original directly), matching FR-014.
+    const inScope = $derived(!currentFolderOnly || depth === 0);
 
     // Lazy small-thumbnail generation: when this image is shown in the tree and small caching is
     // lazy, generate its low thumbnail on demand and mark it ready. Fires once per node.
     let lazyTriggered = false;
     $effect(() => {
-        if (contentImage && cacheSmall && cacheLazy && !!node.thumb_low && !lowReady && !lazyTriggered) {
+        if (contentImage && cacheSmall && cacheLazy && inScope && !!node.thumb_low && !lowReady && !lazyTriggered) {
             lazyTriggered = true;
             invoke('cache_thumbnail', {path: node.path, low: true, high: false})
                 .then(() => readyThumbs.add(node.path))
@@ -102,9 +107,9 @@
             data-path={node.path}
             onclick={(e) => onSelect(node.path, e)}
         >
-            {#if contentImage && cacheSmall && lowReady}
+            {#if contentImage && cacheSmall && inScope && lowReady}
                 <img class="thumb" src={convertFileSrc(node.thumb_low!)} alt="" loading="lazy" />
-            {:else if contentImage && cacheSmall}
+            {:else if contentImage && cacheSmall && inScope}
                 <div class="thumb thumb--placeholder"></div>
             {:else if contentImage}
                 <img class="thumb" src={convertFileSrc(node.path)} alt="" loading="lazy" />
