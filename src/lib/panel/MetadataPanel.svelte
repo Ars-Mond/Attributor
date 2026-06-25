@@ -183,6 +183,7 @@
     // Per-file outcomes streamed from the backend during a batch save (keyed by item index).
     let batchResults = new SvelteMap<number, ItemStatus>();
     let batchCancelling = $state(false);
+    let batchGuardTimer: ReturnType<typeof setTimeout> | null = null;
     const batchFailed = $derived([...batchResults.values()].filter(s => s.kind === 'failed').length);
     const batchCancelled = $derived([...batchResults.values()].filter(s => s.kind === 'cancelled').length);
 
@@ -345,11 +346,18 @@
     }
 
     async function handleBatchSave() {
+        // The metadata cache (batchFileMeta) is only ready after loadBatchData resolves;
+        // saving before then would resolve every item to empty and overwrite files.
+        if (batchLoading) return;
         const paths = [...batchPaths];
         savingTotal = paths.length;
         savingCount = 0;
         batchCancelling = false;
         batchResults.clear();
+        if (batchGuardTimer) {
+            clearTimeout(batchGuardTimer);
+            batchGuardTimer = null;
+        }
         panelState.batchInProgress = true;
 
         // Resolve each file's final metadata from data already loaded for the batch (no re-read).
@@ -381,9 +389,15 @@
 
         savingTotal = 0;
         batchCancelling = false;
-        panelState.batchInProgress = false;
         // Reload to reflect saved state
         loadBatchData(batchPaths);
+        // Keep the watcher-rescan guard armed briefly: the folder-changed events for our own
+        // writes are delivered AFTER this call resolves, so clearing synchronously would let
+        // them trigger a redundant full rescan / thumbnail-pipeline restart (FR-008).
+        batchGuardTimer = setTimeout(() => {
+            panelState.batchInProgress = false;
+            batchGuardTimer = null;
+        }, 1000);
     }
 
     async function cancelBatchSave() {
@@ -1210,7 +1224,7 @@
                 <button
                     class="btn-primary save-btn"
                     onclick={handleBatchSave}
-                    disabled={isSaving}
+                    disabled={isSaving || batchLoading}
                 >
                     {isSaving ? `Saving ${savingCount}/${savingTotal}...` : `Save ${batchPaths.length} Files`}
                 </button>
