@@ -139,6 +139,19 @@
         showGoneToast(name);
     }
 
+    /** Opening a folder clears the viewer/editor so the previously open photo doesn't linger. */
+    function handleFolderOpen(path: string) {
+        metaPanel?.clear();
+        viewerToken++;
+        viewerLoading = false;
+        imageSrc = null;
+        currentPath = null;
+        batchPaths = [];
+        showDialog = false;
+        pendingPath = null;
+        saveAppState({lastFolder: path});
+    }
+
     /** Update viewer when the file was renamed during save. */
     function handlePathChange(newPath: string) {
         currentPath = newPath;
@@ -340,7 +353,7 @@
                     bind:this={filesPanel}
                     onFileSelect={handleFileSelect}
                     onFileGone={handleFileGone}
-                    onFolderOpen={(path) => saveAppState({lastFolder: path})}
+                    onFolderOpen={handleFolderOpen}
                     onBusy={(b) => (isLoading = b)}
                     onSelectionChange={handleSelectionChange}
                     onAltSelect={handleAltSelect}
