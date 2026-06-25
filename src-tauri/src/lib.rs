@@ -18,6 +18,7 @@ use batch::{cancel_batch, save_metadata_batch, BatchState};
 use folder::{FileNode, FolderState, PhotoFolder};
 use log::info;
 use std::path::Path;
+use tauri::Manager;
 use tauri_plugin_prevent_default::Flags;
 
 // ── Tauri command mirrors ─────────────────────────────────────────────────
@@ -100,6 +101,15 @@ async fn open_folder(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Registered first: a second launch focuses the existing window instead of
+        // opening another instance.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .manage(FolderState::default())
         .manage(BatchState::default())
         .plugin(
