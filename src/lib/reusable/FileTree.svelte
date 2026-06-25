@@ -1,6 +1,6 @@
 <script lang="ts">
     import {untrack} from "svelte";
-    import {convertFileSrc, invoke} from "@tauri-apps/api/core";
+    import {convertFileSrc} from "@tauri-apps/api/core";
     import {settings} from "$lib/settings";
     import FileTree from "./FileTree.svelte";
     import type {FileNode} from "$lib/types";
@@ -35,29 +35,15 @@
     );
 
     const cacheSmall = $derived(settings.subscribe<boolean>('cache.smallThumbnails')());
-    const cacheLazy = $derived(settings.subscribe<boolean>('cache.lazy')());
-    const currentFolderOnly = $derived(settings.subscribe<boolean>('cache.currentFolderOnly')());
+    const nestedFolders = $derived(settings.subscribe<boolean>('general.nestedFolders')());
     const contentImage = $derived(viewMode === 'content' && isImage);
     const lowReady = $derived(!!node.thumb_low && readyThumbs.has(node.path));
-    // A photo is in cache scope only at the top level when "Current folder only" is on; out-of-scope
-    // subfolder photos are neither generated nor shown as a cached/placeholder tile (they show the
-    // original directly), matching FR-014.
-    const inScope = $derived(!currentFolderOnly || depth === 0);
-
-    // Lazy small-thumbnail generation: when this image is shown in the tree and small caching is
-    // lazy, generate its low thumbnail on demand and mark it ready. Fires once per node.
-    let lazyTriggered = false;
-    $effect(() => {
-        if (contentImage && cacheSmall && cacheLazy && inScope && !!node.thumb_low && !lowReady && !lazyTriggered) {
-            lazyTriggered = true;
-            invoke('cache_thumbnail', {path: node.path, low: true, high: false})
-                .then(() => readyThumbs.add(node.path))
-                .catch((e) => {
-                    lazyTriggered = false;
-                    console.error('lazy low failed:', e);
-                });
-        }
-    });
+    // A photo is in cache scope at the top level always, and inside nested folders only when "Read
+    // nested folders" is on; out-of-scope subfolder photos are not cached and show the original.
+    const inScope = $derived(nestedFolders || depth === 0);
+    // In Content view, only descend into subfolders when "Read nested folders" is on. Table view is
+    // unaffected (it always shows the full tree).
+    const showChildren = $derived(viewMode !== 'content' || nestedFolders);
 </script>
 
 <div class="tree-node" class:tree-node--h={layoutDir === 'horizontal'}>
@@ -80,7 +66,7 @@
             <span class="name">{node.name}</span>
         </button>
 
-        {#if expanded}
+        {#if expanded && showChildren}
             {#each node.children as child (child.path)}
                 <FileTree
                     node={child}

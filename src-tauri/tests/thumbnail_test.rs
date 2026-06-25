@@ -223,11 +223,11 @@ fn test_ensure_none_is_noop() {
 fn test_thumbnail_dir_exists() {
     let dir = TempDir::new("dir_exists");
     let src = make_source(dir.path(), "x.jpg", 400, 300);
-    assert!(!thumbnail_dir_exists(dir.path()), "no _thumbnail before generation");
+    assert!(!thumbnail_dir_exists(dir.path(), false), "missing while the folder has a photo and no cache");
 
     ensure(&src, true, false).expect("ensure low");
-    assert!(thumbnail_dir_exists(dir.path()), "_thumbnail exists after generation");
+    assert!(thumbnail_dir_exists(dir.path(), false), "_thumbnail exists after generation");
 
     fs::remove_dir_all(dir.path().join("_thumbnail")).expect("delete cache");
-    assert!(!thumbnail_dir_exists(dir.path()), "detected after deletion");
+    assert!(!thumbnail_dir_exists(dir.path(), false), "detected after deletion");
 }

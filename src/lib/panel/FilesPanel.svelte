@@ -37,35 +37,18 @@
     // ── Cache settings ─────────────────────────────────────────────────────
 
     const cacheSmall = $derived(settings.subscribe<boolean>('cache.smallThumbnails')());
-    const cacheLazy = $derived(settings.subscribe<boolean>('cache.lazy')());
 
-    /** Eager-generation config sent to the backend, derived from the cache settings. */
+    /** Eager-generation config sent to the backend, derived from the cache + folder settings.
+     *  Small (low) thumbnails are always generated up front; only the large (high) thumbnail is
+     *  deferred by lazy caching. `recursive` follows the general "Read nested folders" setting. */
     function cacheGenConfig() {
         const lazy = settings.get<boolean>('cache.lazy');
         return {
-            low: !lazy && settings.get<boolean>('cache.smallThumbnails'),
+            low: settings.get<boolean>('cache.smallThumbnails'),
             high: !lazy && settings.get<boolean>('cache.photo'),
-            recursive: !settings.get<boolean>('cache.currentFolderOnly'),
+            recursive: settings.get<boolean>('general.nestedFolders'),
         };
     }
-
-    // Lazy small-thumbnail generation for the icons view: when an image is shown and small caching
-    // is lazy, generate its low thumbnail on demand and mark it ready. Fires once per path.
-    const lazyRequested = new Set<string>();
-    $effect(() => {
-        if (!cacheLazy || !cacheSmall || panelState.viewMode !== 'icons' || !panelState.fileTree) return;
-        for (const node of panelState.fileTree.children) {
-            if (node.is_dir || !isImageFile(node.name) || !node.thumb_low) continue;
-            if (panelState.readyThumbs.has(node.path) || lazyRequested.has(node.path)) continue;
-            lazyRequested.add(node.path);
-            invoke('cache_thumbnail', {path: node.path, low: true, high: false})
-                .then(() => panelState.readyThumbs.add(node.path))
-                .catch((e) => {
-                    lazyRequested.delete(node.path);
-                    console.error('lazy low failed:', e);
-                });
-        }
-    });
 
     // When switching to a thumbnail view, verify the `_thumbnail` cache folder still exists (it may
     // have been deleted on disk); if it is gone, drop the stale ready flags and rebuild the low
@@ -73,18 +56,14 @@
     async function refreshThumbnailsIfMissing() {
         const tree = panelState.fileTree;
         if (!tree || !cacheSmall || panelState.viewMode === 'table') return;
-        // In lazy mode a missing _thumbnail folder is the expected initial state (nothing is
-        // generated until shown); the per-item lazy effects regenerate on display. Only treat a
-        // missing folder as an external deletion to recover from when generation is eager.
-        if (settings.get<boolean>('cache.lazy')) return;
         try {
-            const exists = await invoke<boolean>("thumbnail_dir_exists", {path: tree.path});
+            const recursive = settings.get<boolean>('general.nestedFolders');
+            const exists = await invoke<boolean>("thumbnail_dir_exists", {path: tree.path, recursive});
             if (exists) return;
+            // Small thumbnails are eager, so a missing _thumbnail folder means it was deleted on
+            // disk: drop the stale ready flags and rebuild low for the current scope.
             panelState.readyThumbs.clear();
-            lazyRequested.clear();
-            // Recovery: force low generation for the current scope (even in lazy mode).
-            const recoveryGen = {low: true, high: false, recursive: !settings.get<boolean>('cache.currentFolderOnly')};
-            panelState.fileTree = await invoke<FileNode>("scan_folder", {path: tree.path, gen: recoveryGen});
+            panelState.fileTree = await invoke<FileNode>("scan_folder", {path: tree.path, gen: {low: true, high: false, recursive}});
         } catch (e) {
             console.error("thumbnail refresh failed:", e);
         }
@@ -229,6 +208,9 @@
 
     onMount(async () => {
         window.addEventListener('keydown', handleKeyDown);
+        // readyThumbs records which paths have a ready cached thumbnail. It may retain paths after a
+        // setting is turned off; that is harmless because the display branches independently gate on
+        // the live cacheSmall value, so a cached thumbnail is never shown while caching is off (FR-009).
         unlistenThumb = await listenEvent(EVENT.thumbnailReady, (p) => {
             panelState.readyThumbs.add(p.path);
         });

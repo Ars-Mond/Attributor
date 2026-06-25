@@ -61,8 +61,8 @@ async fn cache_thumbnail(path: String, low: bool, high: bool) -> Result<photo::T
 /// Whether the `_thumbnail` cache folder still exists for an opened folder. The UI calls this when
 /// switching to a thumbnail view so a cache deleted on disk can be detected and regenerated.
 #[tauri::command]
-fn thumbnail_dir_exists(path: String) -> bool {
-    photo::thumbnail_dir_exists(Path::new(&path))
+fn thumbnail_dir_exists(path: String, recursive: bool) -> bool {
+    photo::thumbnail_dir_exists(Path::new(&path), recursive)
 }
 
 #[tauri::command]

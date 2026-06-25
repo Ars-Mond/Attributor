@@ -60,10 +60,51 @@ fn thumb_path(source: &Path, variant: Variant) -> PathBuf {
     thumb_dir(source).join(format!("{name}.{}.jpg", variant.suffix()))
 }
 
-/// True if the `_thumbnail` cache folder exists directly inside `folder`. Lets the UI detect a
-/// cache deleted on disk (e.g. the user removed the folder) and trigger regeneration.
-pub fn thumbnail_dir_exists(folder: &Path) -> bool {
-    folder.join(THUMB_DIR).is_dir()
+/// True if the photo cache looks present: `folder` has a `_thumbnail` subfolder whenever it
+/// directly contains photos, and — when `recursive` — so does every nested subfolder. Lets the UI
+/// detect a cache deleted on disk and regenerate. An unreadable directory is treated as present so
+/// transient errors don't trigger spurious regeneration.
+pub fn thumbnail_dir_exists(folder: &Path, recursive: bool) -> bool {
+    let entries = match fs::read_dir(folder) {
+        Ok(e) => e,
+        Err(_) => return true,
+    };
+
+    let mut has_image = false;
+    let mut subdirs = Vec::new();
+    for entry in entries.flatten() {
+        let p = entry.path();
+        if p.is_dir() {
+            if p.file_name().and_then(|n| n.to_str()) != Some(THUMB_DIR) {
+                subdirs.push(p);
+            }
+        } else if is_supported_image(&p) {
+            has_image = true;
+        }
+    }
+
+    if has_image && !folder.join(THUMB_DIR).is_dir() {
+        return false;
+    }
+    if recursive {
+        for sub in subdirs {
+            if !thumbnail_dir_exists(&sub, true) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// Whether `path` has a supported image extension (jpg/jpeg/png/webp), case-insensitive.
+fn is_supported_image(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .as_deref(),
+        Some("jpg" | "jpeg" | "png" | "webp")
+    )
 }
 
 /// Deterministic thumbnail paths for a source photo — computed only, no file I/O.

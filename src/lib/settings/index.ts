@@ -37,6 +37,15 @@ settings.register('general',
         ]
     }
 );
+settings.register('general',
+    {
+        key: 'general.nestedFolders',
+        type: 'boolean',
+        default: false,
+        label: 'Read nested folders',
+        description: 'Show nested folders in the Content view and include them when generating thumbnails. Does not affect the Table view.'
+    }
+);
 
 settings.register('editor',
     {
@@ -108,16 +117,7 @@ settings.register('caching',
         type: 'boolean',
         default: false,
         label: 'Lazy caching',
-        description: 'Generate thumbnails on display instead of when a folder is opened.'
-    }
-);
-settings.register('caching',
-    {
-        key: 'cache.currentFolderOnly',
-        type: 'boolean',
-        default: true,
-        label: 'Current folder only',
-        description: 'Cache only the current folder; do not recurse into subfolders.'
+        description: 'Generate the viewer (large) thumbnail when a photo is opened, instead of when a folder is opened. Small list thumbnails are always generated up front.'
     }
 );
 
