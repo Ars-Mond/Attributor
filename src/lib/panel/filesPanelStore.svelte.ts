@@ -14,4 +14,6 @@ export const panelState = $state({
     layoutDir: 'vertical' as LayoutDir,
     // Source photo paths whose thumbnail is ready (driven by the `thumbnail-ready` event).
     readyThumbs: new SvelteSet<string>(),
+    // True while a batch metadata save runs — suppresses the watcher-driven folder rescan.
+    batchInProgress: false,
 });

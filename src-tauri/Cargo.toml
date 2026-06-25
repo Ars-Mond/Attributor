@@ -34,4 +34,8 @@ tokio = { version = "1", features = ["sync"] }
 nucleo-matcher = "0.3.1"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 little_exif = { git = "https://github.com/Ars-Mond/little_exif.git" }
+rayon = "1"
+
+[dev-dependencies]
+ts-rs = "10"
 

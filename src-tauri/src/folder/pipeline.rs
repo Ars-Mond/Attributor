@@ -11,16 +11,10 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use log::{debug, warn};
-use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use super::{scan, FileNode};
-
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct ThumbnailReady {
-    path: String,
-}
+use crate::events::{ThumbnailReady, THUMBNAIL_READY};
 
 /// Start a generation run over `root`. Returns immediately; work happens on worker threads.
 pub(crate) fn start(app: AppHandle, root: FileNode, cancel: Arc<AtomicBool>) {
@@ -62,7 +56,7 @@ pub(crate) fn start(app: AppHandle, root: FileNode, cancel: Arc<AtomicBool>) {
                     Ok(_) => {
                         if !cancel.load(Ordering::Relaxed) {
                             if let Err(e) =
-                                app.emit("thumbnail-ready", ThumbnailReady { path: path.clone() })
+                                app.emit(THUMBNAIL_READY, ThumbnailReady { path: path.clone() })
                             {
                                 warn!("emit thumbnail-ready for {path}: {e}");
                             }

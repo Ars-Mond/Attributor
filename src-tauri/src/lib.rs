@@ -1,10 +1,12 @@
+pub mod batch;
+pub mod events;
 pub mod folder;
 mod keywords;
 mod photo;
 mod types;
 
 // Re-exports required by integration tests (tests/metadata_test.rs)
-pub use types::ReadResult;
+pub use types::{ReadResult, SaveRequest};
 
 pub mod photo_metadata {
     pub use super::photo::{
@@ -12,11 +14,11 @@ pub mod photo_metadata {
     };
 }
 
+use batch::{cancel_batch, save_metadata_batch, BatchState};
 use folder::{FileNode, FolderState, PhotoFolder};
-use log::{error, info};
+use log::info;
 use std::path::Path;
 use tauri_plugin_prevent_default::Flags;
-use types::SaveRequest;
 
 // ── Tauri command mirrors ─────────────────────────────────────────────────
 
@@ -39,75 +41,9 @@ fn read_metadata(path: String) -> Result<ReadResult, String> {
 
 #[tauri::command]
 fn save_metadata(metadata: SaveRequest) -> Result<String, String> {
-    let filepath = metadata.filepath.clone();
-    let filename = metadata.filename.clone();
-    let orig_path = Path::new(&filepath);
-    info!("save_metadata: {}", orig_path.display());
-
-    let meta = photo::Metadata {
-        title: metadata.title,
-        description: metadata.description,
-        keywords: metadata.keywords,
-        category: metadata.categories,
-    };
-
-    // ── Determine target path (rename if the stem changed) ──
-    let orig_stem = orig_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-    let new_stem = {
-        let s = filename.trim();
-        Path::new(s).file_stem().and_then(|s| s.to_str()).unwrap_or(s).to_string()
-    };
-
-    let final_path = if !new_stem.is_empty() && new_stem != orig_stem {
-        let ext = orig_path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        let new_name = if ext.is_empty() {
-            new_stem.clone()
-        } else {
-            format!("{}.{}", new_stem, ext)
-        };
-        orig_path.parent().unwrap_or(orig_path).join(&new_name)
-    } else {
-        orig_path.to_path_buf()
-    };
-
-    if final_path != orig_path {
-        // Atomically create the new file (O_CREAT|O_EXCL), copy original bytes,
-        // splice metadata into the copy, then delete the original.
-        use std::io::Write as _;
-        {
-            let mut src = std::fs::File::open(orig_path).map_err(|e| e.to_string())?;
-            let mut dst = std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&final_path)
-                .map_err(|e| {
-                    let msg = if e.kind() == std::io::ErrorKind::AlreadyExists {
-                        format!(
-                            "File already exists: {}",
-                            final_path.file_name().unwrap_or_default().to_string_lossy()
-                        )
-                    } else {
-                        e.to_string()
-                    };
-                    error!("Failed to create {}: {msg}", final_path.display());
-                    msg
-                })?;
-            std::io::copy(&mut src, &mut dst).map_err(|e| e.to_string())?;
-            dst.flush().map_err(|e| e.to_string())?;
-        }
-
-        photo::write_metadata(final_path.to_string_lossy().to_string(), meta)?;
-
-        if let Err(e) = std::fs::remove_file(orig_path) {
-            error!("Failed to delete original {}: {e}", orig_path.display());
-        }
-        info!("renamed: {} → {}", orig_path.display(), final_path.display());
-    } else {
-        photo::write_metadata(filepath.clone(), meta)?;
-    }
-
-    info!("save_metadata: done → {}", final_path.display());
-    Ok(final_path.to_string_lossy().to_string())
+    // Single-file save delegates to the same per-file path used by every batch item,
+    // so the result is identical whether saved alone or as part of a batch.
+    batch::save_one(metadata)
 }
 
 /// Viewer fallback: ensure both thumbnails for a single photo and return their paths.
@@ -165,6 +101,7 @@ async fn open_folder(
 pub fn run() {
     tauri::Builder::default()
         .manage(FolderState::default())
+        .manage(BatchState::default())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(if cfg!(debug_assertions) {
@@ -189,6 +126,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             read_metadata,
             save_metadata,
+            save_metadata_batch,
+            cancel_batch,
             get_thumbnails,
             open_folder,
             open_folder_path,
