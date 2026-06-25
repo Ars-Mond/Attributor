@@ -60,6 +60,12 @@ fn thumb_path(source: &Path, variant: Variant) -> PathBuf {
     thumb_dir(source).join(format!("{name}.{}.jpg", variant.suffix()))
 }
 
+/// True if the `_thumbnail` cache folder exists directly inside `folder`. Lets the UI detect a
+/// cache deleted on disk (e.g. the user removed the folder) and trigger regeneration.
+pub fn thumbnail_dir_exists(folder: &Path) -> bool {
+    folder.join(THUMB_DIR).is_dir()
+}
+
 /// Deterministic thumbnail paths for a source photo — computed only, no file I/O.
 /// Lets callers (e.g. the folder scanner) record paths before the files exist.
 pub fn thumbnail_paths(source: &Path) -> Thumbnails {

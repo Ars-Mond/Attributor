@@ -10,7 +10,8 @@ pub use types::{ReadResult, SaveRequest};
 
 pub mod photo_metadata {
     pub use super::photo::{
-        ensure, ensure_thumbnails, read_metadata, write_metadata, Metadata, Photo, Thumbnails,
+        ensure, ensure_thumbnails, read_metadata, thumbnail_dir_exists, write_metadata, Metadata,
+        Photo, Thumbnails,
     };
 }
 
@@ -55,6 +56,13 @@ async fn cache_thumbnail(path: String, low: bool, high: bool) -> Result<photo::T
     tokio::task::spawn_blocking(move || photo::ensure(std::path::Path::new(&path), low, high))
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// Whether the `_thumbnail` cache folder still exists for an opened folder. The UI calls this when
+/// switching to a thumbnail view so a cache deleted on disk can be detected and regenerated.
+#[tauri::command]
+fn thumbnail_dir_exists(path: String) -> bool {
+    photo::thumbnail_dir_exists(Path::new(&path))
 }
 
 #[tauri::command]
@@ -142,6 +150,7 @@ pub fn run() {
             save_metadata_batch,
             cancel_batch,
             cache_thumbnail,
+            thumbnail_dir_exists,
             open_folder,
             open_folder_path,
             scan_folder,

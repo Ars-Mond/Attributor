@@ -90,7 +90,7 @@ settings.register('caching',
         type: 'boolean',
         default: false,
         label: 'Photo caching',
-        description: 'Show the viewed photo via a cached thumbnail (off shows the original directly).'
+        description: 'Show the viewed photo via a cached thumbnail instead of the original (off shows the original directly). Note: the first run takes longer while thumbnails are generated; with a large number of photos the app may briefly become unresponsive, and the cache increases the disk space used.'
     }
 );
 settings.register('caching',

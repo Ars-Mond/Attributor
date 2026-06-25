@@ -1,4 +1,4 @@
-use attributor_lib::photo_metadata::{ensure, ensure_thumbnails};
+use attributor_lib::photo_metadata::{ensure, ensure_thumbnails, thumbnail_dir_exists};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -217,4 +217,17 @@ fn test_ensure_none_is_noop() {
 
     assert!(!Path::new(&t.low).exists() && !Path::new(&t.high).exists(), "nothing generated");
     assert!(!dir.path().join("_thumbnail").exists(), "no _thumbnail folder created");
+}
+
+#[test]
+fn test_thumbnail_dir_exists() {
+    let dir = TempDir::new("dir_exists");
+    let src = make_source(dir.path(), "x.jpg", 400, 300);
+    assert!(!thumbnail_dir_exists(dir.path()), "no _thumbnail before generation");
+
+    ensure(&src, true, false).expect("ensure low");
+    assert!(thumbnail_dir_exists(dir.path()), "_thumbnail exists after generation");
+
+    fs::remove_dir_all(dir.path().join("_thumbnail")).expect("delete cache");
+    assert!(!thumbnail_dir_exists(dir.path()), "detected after deletion");
 }

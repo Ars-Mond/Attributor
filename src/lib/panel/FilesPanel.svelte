@@ -67,6 +67,32 @@
         }
     });
 
+    // When switching to a thumbnail view, verify the `_thumbnail` cache folder still exists (it may
+    // have been deleted on disk); if it is gone, drop the stale ready flags and rebuild the low
+    // thumbnails for the current scope. Only runs when small-thumbnail caching is enabled.
+    async function refreshThumbnailsIfMissing() {
+        const tree = panelState.fileTree;
+        if (!tree || !cacheSmall || panelState.viewMode === 'table') return;
+        try {
+            const exists = await invoke<boolean>("thumbnail_dir_exists", {path: tree.path});
+            if (exists) return;
+            panelState.readyThumbs.clear();
+            lazyRequested.clear();
+            // Recovery: force low generation for the current scope (even in lazy mode).
+            const recoveryGen = {low: true, high: false, recursive: !settings.get<boolean>('cache.currentFolderOnly')};
+            panelState.fileTree = await invoke<FileNode>("scan_folder", {path: tree.path, gen: recoveryGen});
+        } catch (e) {
+            console.error("thumbnail refresh failed:", e);
+        }
+    }
+
+    $effect(() => {
+        const mode = panelState.viewMode;
+        if (mode === 'content' || mode === 'icons') {
+            refreshThumbnailsIfMissing();
+        }
+    });
+
     // Horizontal wheel scroll for content/icons modes
     $effect(() => {
         if (!contentEl || panelState.viewMode === 'table' || panelState.layoutDir !== 'horizontal') return;
