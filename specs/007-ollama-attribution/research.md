@@ -32,20 +32,22 @@ rustls for robustness); the OpenAI-compatible `/v1` endpoint (no native pull-pro
 | `futures-util 0.3` | `StreamExt::next()` to consume `bytes_stream()` and read NDJSON pull progress |
 
 Already present (no new dep): `tokio`, `serde`/`serde_json`, `image 0.25` (optional downscale before base64),
-`tauri-plugin-opener` (guided install), `rayon` (CPU-bound image prep if needed).
+`std::process::Command` (scripted install), `rayon` (CPU-bound image prep if needed).
 
-## Decision 3 — Availability detection & guided install
+## Decision 3 — Availability detection & scripted install (updated 2026-06-27)
 
-**Availability**: two-level check against the base URL. **Reachable** = `GET /api/version` succeeds within a
-short timeout (daemon up). If it fails, **probe the binary** cross-platform (`ollama`/`ollama.exe` on PATH;
-Windows `%LOCALAPPDATA%\Programs\Ollama\ollama.exe`, macOS `/usr/local/bin/ollama` or `/Applications/Ollama.app`,
-Linux `/usr/local/bin/ollama`/`/usr/bin/ollama`) → "installed but not running" vs "not installed". The status
-is `{reachable, installed, version}`; attribution is available only when `reachable && activeModel != ""`
-(FR-007). The heartbeat is cheap, debounced, and never panics (Result).
+**Availability**: a single reachability **heartbeat** — `GET /api/version` within a short connect timeout.
+Success ⇒ reachable (daemon up); connection-refused/timeout ⇒ not reachable. **No binary/filesystem probe**
+(per clarification). The status is `{reachable, version}`; attribution is available only when
+`reachable && activeModel != ""` (FR-007). The heartbeat is cheap, debounced, never panics (Result).
 
-**Install (FR-003)**: guided only (per clarification default). Use the existing `tauri-plugin-opener` to open
-`https://ollama.com/download` (optionally OS-deep-linked via `std::env::consts::OS`). No scripted/unattended
-installer — respects Constitution I and the spec assumption. No new dependency.
+**Install (FR-003)**: run the official platform install command at the user's request (per clarification),
+via `std::process::Command` — macOS/Linux: `sh -c "curl -fsSL https://ollama.com/install.sh | sh"`; Windows:
+`powershell -NoProfile -Command "irm https://ollama.com/install.ps1 | iex"`. Then re-run the heartbeat to
+confirm. This is pure Rust (process spawn, no C/FFI) and a known-tool install initiated explicitly by the
+user. Caveats: the scripts may require elevation/terminal interaction (sudo on Linux) — surface stderr/exit
+code as a `Result<(), String>` and tell the user to complete any prompt; `curl`/`sh` (mac/Linux) and
+PowerShell (Windows) are assumed present. No new dependency.
 
 ## Decision 4 — Ollama endpoints used
 

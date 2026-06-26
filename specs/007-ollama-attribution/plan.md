@@ -23,7 +23,8 @@ Default prompts and the offered-model list are deferred. See [research.md](./res
 
 **Primary Dependencies**: Existing stack + **new Rust crates** `reqwest 0.12` (default-features off;
 `rustls-tls`, `json`, `stream`), `base64 0.22`, `futures-util 0.3`. No new npm dependency. Reuses present
-`tokio`, `serde`/`serde_json`, `image 0.25`, `tauri-plugin-opener`, `rayon`, and the i18n layer.
+`tokio`, `serde`/`serde_json`, `image 0.25`, `rayon`, `std::process::Command` (scripted install), and the
+i18n layer.
 
 **Storage**: Existing `settings.json` via `tauri-plugin-store` — new keys `ollama.baseUrl`,
 `ollama.activeModel`, `ollama.responseFormat`, `ollama.modelProfiles`. No new storage system.
@@ -55,7 +56,7 @@ to hundreds of photos. Default prompts/offered-models/params are deferred conten
 | I. Pure Rust Backend | ✅ | `reqwest` with `rustls-tls` (no OpenSSL/native-tls); `base64`/`futures-util` pure Rust. |
 | II. Modern Svelte 5 (Runes) | ✅ | Progress store + overlay + settings pages use `$state`/`$derived`; no legacy stores. |
 | III. Themed SCSS Tokens | ✅ | Overlay, settings pages, and the model popup use existing tokens/mixins. |
-| IV. Cross-Platform Parity | ✅ | localhost API everywhere; `opener` for install; per-OS binary probe only smooths detection, never gates a feature. |
+| IV. Cross-Platform Parity | ✅ | localhost API everywhere; the install action runs the official per-OS command (sh / PowerShell); availability is the heartbeat alone (no per-OS probe gating a feature). |
 | V. Reuse UI Primitives | ✅ | Reuses the `Channel`+cancel pattern (004), settings custom-section registration, the dialog overlay, i18n. |
 | VI. Mandatory Logging | ✅ | Backend logs Ollama calls/errors (`log`); frontend logs invoke failures (`@tauri-apps/plugin-log`). |
 | VII. Phase-Based Commits | ✅ | This plan is committed as the `plan` phase. |

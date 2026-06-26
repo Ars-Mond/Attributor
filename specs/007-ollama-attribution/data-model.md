@@ -20,8 +20,7 @@ No new on-disk schema beyond new keys in the existing `settings.json` (`tauri-pl
 
 | Field | Type | Notes |
 |-------|------|-------|
-| reachable | boolean | `/api/version` succeeded — daemon up. |
-| installed | boolean | Binary found (PATH / known locations) even if not running. |
+| reachable | boolean | `/api/version` heartbeat succeeded — daemon up (no binary probe). |
 | version | string \| null | Daemon version when reachable. |
 
 - Derived **available** = `reachable && activeModel != ''` → gates the attribute button (FR-007/009).
@@ -33,7 +32,7 @@ No new on-disk schema beyond new keys in the existing `settings.json` (`tauri-pl
 | name | string | Model id passed to `/api/generate` (e.g. `llama3.2-vision:11b`). |
 | size | number | Bytes on disk (display only). |
 
-- The offered-models list (FR-004) is a separate, app-curated list `{id, label}` — **contents deferred**.
+- The offered-models list (FR-004) is an app-curated list `{id, label}`: `qwen2.5vl:7b`, `qwen2.5vl:3b`, `qwen3-vl:8b`, `llama3.2-vision:11b`, `gemma4:12b`, `gemma3:12b`.
 
 ### ModelProfile (FR-022/024)
 
@@ -106,7 +105,7 @@ settings.json
  ├─ ollama.responseFormat ──────┤        │                         │
  └─ ollama.modelProfiles[] ──(match modelId == activeModel)         │
                                           │                         ├─ POST /api/generate (images[b64], format=schema)
- OllamaStatus (GET /api/version + binary probe) ─ gates ─ attribute │
+ OllamaStatus (GET /api/version heartbeat) ─ gates ─ attribute │
  OllamaModel[] (GET /api/tags) ─ fills ─ activeModel dropdown        │
                                                                      ▼
  AttributionResult ─ single: applied to editor form (overwrite text, merge keywords)

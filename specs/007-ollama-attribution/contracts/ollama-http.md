@@ -8,8 +8,9 @@ overridable via `ollama.baseUrl`). Verified against the current (2026) Ollama AP
 ```
 GET {base}/api/version   ->  200 { "version": "0.x.y" }
 ```
-Short connect timeout (~1–2 s). Connection-refused/timeout ⇒ not reachable. If unreachable, probe the binary
-(PATH + known install locations) to distinguish installed-not-running from not-installed.
+Short connect timeout (~1–2 s). Connection-refused/timeout ⇒ not reachable (the only availability signal —
+no binary/filesystem probe). When not reachable, the settings page offers the scripted install (see
+`install_ollama` in tauri-commands.md).
 
 ## List installed models
 

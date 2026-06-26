@@ -25,6 +25,13 @@ the offered-model list will be provided later."
 - Q: Should batch save run through the new progress overlay with a UI freeze? → A: Yes — both batch attribution and the existing batch save use the shared top-most overlay and freeze interaction until done.
 - Q: How does single-photo attribution apply the result to the form (before manual save)? → A: Overwrite the text fields (title, description, categories) and append new keywords to any existing ones (de-duplicated); nothing is written to disk until the user saves.
 
+### Session 2026-06-27
+
+- Q: What should the "Install Ollama" action do? → A: Run the official platform install command — macOS/Linux `curl -fsSL https://ollama.com/install.sh | sh`, Windows `irm https://ollama.com/install.ps1 | iex` — then re-check reachability. (Supersedes the earlier "open the download page" default.)
+- Q: How is Ollama availability detected? → A: Reachability heartbeat only (HTTP to the local API); no binary/filesystem probe. Available = reachable AND an active model is selected.
+- Q: The offered-models list to install. → A: `qwen2.5vl:7b`, `qwen2.5vl:3b`, `qwen3-vl:8b`, `llama3.2-vision:11b`, `gemma4:12b`, `gemma3:12b`. (Default prompts and run-parameter values remain deferred.)
+- Q: Should the response-format schema keep the `editorial`/`mature_content`/`illustration` fields even though the app ignores them? → A: Yes — they stay required in the schema sent to Ollama; applying them is a separate future feature.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Auto-attribute a single photo (Priority: P1)
@@ -49,20 +56,20 @@ fields populate from the image within a reasonable time and nothing is saved unt
 
 ### User Story 2 - Configure and detect Ollama in settings (Priority: P1)
 
-A user opens settings, finds the Ollama category, checks whether Ollama is installed/running, installs it
+A user opens settings, finds the Ollama category, checks whether Ollama is running/reachable, installs it
 if missing, downloads one of the offered models, selects which installed model the app uses, and (rarely)
 inspects the enforced JSON response format. This makes attribution possible.
 
 **Why this priority**: Attribution cannot run without a reachable Ollama and a selected model; this is the
 enabling configuration and is independently testable on its own.
 
-**Independent Test**: In settings → Ollama, the check action reports installed/not-installed correctly;
+**Independent Test**: In settings → Ollama, the check action reports reachable/not-reachable correctly;
 selecting an installed model persists it; with no model or no Ollama, attribution is disabled everywhere.
 
 **Acceptance Scenarios**:
 
-1. **Given** the Ollama settings category, **When** the user triggers the check action, **Then** the app reports whether Ollama is installed and reachable.
-2. **Given** Ollama is not installed, **When** the user triggers the install action, **Then** the app guides the user through installing Ollama.
+1. **Given** the Ollama settings category, **When** the user triggers the check action, **Then** the app reports whether Ollama is running/reachable.
+2. **Given** Ollama is not reachable, **When** the user triggers the install action, **Then** the app runs the official platform install command and re-checks reachability.
 3. **Given** the offered-models dropdown, **When** the user picks a model and starts the download, **Then** the model is pulled into Ollama with progress shown, and it then appears in the installed-models list.
 4. **Given** the installed-models dropdown, **When** the user selects a model, **Then** that model becomes the active model used for attribution and the choice persists across restarts.
 5. **Given** the JSON response-format field, **When** the user views it, **Then** its description warns that it is for debugging only and should not normally be edited.
@@ -130,7 +137,7 @@ and the active model's profile (prompt + parameters) is the one used during attr
 
 ### Edge Cases
 
-- Ollama is installed but the service is not running, or is unreachable → attribution is disabled and the reason is shown; the check action reports "not reachable".
+- Ollama is not running / not reachable → attribution is disabled and the reason is shown; the check action reports "not reachable".
 - The selected model is not actually pulled / was removed in Ollama → attribution reports a clear error instead of silently failing.
 - The model returns malformed JSON, missing fields, or extra fields → handled gracefully (validation, error surfaced), never corrupting existing metadata.
 - The user switches photos or closes the app while a single attribution is in flight → the in-flight result is discarded for the no-longer-open photo.
@@ -148,8 +155,8 @@ and the active model's profile (prompt + parameters) is the one used during attr
 #### Ollama configuration & availability
 
 - **FR-001**: Settings MUST include a dedicated "Ollama" category.
-- **FR-002**: The Ollama settings MUST provide an action to check whether Ollama is installed and reachable, and MUST display the result.
-- **FR-003**: The Ollama settings MUST provide an action to install Ollama when it is not present.
+- **FR-002**: The Ollama settings MUST provide an action to check whether Ollama is running/reachable (a reachability heartbeat to the local API), and MUST display the result.
+- **FR-003**: The Ollama settings MUST provide an action to install Ollama by running the official platform install command (macOS/Linux `curl -fsSL https://ollama.com/install.sh | sh`; Windows `irm https://ollama.com/install.ps1 | iex`) when it is not reachable, then re-check reachability.
 - **FR-004**: The Ollama settings MUST provide a selection of models the app offers for download and an action to download (pull) the chosen model into Ollama, with progress shown during the download.
 - **FR-005**: The Ollama settings MUST provide a selection of the models currently installed in Ollama (sourced from Ollama); the selected one is the active model used for attribution, and the selection MUST persist across restarts.
 - **FR-006**: The Ollama settings MUST include an editable field holding the enforced JSON response format; its description MUST state that it is for debugging only and should not normally be edited.
@@ -183,8 +190,8 @@ and the active model's profile (prompt + parameters) is the one used during attr
 
 ### Key Entities *(include if feature involves data)*
 
-- **Ollama availability**: Whether Ollama is installed and reachable, used to enable/disable attribution and to inform the user.
-- **Offered model**: An entry in the app-curated list of models it offers to download (identifier + display name). The specific list is provided separately and is out of scope to author here.
+- **Ollama availability**: Whether Ollama is running/reachable (heartbeat), used to enable/disable attribution and to inform the user.
+- **Offered model**: An entry in the app-curated list of models it offers to download (identifier + display name). The list (vision models): `qwen2.5vl:7b`, `qwen2.5vl:3b`, `qwen3-vl:8b`, `llama3.2-vision:11b`, `gemma4:12b`, `gemma3:12b`.
 - **Installed model**: A model currently present in Ollama, discovered from Ollama; one is marked active.
 - **Active model selection**: The installed model the app uses for attribution; persisted.
 - **Response format / schema**: The enforced JSON structure for model output; editable for debugging; default is the fixed format below.
@@ -222,14 +229,14 @@ and the active model's profile (prompt + parameters) is the one used during attr
 ## Assumptions
 
 - **Local Ollama**: Ollama runs locally on the user's machine and the app communicates with the local service; remote/cloud LLM providers are out of scope.
-- **Install action**: "Install Ollama" guides the user to the official installation (e.g. opening the official download/installation path) rather than performing a silent, unattended system install; the check action then confirms success. (Open for `/speckit-clarify` if a deeper automated install is desired.)
+- **Install action**: "Install Ollama" runs the official platform install command at the user's explicit request (macOS/Linux `curl -fsSL https://ollama.com/install.sh | sh`; Windows `irm https://ollama.com/install.ps1 | iex`), then re-checks reachability. This is a scripted install of a known tool initiated by the user (not a silent background install); it may require elevation/terminal interaction the OS handles. Availability is detected by the reachability heartbeat alone — no binary/filesystem probe.
 - **The three flags (deferred)**: `editorial`, `mature_content`, and `illustration` may be returned by the model but are ignored in this feature — not applied to the editor and not persisted. Handling them (new fields + storage target) is a planned follow-up.
 - **Single-mode application**: Single-photo attribution overwrites the text fields (title, description, categories) and appends the returned keywords to any existing ones (de-duplicated); the user reviews before saving (nothing is written to disk until save).
 - **Batch concurrency**: Batch attribution may process images sequentially or with bounded concurrency (a planning decision), but always saves each result; ordering of progress is not guaranteed.
 - **Cancellation is cooperative**: Cancelling stops before starting the next item and/or after the current inference returns; an in-flight inference may need to finish before the operation ends.
 - **Profile persistence**: Model profiles and Ollama settings reuse the application's existing settings/store mechanism; a separate storage system is not introduced unless unavoidable.
 - **One overlay at a time**: The shared progress overlay represents a single operation at a time; concurrent long operations are serialized or rejected rather than stacked.
-- **Deferred content**: Default prompts, the curated list of offered models, and default run-parameter values are NOT authored in this feature; they will be supplied later. The structures that hold them are in scope; their contents are not.
+- **Deferred content**: The offered-models list is now supplied (see Offered model). Default prompts and default run-parameter values remain NOT authored in this feature; the structures that hold them are in scope, their contents are not.
 - **Model parameters are open-ended**: Run parameters include at least context length and thinking mode, plus other model options; the exact, complete parameter set is finalized during planning.
 
 ### Out of scope

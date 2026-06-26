@@ -43,6 +43,8 @@
   shared progress overlay and freezes the UI; single-mode overwrites the text fields (title/description/
   categories) and appends keywords (de-duplicated). FR-010/FR-012, the Attribution-result entity, and the
   Assumptions were updated accordingly.
-- Still open / deferred: the **Install Ollama** action behaviour was not decided this session and keeps its
-  documented default (guided install — open the official installation path); **batch concurrency**
-  (sequential vs. bounded parallel) is intentionally left to `/speckit-plan`.
+- Resolved in the 2026-06-27 session: the **Install Ollama** action runs the official per-OS install command
+  (`curl … | sh` / `irm … | iex`) and availability is the reachability heartbeat alone (no binary probe);
+  the **offered-models list** is now supplied (6 vision models); the schema keeps the three flags. **Batch
+  concurrency** is resolved in plan/research as sequential (Ollama-bound). Default prompts and run-parameter
+  values remain the only deferred content.

@@ -30,8 +30,8 @@ export const progress: {
 Registered `settings.registerSection({id:'ollama', label:'settings.section.ollama', order:N, component:OllamaSettingsPage})`.
 Renders (all labels via `t()`):
 
-- **Status row** + "Check" button → `ollama_status` (shows reachable/installed/version).
-- **Install** button (shown when not installed) → `open_ollama_download`.
+- **Status row** + "Check" button → `ollama_status` (shows reachable + version; heartbeat only).
+- **Install** button (shown when not reachable) → `install_ollama` (runs the official per-OS script, then re-checks status).
 - **Offered-models** dropdown + **Download** button → `ollama_pull_model` with a Channel; progress via the
   overlay; on success refresh installed list. (Offered list contents deferred.)
 - **Installed-models** dropdown → `ollama_list_models`; selection writes `ollama.activeModel`.

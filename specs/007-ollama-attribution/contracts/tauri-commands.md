@@ -9,14 +9,18 @@ All commands follow Constitution IX: `Result<T, String>`, never panic across the
 ```rust
 #[tauri::command]
 async fn ollama_status(base_url: String) -> Result<OllamaStatus, String>;
-// { reachable: bool, installed: bool, version: Option<String> }
+// { reachable: bool, version: Option<String> }  (GET /api/version heartbeat; no binary probe)
 
 #[tauri::command]
 async fn ollama_list_models(base_url: String) -> Result<Vec<OllamaModel>, String>;
 // [{ name: String, size: u64 }]  (from GET /api/tags)
 
 #[tauri::command]
-fn open_ollama_download() -> Result<(), String>;   // guided install: opener -> https://ollama.com/download
+async fn install_ollama() -> Result<(), String>;
+// runs the official per-OS install command via std::process::Command, then the caller re-checks status:
+//   macOS/Linux: sh -c "curl -fsSL https://ollama.com/install.sh | sh"
+//   Windows:     powershell -NoProfile -Command "irm https://ollama.com/install.ps1 | iex"
+// surfaces non-zero exit / stderr as Err(String); may require user elevation/terminal interaction.
 ```
 
 ## Model download (streaming progress, cancelable)
@@ -56,7 +60,7 @@ fn ollama_cancel(state: tauri::State<'_, OllamaState>);   // sets the cancel fla
 ## Payload types (Rust; `#[serde(rename_all = "camelCase")]`; ts-rs for streamed ones)
 
 ```rust
-struct OllamaStatus { reachable: bool, installed: bool, version: Option<String> }
+struct OllamaStatus { reachable: bool, version: Option<String> }
 struct OllamaModel  { name: String, size: u64 }
 
 struct AttributionConfig {
