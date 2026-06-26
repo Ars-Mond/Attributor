@@ -8,6 +8,14 @@
 
 **Input**: User description: "Add a Russian language option to the Tauri UI. Likely needs a localization library/plugin for the frontend, since more languages may be added later. Good practice: a dedicated folder holding the translation objects/structures (typed). The settings already have a language-switching block. Only Russian is planned for now (don't write other languages), but the ability to add another language later must remain."
 
+## Clarifications
+
+### Session 2026-06-26
+
+- Q: Which interface language should the app use on a first-ever launch (before any choice is saved)? → A: Auto-detect from the operating system — start in Russian when the OS language is Russian, otherwise English.
+- Q: How should the keyword-preset buttons (categories like Nature/Architecture) be localized? → A: Translate the button labels (they are UI chrome), but keep the keyword values they insert into metadata in English (they are stock-photo data).
+- Q: How should Russian plurals be handled (1 файл / 2 файла / 5 файлов)? → A: Use the full, correct Russian plural forms (one/few/many), not a single simplified form.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Read the whole app in Russian (Priority: P1)
@@ -45,7 +53,7 @@ it starts in English.
 **Acceptance Scenarios**:
 
 1. **Given** the user selected Russian, **When** the app is restarted, **Then** it starts with the interface in Russian.
-2. **Given** a first-ever launch (no prior choice), **When** the app starts, **Then** it shows a sensible default language.
+2. **Given** a first-ever launch (no prior choice), **When** the app starts, **Then** it starts in the operating-system language if that language is supported (Russian), otherwise in English.
 
 ---
 
@@ -86,20 +94,22 @@ and switches the UI, with no changes needed in any screen/component. (Only Russi
 - **FR-003**: Russian translations MUST be provided for every user-facing interface text the app currently shows in English.
 - **FR-004**: Changing the selected language MUST update the visible interface immediately, without restarting the application.
 - **FR-005**: The selected language MUST persist across application restarts.
-- **FR-006**: On a first-ever launch (no saved choice), the application MUST start in a defined default language.
+- **FR-006**: On a first-ever launch (no saved choice), the application MUST start in the operating-system language when it is a supported language (Russian OS → Russian); otherwise it MUST fall back to the default language (English). Once the user makes an explicit choice, that saved choice takes precedence over OS detection.
 - **FR-007**: When a text is missing in the selected language, the UI MUST fall back to the default-language text (and, if that is also missing, a readable identifier) so no blank or broken text is shown.
 - **FR-008**: Texts that contain dynamic values MUST keep those values intact and correctly positioned within the translated text across languages.
 - **FR-009**: Adding a new language later MUST require only providing that language's translation set and registering it as a selectable option — no changes to the individual screens/components that display text.
 - **FR-010**: The interface text MUST be kept in a single, organized, typed collection (separate from the screens), so missing or extra texts are detectable and a screen cannot silently reference an undefined text.
 - **FR-011**: Only English and Russian are delivered in this feature; no other language data is created.
 - **FR-012**: Localization MUST cover only the application's own interface text, not user-entered content or domain data (file names, metadata values, keyword values).
+- **FR-013**: Quantity-dependent texts MUST use the selected language's correct plural forms — for Russian, the full one/few/many forms (e.g. 1 файл / 2 файла / 5 файлов), not a single simplified form.
+- **FR-014**: Keyword-preset category buttons MUST have their labels localized as interface text, while the keyword values those buttons insert into metadata MUST remain in English (stock-photo data, not UI chrome).
 
 ### Key Entities *(include if feature involves data)*
 
 - **Language**: A selectable interface language (currently English and Russian), identified by a stable code and shown by a human-readable name in the selector.
 - **Translation set**: The complete collection of interface texts for one language, organized by text key; one per supported language.
 - **Text key**: A stable identifier for a single piece of interface text, shared across all languages; screens reference texts by key, not by literal string.
-- **Active language**: The currently selected language, persisted in settings and driving which translation set is displayed.
+- **Active language**: The currently selected language, persisted in settings and driving which translation set is displayed; on a first launch (before a choice is saved) it is initialized from the operating-system language when supported, otherwise the default (English).
 
 ## Success Criteria *(mandatory)*
 
@@ -110,13 +120,14 @@ and switches the UI, with no changes needed in any screen/component. (Only Russi
 - **SC-003**: The selected language is retained across an app restart in 100% of cases.
 - **SC-004**: No user-facing interface text is ever shown blank or as a raw identifier in either language (missing texts fall back to the default language).
 - **SC-005**: A new language can be made selectable by adding exactly one translation set, with zero edits to individual screens/components.
-- **SC-006**: Dynamic values inside texts (counts, names) are preserved and correctly placed in both languages.
+- **SC-006**: Dynamic values inside texts (counts, names) are preserved and correctly placed in both languages, and quantity-dependent texts use the correct plural form for the selected language (Russian one/few/many).
+- **SC-007**: On a first-ever launch, the interface language matches the operating-system language when it is supported (Russian), and otherwise defaults to English.
 
 ## Assumptions
 
-- **Default language**: English remains the default on a first-ever launch (the existing language setting already defaults to English); automatic detection of the operating-system language is out of scope for this feature.
+- **Default language**: On a first-ever launch the app detects the operating-system language — if it is Russian the interface starts in Russian, otherwise it starts in English. English is the fallback for any unsupported OS language. After the user makes an explicit choice, that saved choice takes precedence over OS detection.
 - **Existing selector**: The settings already contain a language block with English/Russian; this feature makes that selection actually drive the interface text and supplies the Russian texts.
 - **Scope of "the UI"**: All of the application's own chrome — menus, panels, settings, dialogs, buttons, tooltips, placeholders, toasts, and validation messages. It excludes user content and domain data (file names, the user's metadata values, stock-photo keyword values), which stay as entered.
-- **Pluralization**: The selected language's natural plural forms are respected for quantity-dependent texts; if full Russian plural rules prove costly, a simpler form may be used initially and noted, but values must always read correctly.
+- **Pluralization**: Quantity-dependent texts use the selected language's full natural plural forms — for Russian the complete one/few/many forms — so counts always read correctly.
 - **Two languages only**: English (existing) and Russian ship; the structure stays open to more, but no other language data is authored here.
-- **Out of scope**: translating user data or domain vocabulary; OS-language auto-detection; right-to-left layouts; per-window or per-document language; live community/contributed translations.
+- **Out of scope**: translating user data or domain vocabulary (including the keyword values inserted by preset buttons); right-to-left layouts; per-window or per-document language; live community/contributed translations.

@@ -36,7 +36,8 @@
   "what/why" level. FR-010 says texts live in a single "typed, organized collection" — this captures
   the user's intent (type-safe, screens can't reference an undefined text) as a quality requirement
   without prescribing a specific technology.
-- Two reasonable defaults were taken without blocking markers and recorded in Assumptions:
-  default language stays English, and OS-language auto-detection is out of scope. `/speckit-clarify`
-  can revisit these (e.g. whether the default should be Russian) before planning.
+- The two deferred defaults were resolved in the 2026-06-26 clarification session: the first-launch
+  language is now auto-detected from the OS (Russian OS → Russian, otherwise English), Russian uses
+  full one/few/many plural forms, and keyword-preset button labels are localized while the inserted
+  keyword values stay English. Assumptions and FR-006/FR-013/FR-014/SC-006/SC-007 were updated accordingly.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.
