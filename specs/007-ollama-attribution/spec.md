@@ -17,14 +17,21 @@ debug-only JSON response-format field) plus an 'Ollama Models' category with per
 greyed-out attribute button with an explanatory tooltip when Ollama is unavailable. Default prompts and
 the offered-model list will be provided later."
 
+## Clarifications
+
+### Session 2026-06-26
+
+- Q: How should the three flags (editorial / mature_content / illustration) from the Ollama response be handled? → A: Ignore them for now — the model may still return them, but the app does not apply or persist them in this feature; handling them is a planned follow-up.
+- Q: Should batch save run through the new progress overlay with a UI freeze? → A: Yes — both batch attribution and the existing batch save use the shared top-most overlay and freeze interaction until done.
+- Q: How does single-photo attribution apply the result to the form (before manual save)? → A: Overwrite the text fields (title, description, categories) and append new keywords to any existing ones (de-duplicated); nothing is written to disk until the user saves.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Auto-attribute a single photo (Priority: P1)
 
 A user opens a photo, clicks the Ollama attribute button in the metadata panel, and the app analyses the
-image with the configured vision model and fills the editor fields (title, description, keywords,
-categories, and the editorial / mature-content / illustration flags) from the model's response. The user
-reviews the suggestions and saves them manually.
+image with the configured vision model and fills the editor fields (title, description, categories, and
+keywords) from the model's response. The user reviews the suggestions and saves them manually.
 
 **Why this priority**: This is the headline value — turning a blank metadata form into a filled one from
 the image alone. Everything else exists to enable or scale this.
@@ -35,7 +42,7 @@ fields populate from the image within a reasonable time and nothing is saved unt
 **Acceptance Scenarios**:
 
 1. **Given** Ollama is available and a model is selected, **When** the user clicks attribute on an open photo, **Then** the editor fields are filled from the model's response and remain unsaved (the file is unchanged until the user saves).
-2. **Given** an attribution is running, **When** it completes, **Then** the title, description, keywords, categories, and the three flags reflect the returned values, with list values placed in the correct fields.
+2. **Given** an attribution is running, **When** it completes, **Then** the title, description, and categories are overwritten with the returned values and the returned keywords are appended to any existing ones (de-duplicated).
 3. **Given** the model returns an invalid or non-conforming response, **When** attribution finishes, **Then** the user sees an error and no fields are corrupted or partially overwritten in a broken way.
 
 ---
@@ -152,9 +159,9 @@ and the active model's profile (prompt + parameters) is the one used during attr
 
 - **FR-008**: The metadata panel MUST present an "attribute via Ollama" action.
 - **FR-009**: When attribution is unavailable, the attribute action MUST be visibly disabled (greyed out) and MUST show a tooltip explaining that Ollama is not available/working.
-- **FR-010**: Single-photo attribution MUST analyse the open image with the active model and populate the editor fields from the model's response; it MUST NOT auto-save — the user reviews and saves.
+- **FR-010**: Single-photo attribution MUST analyse the open image with the active model and apply the result to the editor by overwriting the text fields (title, description, categories) and appending the returned keywords to any existing ones (de-duplicated); it MUST NOT auto-save — the user reviews and saves.
 - **FR-011**: Attribution MUST request and enforce a strict JSON response in the fixed format and MUST validate the response before applying it.
-- **FR-012**: The attribution result MUST map to the editor's fields: title, description, keywords, categories, and the editorial, mature-content, and illustration flags.
+- **FR-012**: The attribution result MUST map to the editor's fields title, description, categories, and keywords. The `editorial`, `mature_content`, and `illustration` flags MAY be returned by the model but MUST NOT be applied or persisted in this feature (deferred to a follow-up).
 - **FR-013**: Batch attribution MUST attribute every selected photo and MUST always save each result automatically.
 - **FR-014**: A failed item in a batch MUST be recorded and surfaced without aborting the rest of the batch and without corrupting other files.
 - **FR-015**: A malformed or non-conforming response MUST never corrupt or partially-overwrite metadata in a broken state; the user MUST be informed of the failure.
@@ -181,7 +188,7 @@ and the active model's profile (prompt + parameters) is the one used during attr
 - **Installed model**: A model currently present in Ollama, discovered from Ollama; one is marked active.
 - **Active model selection**: The installed model the app uses for attribution; persisted.
 - **Response format / schema**: The enforced JSON structure for model output; editable for debugging; default is the fixed format below.
-- **Attribution result**: A single image's model output — `title`, `description`, `keywords[]`, `categories[]`, `editorial` (bool), `mature_content` (bool), `illustration` (bool).
+- **Attribution result**: A single image's model output — `title`, `description`, `keywords[]`, `categories[]`, plus `editorial` (bool), `mature_content` (bool), `illustration` (bool). Only title/description/categories/keywords are applied in this feature; the three booleans are accepted in the response but currently unused (deferred follow-up).
 - **Model profile**: A reusable configuration for one model — model identifier, run parameters (context, thinking mode, and others), and prompt; persisted; the active model's profile is used.
 - **Long-running operation**: An operation surfaced by the progress overlay — a label, progress, blocking/non-blocking, and whether it is cancellable.
 
@@ -216,8 +223,8 @@ and the active model's profile (prompt + parameters) is the one used during attr
 
 - **Local Ollama**: Ollama runs locally on the user's machine and the app communicates with the local service; remote/cloud LLM providers are out of scope.
 - **Install action**: "Install Ollama" guides the user to the official installation (e.g. opening the official download/installation path) rather than performing a silent, unattended system install; the check action then confirms success. (Open for `/speckit-clarify` if a deeper automated install is desired.)
-- **The three flags**: `editorial`, `mature_content`, and `illustration` are surfaced as editable boolean attributes in the editor so the auto-filled values can be reviewed and saved alongside the existing metadata. Their exact persistence target in the image is to be confirmed in planning/clarify; this feature introduces them as part of what the editor manages. (Open for `/speckit-clarify`.)
-- **Single-mode overwrite**: Single-photo attribution fills/overwrites the current field values with the suggestions; the user reviews before saving (nothing is written to disk until save).
+- **The three flags (deferred)**: `editorial`, `mature_content`, and `illustration` may be returned by the model but are ignored in this feature — not applied to the editor and not persisted. Handling them (new fields + storage target) is a planned follow-up.
+- **Single-mode application**: Single-photo attribution overwrites the text fields (title, description, categories) and appends the returned keywords to any existing ones (de-duplicated); the user reviews before saving (nothing is written to disk until save).
 - **Batch concurrency**: Batch attribution may process images sequentially or with bounded concurrency (a planning decision), but always saves each result; ordering of progress is not guaranteed.
 - **Cancellation is cooperative**: Cancelling stops before starting the next item and/or after the current inference returns; an in-flight inference may need to finish before the operation ends.
 - **Profile persistence**: Model profiles and Ollama settings reuse the application's existing settings/store mechanism; a separate storage system is not introduced unless unavoidable.

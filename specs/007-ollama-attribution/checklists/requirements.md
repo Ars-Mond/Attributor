@@ -38,12 +38,11 @@
 - Per the user's instruction, the **default prompts, the curated offered-model list, and default run
   parameters are intentionally not authored** here; only the structures that hold them are in scope. These
   contents will be supplied in a follow-up.
-- Three reasonable defaults were taken (no blocking markers) and recorded in Assumptions; `/speckit-clarify`
-  should revisit them before planning:
-  1. **Install action** — guided install (open official path) vs. a deeper automated/unattended install.
-  2. **The three flags** (`editorial` / `mature_content` / `illustration`) — confirm they become persisted
-     editable metadata attributes, and where they are written in the image.
-  3. **Progress overlay ownership of batch save** — confirm batch save should be routed through the new
-     overlay and fully freeze the UI (the user leaned this way but framed it as an option).
-- Also worth confirming in clarify: single-mode overwrite vs. fill-empty-only, and batch concurrency
-  (sequential vs. bounded parallel).
+- Clarified in the 2026-06-26 session: the three flags (`editorial` / `mature_content` / `illustration`)
+  are ignored/deferred (not applied or persisted — a planned follow-up); batch save is routed through the
+  shared progress overlay and freezes the UI; single-mode overwrites the text fields (title/description/
+  categories) and appends keywords (de-duplicated). FR-010/FR-012, the Attribution-result entity, and the
+  Assumptions were updated accordingly.
+- Still open / deferred: the **Install Ollama** action behaviour was not decided this session and keeps its
+  documented default (guided install — open the official installation path); **batch concurrency**
+  (sequential vs. bounded parallel) is intentionally left to `/speckit-plan`.
