@@ -46,6 +46,8 @@
     const showChildren = $derived(viewMode !== 'content' || nestedFolders);
 </script>
 
+<!-- Hide folder rows entirely in Content view when "Read nested folders" is off (files only). -->
+{#if !node.is_dir || showChildren}
 <div class="tree-node" class:tree-node--h={layoutDir === 'horizontal'}>
     {#if node.is_dir}
         <!-- Folder row -->
@@ -115,6 +117,7 @@
         </button>
     {/if}
 </div>
+{/if}
 
 <style lang="scss">
     @use 'styles/mixins' as *;
