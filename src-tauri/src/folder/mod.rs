@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use notify::RecommendedWatcher;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub use scan::scan_dir;
 
@@ -27,6 +27,16 @@ pub struct FileNode {
     pub thumb_low: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thumb_high: Option<String>,
+}
+
+/// What the frontend asks the backend to generate eagerly on folder open/scan. Derived from the
+/// cache settings: `low`/`high` request each size, `recursive` extends generation into subfolders.
+#[derive(Deserialize, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
+pub struct GenConfig {
+    pub low: bool,
+    pub high: bool,
+    pub recursive: bool,
 }
 
 /// Tauri-managed runtime state for the open folder.
@@ -46,6 +56,7 @@ impl PhotoFolder {
         app: &tauri::AppHandle,
         state: &FolderState,
         path: &Path,
+        gen: GenConfig,
     ) -> Result<FileNode, String> {
         if !path.is_dir() {
             return Err(format!("Not a directory: {}", path.display()));
@@ -65,7 +76,9 @@ impl PhotoFolder {
 
         watch::start_watching(app, path, state);
         let cancel = swap_run(state);
-        pipeline::start(app.clone(), node.clone(), cancel);
+        if gen.low || gen.high {
+            pipeline::start(app.clone(), node.clone(), cancel, gen.low, gen.high, gen.recursive);
+        }
         Ok(node)
     }
 
@@ -74,6 +87,7 @@ impl PhotoFolder {
         app: &tauri::AppHandle,
         state: &FolderState,
         path: &Path,
+        gen: GenConfig,
     ) -> Result<FileNode, String> {
         let scan_path = path.to_path_buf();
         let node = tokio::task::spawn_blocking(move || scan::scan_dir(&scan_path))
@@ -82,7 +96,9 @@ impl PhotoFolder {
             .map_err(|e| e.to_string())?;
 
         let cancel = swap_run(state);
-        pipeline::start(app.clone(), node.clone(), cancel);
+        if gen.low || gen.high {
+            pipeline::start(app.clone(), node.clone(), cancel, gen.low, gen.high, gen.recursive);
+        }
         Ok(node)
     }
 

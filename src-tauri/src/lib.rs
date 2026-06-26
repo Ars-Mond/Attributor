@@ -10,12 +10,13 @@ pub use types::{ReadResult, SaveRequest};
 
 pub mod photo_metadata {
     pub use super::photo::{
-        ensure_thumbnails, read_metadata, write_metadata, Metadata, Photo, Thumbnails,
+        ensure, ensure_thumbnails, read_metadata, thumbnail_dir_exists, write_metadata, Metadata,
+        Photo, Thumbnails,
     };
 }
 
 use batch::{cancel_batch, save_metadata_batch, BatchState};
-use folder::{FileNode, FolderState, PhotoFolder};
+use folder::{FileNode, FolderState, GenConfig, PhotoFolder};
 use log::info;
 use std::path::Path;
 use tauri::Manager;
@@ -47,14 +48,21 @@ fn save_metadata(metadata: SaveRequest) -> Result<String, String> {
     batch::save_one(metadata)
 }
 
-/// Viewer fallback: ensure both thumbnails for a single photo and return their paths.
-/// (Folder scans already populate `FileNode.thumb_low`/`thumb_high`; this serves files
-/// opened outside a scan.) CPU work runs off the UI thread.
+/// On-demand single-photo generation: produce the requested size(s) and return both cache paths.
+/// Used by the viewer (high) and lazy list previews (low); CPU work runs off the UI thread.
+/// An explicit viewer-open uses this regardless of the folder scope (FR-017).
 #[tauri::command]
-async fn get_thumbnails(path: String) -> Result<photo::Thumbnails, String> {
-    tokio::task::spawn_blocking(move || photo::ensure_thumbnails(std::path::Path::new(&path)))
+async fn cache_thumbnail(path: String, low: bool, high: bool) -> Result<photo::Thumbnails, String> {
+    tokio::task::spawn_blocking(move || photo::ensure(std::path::Path::new(&path), low, high))
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// Whether the `_thumbnail` cache folder still exists for an opened folder. The UI calls this when
+/// switching to a thumbnail view so a cache deleted on disk can be detected and regenerated.
+#[tauri::command]
+fn thumbnail_dir_exists(path: String, recursive: bool) -> bool {
+    photo::thumbnail_dir_exists(Path::new(&path), recursive)
 }
 
 #[tauri::command]
@@ -62,8 +70,9 @@ async fn scan_folder(
     app: tauri::AppHandle,
     state: tauri::State<'_, FolderState>,
     path: String,
+    gen: GenConfig,
 ) -> Result<FileNode, String> {
-    PhotoFolder::rescan(&app, state.inner(), Path::new(&path)).await
+    PhotoFolder::rescan(&app, state.inner(), Path::new(&path), gen).await
 }
 
 #[tauri::command]
@@ -71,14 +80,16 @@ async fn open_folder_path(
     app: tauri::AppHandle,
     state: tauri::State<'_, FolderState>,
     path: String,
+    gen: GenConfig,
 ) -> Result<FileNode, String> {
-    PhotoFolder::open(&app, state.inner(), Path::new(&path)).await
+    PhotoFolder::open(&app, state.inner(), Path::new(&path), gen).await
 }
 
 #[tauri::command]
 async fn open_folder(
     app: tauri::AppHandle,
     state: tauri::State<'_, FolderState>,
+    gen: GenConfig,
 ) -> Result<Option<FileNode>, String> {
     use tauri_plugin_dialog::DialogExt;
 
@@ -92,7 +103,7 @@ async fn open_folder(
     };
     let path = folder.into_path().map_err(|e| e.to_string())?;
     info!("open_folder: {}", path.display());
-    let node = PhotoFolder::open(&app, state.inner(), &path).await?;
+    let node = PhotoFolder::open(&app, state.inner(), &path, gen).await?;
     Ok(Some(node))
 }
 
@@ -138,7 +149,8 @@ pub fn run() {
             save_metadata,
             save_metadata_batch,
             cancel_batch,
-            get_thumbnails,
+            cache_thumbnail,
+            thumbnail_dir_exists,
             open_folder,
             open_folder_path,
             scan_folder,

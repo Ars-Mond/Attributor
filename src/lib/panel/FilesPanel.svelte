@@ -2,7 +2,8 @@
     import {invoke} from "@tauri-apps/api/core";
     import {convertFileSrc} from "@tauri-apps/api/core";
     import {listenEvent, EVENT} from "$lib/events";
-    import {onMount, onDestroy} from "svelte";
+    import {settings} from "$lib/settings";
+    import {onMount, onDestroy, untrack} from "svelte";
     import FileTree from "$reusable/FileTree.svelte";
     import type {FileNode} from "$lib/types";
     import {panelState} from './filesPanelStore.svelte';
@@ -32,6 +33,51 @@
     function isImageFile(name: string): boolean {
         return /\.(jpg|jpeg|png|webp)$/i.test(name);
     }
+
+    // ── Cache settings ─────────────────────────────────────────────────────
+
+    const cacheSmall = $derived(settings.subscribe<boolean>('cache.smallThumbnails')());
+
+    /** Eager-generation config sent to the backend, derived from the cache + folder settings.
+     *  Small (low) thumbnails are always generated up front; only the large (high) thumbnail is
+     *  deferred by lazy caching. `recursive` follows the general "Read nested folders" setting. */
+    function cacheGenConfig() {
+        const lazy = settings.get<boolean>('cache.lazy');
+        return {
+            low: settings.get<boolean>('cache.smallThumbnails'),
+            high: !lazy && settings.get<boolean>('cache.photo'),
+            recursive: settings.get<boolean>('general.nestedFolders'),
+        };
+    }
+
+    // When switching to a thumbnail view, verify the `_thumbnail` cache folder still exists (it may
+    // have been deleted on disk); if it is gone, drop the stale ready flags and rebuild the low
+    // thumbnails for the current scope. Only runs when small-thumbnail caching is enabled.
+    async function refreshThumbnailsIfMissing() {
+        const tree = panelState.fileTree;
+        if (!tree || !cacheSmall || panelState.viewMode === 'table') return;
+        try {
+            const recursive = settings.get<boolean>('general.nestedFolders');
+            const exists = await invoke<boolean>("thumbnail_dir_exists", {path: tree.path, recursive});
+            if (exists) return;
+            // Small thumbnails are eager, so a missing _thumbnail folder means it was deleted on
+            // disk: drop the stale ready flags and rebuild low for the current scope.
+            panelState.readyThumbs.clear();
+            panelState.fileTree = await invoke<FileNode>("scan_folder", {path: tree.path, gen: {low: true, high: false, recursive}});
+        } catch (e) {
+            console.error("thumbnail refresh failed:", e);
+        }
+    }
+
+    $effect(() => {
+        const mode = panelState.viewMode;
+        if (mode === 'content' || mode === 'icons') {
+            // untrack: re-run only on a viewMode change, not on the fileTree/cacheSmall reads inside
+            // refreshThumbnailsIfMissing — otherwise each rescan reassigns fileTree and re-runs this
+            // effect, firing redundant checks and self-feeding the recovery rescan.
+            untrack(() => refreshThumbnailsIfMissing());
+        }
+    });
 
     // Horizontal wheel scroll for content/icons modes
     $effect(() => {
@@ -162,6 +208,9 @@
 
     onMount(async () => {
         window.addEventListener('keydown', handleKeyDown);
+        // readyThumbs records which paths have a ready cached thumbnail. It may retain paths after a
+        // setting is turned off; that is harmless because the display branches independently gate on
+        // the live cacheSmall value, so a cached thumbnail is never shown while caching is off (FR-009).
         unlistenThumb = await listenEvent(EVENT.thumbnailReady, (p) => {
             panelState.readyThumbs.add(p.path);
         });
@@ -174,7 +223,7 @@
             refreshTimer = setTimeout(async () => {
                 if (panelState.fileTree) {
                     try {
-                        const updated = await invoke<FileNode>("scan_folder", {path: panelState.fileTree.path});
+                        const updated = await invoke<FileNode>("scan_folder", {path: panelState.fileTree.path, gen: cacheGenConfig()});
                         panelState.fileTree = updated;
 
                         const allPaths = flatFilePaths(updated);
@@ -212,7 +261,7 @@
     async function openFolder() {
         onBusy?.(true);
         try {
-            const result = await invoke<FileNode | null>("open_folder");
+            const result = await invoke<FileNode | null>("open_folder", {gen: cacheGenConfig()});
             if (result) {
                 panelState.fileTree = result;
                 onFolderOpen?.(result.path);
@@ -230,7 +279,7 @@
     /** Open a folder by path without a dialog (used to restore last session). */
     export async function openFolderByPath(path: string): Promise<boolean> {
         try {
-            const result = await invoke<FileNode>("open_folder_path", {path});
+            const result = await invoke<FileNode>("open_folder_path", {path, gen: cacheGenConfig()});
             panelState.fileTree = result;
             return true;
         } catch {
@@ -351,10 +400,12 @@
                         title={node.name}
                         onclick={(e) => handleTreeSelect(node.path, e)}
                     >
-                        {#if node.thumb_low && panelState.readyThumbs.has(node.path)}
+                        {#if cacheSmall && node.thumb_low && panelState.readyThumbs.has(node.path)}
                             <img class="icon-thumb" src={convertFileSrc(node.thumb_low)} alt={node.name} />
-                        {:else}
+                        {:else if cacheSmall}
                             <div class="icon-thumb icon-thumb--placeholder"></div>
+                        {:else}
+                            <img class="icon-thumb" src={convertFileSrc(node.path)} alt={node.name} loading="lazy" />
                         {/if}
                         <span class="icon-overlay">{node.name}</span>
                     </button>

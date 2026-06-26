@@ -1,7 +1,7 @@
 //! Concurrent thumbnail generation — a producer–consumer pool over standard threads
 //! (no new dependency; constitution v1.1.0 §VIII). The producer enqueues photos
 //! visible-level first, then deeper subfolders; a bounded set of workers calls
-//! `photo::ensure_thumbnails` and emits a `thumbnail-ready` event per completed photo.
+//! `photo::ensure` (for the requested sizes) and emits a `thumbnail-ready` event per completed photo.
 //! A shared cancel flag stops the run when the folder is switched.
 
 use std::collections::VecDeque;
@@ -16,9 +16,21 @@ use tauri::{AppHandle, Emitter};
 use super::{scan, FileNode};
 use crate::events::{ThumbnailReady, THUMBNAIL_READY};
 
-/// Start a generation run over `root`. Returns immediately; work happens on worker threads.
-pub(crate) fn start(app: AppHandle, root: FileNode, cancel: Arc<AtomicBool>) {
-    let jobs = collect_jobs(&root);
+/// Start a generation run over `root` for the requested sizes. Returns immediately; work happens
+/// on worker threads. `recursive` controls whether subfolders are included; requesting neither
+/// size is a no-op.
+pub(crate) fn start(
+    app: AppHandle,
+    root: FileNode,
+    cancel: Arc<AtomicBool>,
+    low: bool,
+    high: bool,
+    recursive: bool,
+) {
+    if !low && !high {
+        return;
+    }
+    let jobs = collect_jobs(&root, recursive);
     if jobs.is_empty() {
         return;
     }
@@ -52,7 +64,7 @@ pub(crate) fn start(app: AppHandle, root: FileNode, cancel: Arc<AtomicBool>) {
                 if cancel.load(Ordering::Relaxed) {
                     break;
                 }
-                match crate::photo::ensure_thumbnails(std::path::Path::new(&path)) {
+                match crate::photo::ensure(std::path::Path::new(&path), low, high) {
                     Ok(_) => {
                         if !cancel.load(Ordering::Relaxed) {
                             if let Err(e) =
@@ -71,7 +83,8 @@ pub(crate) fn start(app: AppHandle, root: FileNode, cancel: Arc<AtomicBool>) {
 }
 
 /// Photo paths needing thumbnails, ordered visible level first then deeper (breadth-first).
-fn collect_jobs(root: &FileNode) -> Vec<String> {
+/// When `recursive` is false, only photos directly in `root` are included (no subfolders).
+fn collect_jobs(root: &FileNode, recursive: bool) -> Vec<String> {
     let mut jobs = Vec::new();
     let mut queue: VecDeque<&FileNode> = VecDeque::new();
     queue.push_back(root);
@@ -82,10 +95,12 @@ fn collect_jobs(root: &FileNode) -> Vec<String> {
                 jobs.push(child.path.clone());
             }
         }
-        // Then descend into subfolders (subsequent levels).
-        for child in &node.children {
-            if child.is_dir {
-                queue.push_back(child);
+        // Then descend into subfolders (subsequent levels), unless restricted to the top level.
+        if recursive {
+            for child in &node.children {
+                if child.is_dir {
+                    queue.push_back(child);
+                }
             }
         }
     }
@@ -111,11 +126,29 @@ mod tests {
             dir("sub", vec![file("deep1.jpg")]),
             file("top2.jpg"),
         ]);
-        let jobs = collect_jobs(&root);
+        let jobs = collect_jobs(&root, true);
 
         let i_top1 = jobs.iter().position(|p| p == "top1.jpg").expect("top1");
         let i_top2 = jobs.iter().position(|p| p == "top2.jpg").expect("top2");
         let i_deep = jobs.iter().position(|p| p == "deep1.jpg").expect("deep1");
         assert!(i_top1 < i_deep && i_top2 < i_deep, "visible level before deeper: {jobs:?}");
+    }
+
+    #[test]
+    fn collect_jobs_non_recursive_top_level_only() {
+        let root = dir("root", vec![
+            file("top1.jpg"),
+            dir("sub", vec![file("deep1.jpg")]),
+            file("top2.jpg"),
+        ]);
+        let shallow = collect_jobs(&root, false);
+        assert!(
+            shallow.iter().any(|p| p == "top1.jpg") && shallow.iter().any(|p| p == "top2.jpg"),
+            "top-level photos included: {shallow:?}"
+        );
+        assert!(!shallow.iter().any(|p| p == "deep1.jpg"), "no subfolder photos: {shallow:?}");
+
+        let deep = collect_jobs(&root, true);
+        assert!(deep.iter().any(|p| p == "deep1.jpg"), "recursive includes subfolder: {deep:?}");
     }
 }

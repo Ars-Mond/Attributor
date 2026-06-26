@@ -37,6 +37,15 @@ settings.register('general',
         ]
     }
 );
+settings.register('general',
+    {
+        key: 'general.nestedFolders',
+        type: 'boolean',
+        default: false,
+        label: 'Read nested folders',
+        description: 'Show nested folders in the Content view and include them when generating thumbnails. Does not affect the Table view.'
+    }
+);
 
 settings.register('editor',
     {
@@ -76,6 +85,39 @@ settings.register('appearance',
         label: 'Font size',
         min: 10,
         max: 24
+    }
+);
+
+settings.registerSection({
+    id: 'caching',
+    label: 'Caching',
+    order: 3
+});
+settings.register('caching',
+    {
+        key: 'cache.photo',
+        type: 'boolean',
+        default: false,
+        label: 'Photo caching',
+        description: 'Show the viewed photo via a cached thumbnail instead of the original (off shows the original directly). Note: the first run takes longer while thumbnails are generated; with a large number of photos the app may briefly become unresponsive, and the cache increases the disk space used.'
+    }
+);
+settings.register('caching',
+    {
+        key: 'cache.smallThumbnails',
+        type: 'boolean',
+        default: false,
+        label: 'Cache small thumbnails',
+        description: 'Show list previews via cached small thumbnails (off shows the original directly).'
+    }
+);
+settings.register('caching',
+    {
+        key: 'cache.lazy',
+        type: 'boolean',
+        default: false,
+        label: 'Lazy caching',
+        description: 'Generate the viewer (large) thumbnail when a photo is opened, instead of when a folder is opened. Small list thumbnails are always generated up front.'
     }
 );
 
