@@ -22,13 +22,15 @@
     import SettingsDialog from "$lib/settings/SettingsDialog.svelte";
     import {settings} from "$lib/settings";
     import {shortcuts} from "$lib/shortcuts";
+    import {t, initLocale, type MessageKey} from "$lib/i18n";
 
     // --- Docking ---
-    const windowConfigs: WindowConfig[] = [
-        {id: 'control', title: 'Control', closable: true},
-        {id: 'view', title: 'View', closable: false},
-        {id: 'hierarchy', title: 'Hierarchy', closable: true},
-    ];
+    // $derived so dock tab titles re-render on a language switch.
+    const windowConfigs = $derived<WindowConfig[]>([
+        {id: 'control', title: t('dock.window.control'), closable: true},
+        {id: 'view', title: t('dock.window.view'), closable: false},
+        {id: 'hierarchy', title: t('dock.window.hierarchy'), closable: true},
+    ]);
 
     let layout = $state<LayoutNode>(getDefaultLayout());
     let hiddenWindows = $state<string[]>([]);
@@ -266,6 +268,10 @@
         // viewer reflect the user's saved settings instead of the defaults.
         await settings.load();
 
+        // Resolve the interface language (first-run OS detection) before the window is shown, so the
+        // first painted frame is already localized.
+        await initLocale();
+
         // 3. Restore last folder, then last file
         if (state.lastFolder) {
             const ok = await filesPanel?.openFolderByPath(state.lastFolder);
@@ -314,35 +320,35 @@
 
 <div class="app">
     <MenuBar>
-        <MenuTab label="File">
-            <MenuItem label="Open directory..." shortcut={shortcuts.getEffectiveBinding('file.open_folder') ?? undefined} onClick={() => filesPanel?.openFolderDialog()} />
+        <MenuTab label={t('menu.file.label')}>
+            <MenuItem label={t('menu.file.openDirectory')} shortcut={shortcuts.getEffectiveBinding('file.open_folder') ?? undefined} onClick={() => filesPanel?.openFolderDialog()} />
             <MenuSeparator />
-            <MenuTab label="Theme">
-                {#each themes as t}
+            <MenuTab label={t('menu.file.theme')}>
+                {#each themes as theme}
                     <MenuItem
-                        label={t.name}
-                        onClick={() => { currentTheme = t.id; applyTheme(t.id); saveAppState({theme: t.id}); }}
+                        label={t(`theme.${theme.id}` as MessageKey)}
+                        onClick={() => { currentTheme = theme.id; applyTheme(theme.id); saveAppState({theme: theme.id}); }}
                     />
                 {/each}
             </MenuTab>
             <MenuSeparator />
-            <MenuItem label="Settings" shortcut={shortcuts.getEffectiveBinding('file.settings') ?? undefined} onClick={() => {showSettings = true;}} />
+            <MenuItem label={t('menu.file.settings')} shortcut={shortcuts.getEffectiveBinding('file.settings') ?? undefined} onClick={() => {showSettings = true;}} />
         </MenuTab>
-        <MenuTab label="Windows">
+        <MenuTab label={t('menu.windows.label')}>
             <MenuItem
-                label="Show Control"
+                label={t('menu.windows.showControl')}
                 onClick={() => handleShowWindow('control')}
                 disabled={!hiddenWindows.includes('control')}
             />
             <MenuItem
-                label="Show Hierarchy"
+                label={t('menu.windows.showHierarchy')}
                 onClick={() => handleShowWindow('hierarchy')}
                 disabled={!hiddenWindows.includes('hierarchy')}
             />
         </MenuTab>
-        <MenuTab label="Help">
-            <MenuItem label="Help" onClick={() => { showHelp = true; }} />
-            <MenuItem label="About" onClick={() => { showAbout = true; }} />
+        <MenuTab label={t('menu.help.label')}>
+            <MenuItem label={t('menu.help.help')} onClick={() => { showHelp = true; }} />
+            <MenuItem label={t('menu.help.about')} onClick={() => { showAbout = true; }} />
         </MenuTab>
     </MenuBar>
 

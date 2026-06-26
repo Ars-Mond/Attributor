@@ -32,8 +32,8 @@ Single desktop app: frontend in `src/`, backend in `src-tauri/`. The new localiz
 
 **Purpose**: Add the one new dependency and establish a clean baseline.
 
-- [ ] T001 [P] Add `sys-locale = "0.3"` to the `[dependencies]` table in `src-tauri/Cargo.toml` (pure-Rust OS-locale detection; justified in research.md Decision 2).
-- [ ] T002 [P] Confirm a clean baseline before changes: `npm run check` and `cargo check` (in `src-tauri/`) both pass.
+- [x] T001 [P] Add `sys-locale = "0.3"` to the `[dependencies]` table in `src-tauri/Cargo.toml` (pure-Rust OS-locale detection; justified in research.md Decision 2).
+- [x] T002 [P] Confirm a clean baseline before changes: `npm run check` and `cargo check` (in `src-tauri/`) both pass.
 
 ---
 
@@ -44,11 +44,11 @@ engine works (English) but no screen consumes it yet.
 
 **⚠️ CRITICAL**: No user story can begin until this phase is complete.
 
-- [ ] T003 Define localization types in `src/lib/i18n/types.ts`: the `Locale` union (`'en' | 'ru'`), `LOCALES`, `DEFAULT_LOCALE` (`'en'`), an `endonyms` map (`en: 'English'`, `ru: 'Русский'`), `PluralForms` (`{one, other}` for EN / `{one, few, many}` for RU), the `Messages` interface grouped by area (`common`, `menu`, `files`, `metadata`, `viewer`, `dialog`, `shortcuts`, `settings`) covering the inventory in research.md Decision 5, and the derived `MessageKey` / `PluralKey` key types.
-- [ ] T004 [P] Implement `pluralCategory(loc, n)` in `src/lib/i18n/plural.ts` per CLDR (RU one/few/many, EN one/other) exactly as research.md Decision 3.
-- [ ] T005 Implement the reactive store in `src/lib/i18n/store.svelte.ts`: a module-level `$derived` active locale normalized from `settings.subscribe<string>('general.language')()`; `locale()`; `setLocale(value)` → `settings.set('general.language', normalize(value))`; `t(key, params?)` with `{name}` interpolation and fallback chain `catalog[locale][key] → catalog[DEFAULT_LOCALE][key] → key`; `tn(key, count, params?)` selecting the form via `pluralCategory` with `{n}` exposed (depends on T003, T004, T006).
-- [ ] T006 Create `src/lib/i18n/catalog.ts` (`export const catalog: Record<Locale, Messages>` from `en`/`ru`) and `src/lib/i18n/index.ts` (re-export `t`, `tn`, `locale`, `setLocale`, `LOCALES`, `DEFAULT_LOCALE`, types; `initLocale()` is added in US2) (depends on T003).
-- [ ] T007 Author the full English catalog `src/lib/i18n/en.ts` as `const en: Messages = {…}`, supplying every key declared by `Messages` (this is also the fallback source) (depends on T003).
+- [x] T003 Define localization types in `src/lib/i18n/types.ts`: the `Locale` union (`'en' | 'ru'`), `LOCALES`, `DEFAULT_LOCALE` (`'en'`), an `endonyms` map (`en: 'English'`, `ru: 'Русский'`), `PluralForms` (`{one, other}` for EN / `{one, few, many}` for RU), the `Messages` interface grouped by area (`common`, `menu`, `files`, `metadata`, `viewer`, `dialog`, `shortcuts`, `settings`) covering the inventory in research.md Decision 5, and the derived `MessageKey` / `PluralKey` key types.
+- [x] T004 [P] Implement `pluralCategory(loc, n)` in `src/lib/i18n/plural.ts` per CLDR (RU one/few/many, EN one/other) exactly as research.md Decision 3.
+- [x] T005 Implement the reactive store in `src/lib/i18n/store.svelte.ts`: a module-level `$derived` active locale normalized from `settings.subscribe<string>('general.language')()`; `locale()`; `setLocale(value)` → `settings.set('general.language', normalize(value))`; `t(key, params?)` with `{name}` interpolation and fallback chain `catalog[locale][key] → catalog[DEFAULT_LOCALE][key] → key`; `tn(key, count, params?)` selecting the form via `pluralCategory` with `{n}` exposed (depends on T003, T004, T006).
+- [x] T006 Create `src/lib/i18n/catalog.ts` (`export const catalog: Record<Locale, Messages>` from `en`/`ru`) and `src/lib/i18n/index.ts` (re-export `t`, `tn`, `locale`, `setLocale`, `LOCALES`, `DEFAULT_LOCALE`, types; `initLocale()` is added in US2) (depends on T003).
+- [x] T007 Author the full English catalog `src/lib/i18n/en.ts` as `const en: Messages = {…}`, supplying every key declared by `Messages` (this is also the fallback source) (depends on T003).
 
 **Checkpoint**: `npm run check` passes; `en.ts` satisfies `Messages`; the runtime is importable.
 
@@ -64,22 +64,22 @@ keyword values stay English.
 screen, tooltips, and toast/validation messages read in Russian with no leftover English; set back to
 **English** → reverts. (OS auto-detect is US2; here English default is acceptable.)
 
-- [ ] T008 [US1] Author the full Russian catalog `src/lib/i18n/ru.ts` as `const ru: Messages = {…}`, providing Russian for every key in `Messages`, with correct one/few/many plural forms (FR-003/FR-013) (depends on T003, T007).
-- [ ] T009 [P] [US1] Localize menu chrome: replace literal labels with `t()` in `src/routes/+page.svelte` (File, Open directory…, Theme + theme display names, Settings, Windows, Show Control, Show Hierarchy, Help, About) and any literals in `src/lib/menu/MenuBar.svelte`, `MenuItem.svelte`, `MenuTab.svelte`.
-- [ ] T010 [P] [US1] Localize `src/lib/panel/FilesPanel.svelte` (Files, Table/Content/Icons, Vertical/Horizontal tooltips, "No folder open").
-- [ ] T011 [P] [US1] Localize `src/lib/reusable/FileTree.svelte` (any user-facing literals/tooltips).
-- [ ] T012 [US1] Localize `src/lib/panel/MetadataPanel.svelte` (largest): field labels (Title/Description/Keywords/Filename/rename on save/Categories/Release Filename/Stock Keywords/Optional/Required), buttons (Copy/Paste/Clear/Clear All/Save Changes/Cancel/Cancelling…), placeholders (Enter or ", " to add), validation messages (No file selected, Filename/Title/Description is required, At least one keyword is required, Save failed:), file-status labels (none/open/edit/batch) via `t()`, and count-bearing strings via `tn()` ("x of y", "{n} files", "Save {n} Files", word/char counts). Localize preset **category labels** (Nature/People/Urban/Concepts/Animals/Seasons) via `t()` while keeping the inserted keyword **values** as English constants (FR-014).
-- [ ] T013 [P] [US1] Localize `src/lib/panel/ImageViewerPanel.svelte` (No image open, Loading preview, "was moved or deleted externally", Dismiss).
-- [ ] T014 [P] [US1] Localize `src/lib/dialog/ConfirmDialog.svelte` (generic title/body/buttons it renders).
-- [ ] T015 [P] [US1] Localize `src/lib/dialog/UnsavedChangesDialog.svelte` (Unsaved Changes, "{filename} has unsaved changes", Cancel/Discard/Save).
-- [ ] T016 [P] [US1] Localize `src/lib/dialog/AboutDialog.svelte` (Version/Identifier/License labels + description + Close; keep dynamic version/identifier values as-is).
-- [ ] T017 [P] [US1] Localize `src/lib/dialog/HelpDialog.svelte` chrome (title, Close) and change the doc fetch to a locale-aware path `/Help.${locale}.md` with fallback to `/Help.en.md`; rename `static/Help.md` → `static/Help.en.md`.
-- [ ] T018 [P] [US1] Localize `src/lib/reusable/InputContextMenu.svelte` (Copy/Paste/Cut) — reuse `common.*` keys.
-- [ ] T019 [P] [US1] Localize `src/lib/reusable/KeywordSuggestions.svelte` (any user-facing literals).
-- [ ] T020 [P] [US1] Author the Russian Help document `static/Help.ru.md` mirroring `static/Help.en.md` (Constitution Comms & Docs: English is source of truth) (depends on T017 for the file convention).
-- [ ] T021 [US1] Convert settings descriptors to message keys in `src/lib/settings/index.ts`: section labels (General/Editor/Appearance/Caching/Shortcuts) and each setting's `label`/`description` become stable `settings.*` keys (keep `options[].label` endonyms literal). Add the corresponding keys to `Messages`/`en.ts`/`ru.ts`.
-- [ ] T022 [US1] Resolve registry labels at render time in `src/lib/settings/SettingsDialog.svelte`: wrap section labels and descriptor `label`/`description` in `t()`, and localize dialog chrome (Settings, Decrease, Increase, Reset to defaults) (depends on T021).
-- [ ] T023 [US1] Convert shortcut action labels to message keys in `src/lib/shortcuts/registry.svelte.ts` and resolve them (plus page chrome: Press keys…, Already used by:, Reassign, Reset to defaults, Reset all shortcuts, Close) via `t()` in `src/lib/shortcuts/ShortcutsPage.svelte`. Add the keys to `Messages`/`en.ts`/`ru.ts`.
+- [x] T008 [US1] Author the full Russian catalog `src/lib/i18n/ru.ts` as `const ru: Messages = {…}`, providing Russian for every key in `Messages`, with correct one/few/many plural forms (FR-003/FR-013) (depends on T003, T007).
+- [x] T009 [P] [US1] Localize menu chrome: replace literal labels with `t()` in `src/routes/+page.svelte` (File, Open directory…, Theme + theme display names, Settings, Windows, Show Control, Show Hierarchy, Help, About) and any literals in `src/lib/menu/MenuBar.svelte`, `MenuItem.svelte`, `MenuTab.svelte`.
+- [x] T010 [P] [US1] Localize `src/lib/panel/FilesPanel.svelte` (Files, Table/Content/Icons, Vertical/Horizontal tooltips, "No folder open").
+- [x] T011 [P] [US1] Localize `src/lib/reusable/FileTree.svelte` (any user-facing literals/tooltips).
+- [x] T012 [US1] Localize `src/lib/panel/MetadataPanel.svelte` (largest): field labels (Title/Description/Keywords/Filename/rename on save/Categories/Release Filename/Stock Keywords/Optional/Required), buttons (Copy/Paste/Clear/Clear All/Save Changes/Cancel/Cancelling…), placeholders (Enter or ", " to add), validation messages (No file selected, Filename/Title/Description is required, At least one keyword is required, Save failed:), file-status labels (none/open/edit/batch) via `t()`, and count-bearing strings via `tn()` ("x of y", "{n} files", "Save {n} Files", word/char counts). Localize preset **category labels** (Nature/People/Urban/Concepts/Animals/Seasons) via `t()` while keeping the inserted keyword **values** as English constants (FR-014).
+- [x] T013 [P] [US1] Localize `src/lib/panel/ImageViewerPanel.svelte` (No image open, Loading preview, "was moved or deleted externally", Dismiss).
+- [x] T014 [P] [US1] Localize `src/lib/dialog/ConfirmDialog.svelte` (generic title/body/buttons it renders).
+- [x] T015 [P] [US1] Localize `src/lib/dialog/UnsavedChangesDialog.svelte` (Unsaved Changes, "{filename} has unsaved changes", Cancel/Discard/Save).
+- [x] T016 [P] [US1] Localize `src/lib/dialog/AboutDialog.svelte` (Version/Identifier/License labels + description + Close; keep dynamic version/identifier values as-is).
+- [x] T017 [P] [US1] Localize `src/lib/dialog/HelpDialog.svelte` chrome (title, Close) and change the doc fetch to a locale-aware path `/Help.${locale}.md` with fallback to `/Help.en.md`; rename `static/Help.md` → `static/Help.en.md`.
+- [x] T018 [P] [US1] Localize `src/lib/reusable/InputContextMenu.svelte` (Copy/Paste/Cut) — reuse `common.*` keys.
+- [x] T019 [P] [US1] Localize `src/lib/reusable/KeywordSuggestions.svelte` (any user-facing literals).
+- [x] T020 [P] [US1] Author the Russian Help document `static/Help.ru.md` mirroring `static/Help.en.md` (Constitution Comms & Docs: English is source of truth) (depends on T017 for the file convention).
+- [x] T021 [US1] Convert settings descriptors to message keys in `src/lib/settings/index.ts`: section labels (General/Editor/Appearance/Caching/Shortcuts) and each setting's `label`/`description` become stable `settings.*` keys (keep `options[].label` endonyms literal). Add the corresponding keys to `Messages`/`en.ts`/`ru.ts`.
+- [x] T022 [US1] Resolve registry labels at render time in `src/lib/settings/SettingsDialog.svelte`: wrap section labels and descriptor `label`/`description` in `t()`, and localize dialog chrome (Settings, Decrease, Increase, Reset to defaults) (depends on T021).
+- [x] T023 [US1] Convert shortcut action labels to message keys in `src/lib/shortcuts/registry.svelte.ts` and resolve them (plus page chrome: Press keys…, Already used by:, Reassign, Reset to defaults, Reset all shortcuts, Close) via `t()` in `src/lib/shortcuts/ShortcutsPage.svelte`. Add the keys to `Messages`/`en.ts`/`ru.ts`.
 
 **Checkpoint**: With Russian selected the whole UI reads in Russian and switches live; `npm run check` passes.
 
@@ -93,10 +93,10 @@ painted frame already correct; an explicit choice persists and wins over detecti
 **Independent Test**: Delete `general.language` from `settings.json` → launch on a Russian OS starts in
 Russian (non-Russian → English); choose a language, restart → it persists and overrides OS detection.
 
-- [ ] T024 [P] [US2] Add the `detect_os_locale() -> Result<String, String>` command in `src-tauri/src/lib.rs` using `sys_locale::get_locale()` — return `Ok(tag)`, or `Ok("en")` + a `log::warn!` when `None` (never `Err` for the absent case, never panic) — and register it in `tauri::generate_handler![…]` (contract: contracts/locale-command.md).
-- [ ] T025 [US2] Add a first-run helper to `src/lib/settings/registry.svelte.ts` that reports whether a key was loaded from disk vs. defaulted (e.g. record loaded keys during `load()` and expose `wasPersisted(key): boolean`).
-- [ ] T026 [US2] Implement `initLocale()` in `src/lib/i18n/index.ts`: if `settings.wasPersisted('general.language')` is false, `invoke<string>('detect_os_locale')` (catch → `'en'`), map the primary subtag to a `Locale` (unknown → `DEFAULT_LOCALE`), and `settings.set('general.language', mapped)`; log invoke failures via `@tauri-apps/plugin-log`. Idempotent (depends on T024, T025).
-- [ ] T027 [US2] Call `await initLocale()` in `src/routes/+page.svelte` `onMount` immediately after `await settings.load()` and before `await win.show()`, so the first frame is already localized (depends on T026).
+- [x] T024 [P] [US2] Add the `detect_os_locale() -> Result<String, String>` command in `src-tauri/src/lib.rs` using `sys_locale::get_locale()` — return `Ok(tag)`, or `Ok("en")` + a `log::warn!` when `None` (never `Err` for the absent case, never panic) — and register it in `tauri::generate_handler![…]` (contract: contracts/locale-command.md).
+- [x] T025 [US2] Add a first-run helper to `src/lib/settings/registry.svelte.ts` that reports whether a key was loaded from disk vs. defaulted (e.g. record loaded keys during `load()` and expose `wasPersisted(key): boolean`).
+- [x] T026 [US2] Implement `initLocale()` in `src/lib/i18n/index.ts`: if `settings.wasPersisted('general.language')` is false, `invoke<string>('detect_os_locale')` (catch → `'en'`), map the primary subtag to a `Locale` (unknown → `DEFAULT_LOCALE`), and `settings.set('general.language', mapped)`; log invoke failures via `@tauri-apps/plugin-log`. Idempotent (depends on T024, T025).
+- [x] T027 [US2] Call `await initLocale()` in `src/routes/+page.svelte` `onMount` immediately after `await settings.load()` and before `await win.show()`, so the first frame is already localized (depends on T026).
 
 **Checkpoint**: First-run OS detection works, no language flash, and saved choices persist and win.
 
@@ -110,9 +110,9 @@ no screen edits required.
 **Independent Test**: Add a throwaway `de.ts`, extend `LOCALES`; it appears in the selector and switches the
 UI with zero screen edits; remove one `ru` key → that text shows the English fallback (build still flags it).
 
-- [ ] T028 [US3] Drive the `general.language` selector options from `LOCALES` + `endonyms` (edit `src/lib/settings/index.ts` to build `options` from the i18n source of truth instead of hardcoding en/ru), so a newly added language appears automatically (FR-009/SC-005).
-- [ ] T029 [US3] Verify and harden the missing-key fallback in `src/lib/i18n/store.svelte.ts` (`catalog[loc] → catalog[DEFAULT_LOCALE] → key`), and emit a guarded dev-only `log` warning when a fallback occurs (no `console.*`) (FR-007/SC-004).
-- [ ] T030 [P] [US3] Add `src/lib/i18n/README.md` documenting how to add a language (create one `Messages` file, append to `LOCALES`, add the endonym) — English, as code docs.
+- [x] T028 [US3] Drive the `general.language` selector options from `LOCALES` + `endonyms` (edit `src/lib/settings/index.ts` to build `options` from the i18n source of truth instead of hardcoding en/ru), so a newly added language appears automatically (FR-009/SC-005).
+- [x] T029 [US3] Verify and harden the missing-key fallback in `src/lib/i18n/store.svelte.ts` (`catalog[loc] → catalog[DEFAULT_LOCALE] → key`), and emit a guarded dev-only `log` warning when a fallback occurs (no `console.*`) (FR-007/SC-004).
+- [x] T030 [P] [US3] Add `src/lib/i18n/README.md` documenting how to add a language (create one `Messages` file, append to `LOCALES`, add the endonym) — English, as code docs.
 - [ ] T031 [US3] Validate extensibility per quickstart Scenario 7: add a temporary `de.ts`, confirm it appears/switches with no screen edits and that `npm run check` enforces completeness, then remove it.
 
 **Checkpoint**: Extensibility and fallback proven; all three stories independently functional.
@@ -123,10 +123,10 @@ UI with zero screen edits; remove one `ru` key → that text shows the English f
 
 **Purpose**: Final validation across all stories.
 
-- [ ] T032 [P] Run `npm run check` (svelte-check) — the completeness gate passes with no missing/extra/mistyped keys (SC-005); fix any reported gaps in `en.ts`/`ru.ts`/`Messages`.
-- [ ] T033 [P] Run `cargo check` and `cargo test` in `src-tauri/` — backend builds with `sys-locale` and the new command.
+- [x] T032 [P] Run `npm run check` (svelte-check) — the completeness gate passes with no missing/extra/mistyped keys (SC-005); fix any reported gaps in `en.ts`/`ru.ts`/`Messages`.
+- [x] T033 [P] Run `cargo check` and `cargo test` in `src-tauri/` — backend builds with `sys-locale` and the new command.
 - [ ] T034 Run quickstart.md Scenarios 1–6 manually and confirm SC-001..SC-007 (whole-UI Russian, live switch, persistence, first-run detection, fallback, plurals, preset label/value split).
-- [ ] T035 [P] Audit Constitution VI logging (warn path in `detect_os_locale`; frontend `initLocale` invoke-failure log) and confirm no `console.*` / `println!` / `dbg!` were introduced.
+- [x] T035 [P] Audit Constitution VI logging (warn path in `detect_os_locale`; frontend `initLocale` invoke-failure log) and confirm no `console.*` / `println!` / `dbg!` were introduced.
 
 ---
 

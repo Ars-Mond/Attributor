@@ -29,6 +29,20 @@ fn search_keywords(query: String, limit: Option<usize>) -> Vec<String> {
     keywords::search_keywords_impl(query, limit)
 }
 
+/// Best-effort OS UI language as a BCP-47 tag (e.g. "ru-RU"). Used once on first launch to pick a
+/// default interface language. Returns "en" when the OS locale is unavailable; never errors for the
+/// merely-absent case and never panics across the IPC boundary.
+#[tauri::command]
+fn detect_os_locale() -> Result<String, String> {
+    match sys_locale::get_locale() {
+        Some(tag) => Ok(tag),
+        None => {
+            log::warn!("detect_os_locale: OS locale unavailable, defaulting to en");
+            Ok("en".to_string())
+        }
+    }
+}
+
 #[tauri::command]
 fn read_metadata(path: String) -> Result<ReadResult, String> {
     let meta = photo::read_metadata(path)?;
@@ -155,6 +169,7 @@ pub fn run() {
             open_folder_path,
             scan_folder,
             search_keywords,
+            detect_os_locale,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
