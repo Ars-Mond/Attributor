@@ -12,7 +12,14 @@ const DEFAULT_OLLAMA_FORMAT = JSON.stringify({
         title: {type: 'string'},
         description: {type: 'string'},
         keywords: {type: 'array', items: {type: 'string'}},
-        categories: {type: 'array', items: {type: 'string'}},
+        categories: {
+            type: 'array',
+            items: {
+                type: 'string',
+                enum: ['Abstract', 'Animals/Wildlife', 'Arts', 'Backgrounds/Textures', 'Beauty/Fashion', 'Buildings/Landmarks', 'Business/Finance', 'Celebrities', 'Education', 'Food and drink', 'Healthcare/Medical', 'Holidays', 'Industrial', 'Interiors', 'Miscellaneous', 'Nature', 'Objects', 'Parks/Outdoor', 'People', 'Religion', 'Science', 'Signs/Symbols', 'Sports/Recreation', 'Technology', 'Transportation', 'Vintage']
+            },
+            maxItems: 2
+        },
         editorial: {type: 'boolean'},
         mature_content: {type: 'boolean'},
         illustration: {type: 'boolean'}

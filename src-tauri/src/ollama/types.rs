@@ -2,10 +2,12 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Result of the reachability heartbeat (`GET /api/version`). No binary probe.
+/// Ollama presence: `installed` = the `ollama` command exists on the system (drives the Install button);
+/// `reachable` = the daemon answers the heartbeat now. Inference auto-starts the daemon when needed.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct OllamaStatus {
+    pub installed: bool,
     pub reachable: bool,
     pub version: Option<String>,
 }

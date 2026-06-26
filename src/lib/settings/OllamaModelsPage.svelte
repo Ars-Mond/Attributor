@@ -1,14 +1,25 @@
 <script lang="ts">
+    import {onMount} from 'svelte';
     import {settings} from './index';
     import {t} from '$lib/i18n';
     import OllamaModelDialog from './OllamaModelDialog.svelte';
-    import type {ModelProfile} from '$lib/ollama/ollama';
+    import {listModels, type ModelProfile} from '$lib/ollama/ollama';
+    import {OFFERED_MODELS} from '$lib/ollama/models';
     import type {SettingSectionProps} from './SettingsSection';
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     let {section, resetSection}: SettingSectionProps = $props();
 
     const profiles = $derived(settings.subscribe<ModelProfile[]>('ollama.modelProfiles')() ?? []);
+
+    // Suggestions for the model-id field: offered models + already-installed models.
+    let installed = $state<string[]>([]);
+    const modelOptions = $derived([...new Set([...OFFERED_MODELS.map(m => m.id), ...installed])]);
+
+    onMount(async () => {
+        try {installed = (await listModels()).map(m => m.name);}
+        catch {installed = [];}
+    });
 
     let editing = $state<ModelProfile | null>(null);
     let isNew = $state(false);
@@ -60,7 +71,7 @@
 </div>
 
 {#if editing}
-    <OllamaModelDialog profile={editing} {isNew} onSave={save} onCancel={() => (editing = null)} />
+    <OllamaModelDialog profile={editing} {isNew} {modelOptions} onSave={save} onCancel={() => (editing = null)} />
 {/if}
 
 <style lang="scss">

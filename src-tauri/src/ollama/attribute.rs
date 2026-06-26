@@ -37,8 +37,9 @@ fn parse_result(raw: &str) -> Result<AttributionResult, String> {
     })
 }
 
-/// Single-image attribution → parsed result (the frontend applies it to the form).
+/// Single-image attribution → parsed result (the frontend applies it to the form). Auto-starts the daemon.
 pub async fn attribute_one(path: &str, cfg: &AttributionConfig) -> Result<AttributionResult, String> {
+    client::ensure_running(&cfg.base_url).await?;
     let image = client::image_to_base64(path)?;
     let raw = client::generate(cfg, image).await?;
     parse_result(&raw)

@@ -29,13 +29,20 @@ fn swap_cancel(state: &OllamaState) -> Arc<AtomicBool> {
     new_flag
 }
 
-/// Reachability heartbeat (no binary probe). Never errors for "not running" — reports `reachable:false`.
+/// Status: `installed` (the `ollama` command exists) and `reachable` (the daemon answers now). Never
+/// errors for "not running". The Install button keys off `installed`; inference auto-starts the daemon.
 #[tauri::command]
 pub async fn ollama_status(base_url: String) -> Result<OllamaStatus, String> {
-    match client::version(&base_url).await {
-        Ok(version) => Ok(OllamaStatus { reachable: true, version: Some(version) }),
-        Err(_) => Ok(OllamaStatus { reachable: false, version: None }),
-    }
+    let (reachable, version) = match client::version(&base_url).await {
+        Ok(v) => (true, Some(v)),
+        Err(_) => (false, None),
+    };
+    let installed = if reachable {
+        true
+    } else {
+        tokio::task::spawn_blocking(client::is_installed).await.unwrap_or(false)
+    };
+    Ok(OllamaStatus { installed, reachable, version })
 }
 
 /// Models currently installed in Ollama (`GET /api/tags`).
@@ -52,6 +59,7 @@ pub async fn ollama_pull_model(
     on_progress: tauri::ipc::Channel<PullProgress>,
     state: tauri::State<'_, OllamaState>,
 ) -> Result<(), String> {
+    client::ensure_running(&base_url).await?;
     let cancel = swap_cancel(state.inner());
     client::pull(&base_url, &model, &cancel, |line| {
         let msg = PullProgress {

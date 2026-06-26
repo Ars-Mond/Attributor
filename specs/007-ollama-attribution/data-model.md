@@ -20,10 +20,12 @@ No new on-disk schema beyond new keys in the existing `settings.json` (`tauri-pl
 
 | Field | Type | Notes |
 |-------|------|-------|
-| reachable | boolean | `/api/version` heartbeat succeeded — daemon up (no binary probe). |
+| installed | boolean | The `ollama` command exists on the system — drives the Install button. |
+| reachable | boolean | `/api/version` heartbeat succeeded — daemon running now. |
 | version | string \| null | Daemon version when reachable. |
 
-- Derived **available** = `reachable && activeModel != ''` → gates the attribute button (FR-007/009).
+- Derived **available** = `installed && activeModel != ''` → gates the attribute button (FR-007/009).
+  Inference auto-starts the daemon (`ollama serve`) when it is not running.
 
 ### OllamaModel (installed; from `/api/tags`)
 

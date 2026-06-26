@@ -2,9 +2,10 @@
     import {t} from '$lib/i18n';
     import type {ModelProfile} from '$lib/ollama/ollama';
 
-    let {profile, isNew, onSave, onCancel}: {
+    let {profile, isNew, modelOptions, onSave, onCancel}: {
         profile: ModelProfile;
         isNew: boolean;
+        modelOptions: string[];
         onSave: (p: ModelProfile) => void;
         onCancel: () => void;
     } = $props();
@@ -71,7 +72,10 @@
             </label>
             <label class="md-field">
                 <span class="md-label">{t('settings.ollamaModel.modelId')}</span>
-                <input class="md-input" type="text" bind:value={modelId} placeholder="llama3.2-vision:11b" />
+                <input class="md-input" type="text" list="ollama-model-options" bind:value={modelId} placeholder="llama3.2-vision:11b" />
+                <datalist id="ollama-model-options">
+                    {#each modelOptions as o (o)}<option value={o}></option>{/each}
+                </datalist>
             </label>
             <label class="md-field">
                 <span class="md-label">{t('settings.ollamaModel.prompt')}</span>

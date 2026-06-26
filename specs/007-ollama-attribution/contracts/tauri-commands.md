@@ -9,7 +9,9 @@ All commands follow Constitution IX: `Result<T, String>`, never panic across the
 ```rust
 #[tauri::command]
 async fn ollama_status(base_url: String) -> Result<OllamaStatus, String>;
-// { reachable: bool, version: Option<String> }  (GET /api/version heartbeat; no binary probe)
+// { installed: bool, reachable: bool, version: Option<String> }
+// installed = `ollama --version` succeeds (or reachable); reachable = /api/version heartbeat.
+// Attribution and pull call client::ensure_running() first, which spawns `ollama serve` if down.
 
 #[tauri::command]
 async fn ollama_list_models(base_url: String) -> Result<Vec<OllamaModel>, String>;
@@ -60,7 +62,7 @@ fn ollama_cancel(state: tauri::State<'_, OllamaState>);   // sets the cancel fla
 ## Payload types (Rust; `#[serde(rename_all = "camelCase")]`; ts-rs for streamed ones)
 
 ```rust
-struct OllamaStatus { reachable: bool, version: Option<String> }
+struct OllamaStatus { installed: bool, reachable: bool, version: Option<String> }
 struct OllamaModel  { name: String, size: u64 }
 
 struct AttributionConfig {

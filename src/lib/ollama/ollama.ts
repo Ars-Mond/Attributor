@@ -4,6 +4,7 @@ import {settings} from '$lib/settings';
 import type {BatchProgress, ItemStatus, PullProgress} from '$lib/events';
 
 export interface OllamaStatus {
+    installed: boolean;
     reachable: boolean;
     version: string | null;
 }

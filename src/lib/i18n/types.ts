@@ -193,6 +193,8 @@ export interface Messages {
     'settings.ollama.status': string;
     'settings.ollama.status.reachable': string;
     'settings.ollama.status.notReachable': string;
+    'settings.ollama.status.installedNotRunning': string;
+    'settings.ollama.status.notInstalled': string;
     'settings.ollama.status.unknown': string;
     'settings.ollama.check': string;
     'settings.ollama.checking': string;

@@ -34,7 +34,7 @@
             await ollama.refresh();
             if (status.reachable) await refreshModels();
         } catch {
-            status = {reachable: false, version: null};
+            status = {installed: false, reachable: false, version: null};
         } finally {
             checking = false;
         }
@@ -85,14 +85,15 @@
     <div class="ob-field">
         <span class="ob-label">{t('settings.ollama.status')}</span>
         <div class="ob-row">
-            <span class="ob-status" class:ok={status?.reachable} class:bad={status && !status.reachable}>
+            <span class="ob-status" class:ok={status?.reachable} class:bad={status && !status.installed}>
                 {#if checking}{t('settings.ollama.checking')}
                 {:else if status?.reachable}{t('settings.ollama.status.reachable', {version: status.version ?? ''})}
-                {:else if status}{t('settings.ollama.status.notReachable')}
+                {:else if status?.installed}{t('settings.ollama.status.installedNotRunning')}
+                {:else if status}{t('settings.ollama.status.notInstalled')}
                 {:else}{t('settings.ollama.status.unknown')}{/if}
             </span>
             <button class="ob-btn" onclick={check} disabled={checking}>{t('settings.ollama.check')}</button>
-            {#if status && !status.reachable}
+            {#if status && !status.installed}
                 <button class="ob-btn" onclick={install} disabled={installing}>
                     {installing ? t('settings.ollama.installing') : t('settings.ollama.install')}
                 </button>
@@ -124,7 +125,7 @@
             <select class="ob-input" bind:value={toDownload}>
                 {#each OFFERED_MODELS as m (m.id)}<option value={m.id}>{m.label}</option>{/each}
             </select>
-            <button class="ob-btn" onclick={download} disabled={!status?.reachable}>{t('settings.ollama.download.button')}</button>
+            <button class="ob-btn" onclick={download} disabled={!status?.installed}>{t('settings.ollama.download.button')}</button>
         </div>
     </div>
 

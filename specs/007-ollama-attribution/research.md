@@ -36,10 +36,12 @@ Already present (no new dep): `tokio`, `serde`/`serde_json`, `image 0.25` (optio
 
 ## Decision 3 — Availability detection & scripted install (updated 2026-06-27)
 
-**Availability**: a single reachability **heartbeat** — `GET /api/version` within a short connect timeout.
-Success ⇒ reachable (daemon up); connection-refused/timeout ⇒ not reachable. **No binary/filesystem probe**
-(per clarification). The status is `{reachable, version}`; attribution is available only when
-`reachable && activeModel != ""` (FR-007). The heartbeat is cheap, debounced, never panics (Result).
+**Availability** (updated): `OllamaStatus { installed, reachable, version }`. `reachable` = `GET /api/version`
+heartbeat succeeds. `installed` = reachable OR the `ollama --version` command succeeds (run via
+`spawn_blocking`). The **Install** button keys off `!installed`; attribution availability =
+`installed && activeModel != ""` (FR-007). **Auto-start**: attribution and pull call `ensure_running()`
+first — if the heartbeat fails it spawns `ollama serve` (detached) and polls `/api/version` (~15 s) until
+ready, so the daemon need not be running up front. Never panics (Result).
 
 **Install (FR-003)**: run the official platform install command at the user's request (per clarification),
 via `std::process::Command` — macOS/Linux: `sh -c "curl -fsSL https://ollama.com/install.sh | sh"`; Windows:

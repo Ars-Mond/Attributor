@@ -161,3 +161,37 @@ pub fn image_to_base64(path: &str) -> Result<String, String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
 }
+
+/// Whether the `ollama` command exists on the system (installed), regardless of the daemon running.
+/// Blocking — call inside `spawn_blocking`.
+pub fn is_installed() -> bool {
+    std::process::Command::new("ollama")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Ensure the daemon is running before an operation: if the heartbeat fails, spawn `ollama serve`
+/// (detached) and poll until it answers (~15 s). Returns Err if Ollama is missing or never comes up.
+pub async fn ensure_running(base_url: &str) -> Result<(), String> {
+    if version(base_url).await.is_ok() {
+        return Ok(());
+    }
+    log::info!("ensure_running: Ollama not reachable, starting `ollama serve`");
+    std::process::Command::new("ollama")
+        .arg("serve")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|_| "Ollama is not installed or could not be started".to_string())?;
+    for _ in 0..30 {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        if version(base_url).await.is_ok() {
+            return Ok(());
+        }
+    }
+    Err("Ollama did not become ready in time".to_string())
+}

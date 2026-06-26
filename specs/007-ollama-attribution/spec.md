@@ -28,7 +28,7 @@ the offered-model list will be provided later."
 ### Session 2026-06-27
 
 - Q: What should the "Install Ollama" action do? → A: Run the official platform install command — macOS/Linux `curl -fsSL https://ollama.com/install.sh | sh`, Windows `irm https://ollama.com/install.ps1 | iex` — then re-check reachability. (Supersedes the earlier "open the download page" default.)
-- Q: How is Ollama availability detected? → A: Reachability heartbeat only (HTTP to the local API); no binary/filesystem probe. Available = reachable AND an active model is selected.
+- Q: How is Ollama availability detected and the daemon started? → A: Detect whether Ollama is INSTALLED (the `ollama` command exists) — this gates the Install button; attribution availability = installed AND an active model is selected. On inference the app auto-starts the daemon (`ollama serve`) if it is not running. (Updates the earlier heartbeat-only note.)
 - Q: The offered-models list to install. → A: `qwen2.5vl:7b`, `qwen2.5vl:3b`, `qwen3-vl:8b`, `llama3.2-vision:11b`, `gemma4:12b`, `gemma3:12b`. (Default prompts and run-parameter values remain deferred.)
 - Q: Should the response-format schema keep the `editorial`/`mature_content`/`illustration` fields even though the app ignores them? → A: Yes — they stay required in the schema sent to Ollama; applying them is a separate future feature.
 
@@ -155,12 +155,12 @@ and the active model's profile (prompt + parameters) is the one used during attr
 #### Ollama configuration & availability
 
 - **FR-001**: Settings MUST include a dedicated "Ollama" category.
-- **FR-002**: The Ollama settings MUST provide an action to check whether Ollama is running/reachable (a reachability heartbeat to the local API), and MUST display the result.
-- **FR-003**: The Ollama settings MUST provide an action to install Ollama by running the official platform install command (macOS/Linux `curl -fsSL https://ollama.com/install.sh | sh`; Windows `irm https://ollama.com/install.ps1 | iex`) when it is not reachable, then re-check reachability.
+- **FR-002**: The Ollama settings MUST provide an action to check whether Ollama is installed (the `ollama` command exists) and whether the daemon is currently running, and MUST display the result.
+- **FR-003**: The Ollama settings MUST provide an action to install Ollama by running the official platform install command (macOS/Linux `curl -fsSL https://ollama.com/install.sh | sh`; Windows `irm https://ollama.com/install.ps1 | iex`) when it is not installed, then re-check status.
 - **FR-004**: The Ollama settings MUST provide a selection of models the app offers for download and an action to download (pull) the chosen model into Ollama, with progress shown during the download.
 - **FR-005**: The Ollama settings MUST provide a selection of the models currently installed in Ollama (sourced from Ollama); the selected one is the active model used for attribution, and the selection MUST persist across restarts.
 - **FR-006**: The Ollama settings MUST include an editable field holding the enforced JSON response format; its description MUST state that it is for debugging only and should not normally be edited.
-- **FR-007**: The app MUST treat attribution as available only when Ollama is reachable AND an active model is selected; otherwise attribution MUST be disabled.
+- **FR-007**: The app MUST treat attribution as available only when Ollama is installed AND an active model is selected; otherwise attribution MUST be disabled. When attribution runs and the daemon is not running, the app MUST auto-start it (`ollama serve`) before the inference.
 
 #### Attribution
 

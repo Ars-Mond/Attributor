@@ -1282,19 +1282,21 @@
                         {batchCancelling ? t('metadata.button.cancel.batch.progress') : t('metadata.button.cancel.batch')}
                     </button>
                 {/if}
-                <button
-                    class="btn-ghost"
-                    onclick={handleBatchAttribute}
-                    disabled={!ollama.available || isSaving || batchLoading}
-                    title={ollama.available ? t('ollama.attribute.tooltip') : t('ollama.unavailable.tooltip')}
-                >{t('ollama.attribute')}</button>
-                <button
-                    class="btn-primary save-btn"
-                    onclick={handleBatchSave}
-                    disabled={isSaving || batchLoading}
-                >
-                    {isSaving ? t('metadata.button.saveBatch.progress', {n: savingCount, total: savingTotal}) : tn('metadata.button.saveBatch', batchPaths.length)}
-                </button>
+                <div class="footer-actions">
+                    <button
+                        class="btn-ghost"
+                        onclick={handleBatchAttribute}
+                        disabled={!ollama.available || isSaving || batchLoading}
+                        title={ollama.available ? t('ollama.attribute.tooltip') : t('ollama.unavailable.tooltip')}
+                    >{t('ollama.attribute')}</button>
+                    <button
+                        class="btn-primary save-btn"
+                        onclick={handleBatchSave}
+                        disabled={isSaving || batchLoading}
+                    >
+                        {isSaving ? t('metadata.button.saveBatch.progress', {n: savingCount, total: savingTotal}) : tn('metadata.button.saveBatch', batchPaths.length)}
+                    </button>
+                </div>
             {:else}
                 <label class="autosave-toggle">
                     <input
@@ -1304,17 +1306,19 @@
                     />
                     <span>{t('metadata.button.autosave')}</span>
                 </label>
-                <button
-                    class="btn-ghost"
-                    onclick={handleAttribute}
-                    disabled={!ollama.available || !filepath}
-                    title={ollama.available ? t('ollama.attribute.tooltip') : t('ollama.unavailable.tooltip')}
-                >{t('ollama.attribute')}</button>
-                <button
-                    class="btn-primary save-btn"
-                    onclick={handleSave}
-                    disabled={!filepath}
-                >{t('metadata.button.saveChanges')}</button>
+                <div class="footer-actions">
+                    <button
+                        class="btn-ghost"
+                        onclick={handleAttribute}
+                        disabled={!ollama.available || !filepath}
+                        title={ollama.available ? t('ollama.attribute.tooltip') : t('ollama.unavailable.tooltip')}
+                    >{t('ollama.attribute')}</button>
+                    <button
+                        class="btn-primary save-btn"
+                        onclick={handleSave}
+                        disabled={!filepath}
+                    >{t('metadata.button.saveChanges')}</button>
+                </div>
             {/if}
         </div>
     </footer>
@@ -1543,8 +1547,14 @@
         input[type="checkbox"] { accent-color: $accent; cursor: pointer; }
     }
 
-    .save-btn {
+    // Ollama attribute + Save grouped together on the right of the footer.
+    .footer-actions {
+        @include flex(row, flex-end, center);
+        gap: 8px;
         margin-left: auto;
+    }
+
+    .save-btn {
         &:disabled { opacity: 0.4; cursor: not-allowed; }
     }
 
