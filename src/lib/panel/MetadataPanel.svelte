@@ -7,6 +7,9 @@
     import {loadAppState, saveAppState} from "$lib/store";
     import {settings} from "$lib/settings";
     import {t, tn, type MessageKey} from "$lib/i18n";
+    import {attributePhoto, attributeBatch, cancelOllama} from "$lib/ollama/ollama";
+    import {ollama} from "$lib/ollama/availability.svelte";
+    import {progress} from "$lib/progress.svelte";
     import type {Metadata, ReadResult} from "$lib/types";
     import type {BatchProgress, ItemStatus} from "$lib/events";
     import {SvelteMap} from "svelte/reactivity";
@@ -57,7 +60,53 @@
         if (s.stockKeywordsOpen !== undefined) stockKeywordsOpen = s.stockKeywordsOpen;
         if (s.optionalOpen !== undefined) optionalOpen = s.optionalOpen;
         uiLoaded = true;
+        void ollama.refresh();
     });
+
+    // ── Ollama attribution ─────────────────────────────────────────────────
+
+    /** Single-photo attribution: fill the form from the model (overwrite text, append+dedupe keywords). */
+    async function handleAttribute() {
+        if (!ollama.available || !filepath) return;
+        const handle = progress.run({label: t('ollama.attribute.progress')});
+        try {
+            const r = await attributePhoto(filepath);
+            title = r.title;
+            description = r.description;
+            categories = r.categories.join(', ');
+            for (const kw of r.keywords) addKeyword(kw);
+        } catch (e) {
+            saveError = t('ollama.attribute.failed', {error: e instanceof Error ? e.message : String(e)});
+        } finally {
+            handle.done();
+        }
+    }
+
+    /** Batch attribution: attribute + always save every selected photo, via the blocking overlay. */
+    async function handleBatchAttribute() {
+        if (!ollama.available || isSaving || batchLoading) return;
+        const paths = [...batchPaths];
+        const handle = progress.run({
+            label: t('ollama.attribute.batch.progress'),
+            total: paths.length,
+            blocking: true,
+            cancelable: true,
+            onCancel: () => {cancelOllama();}
+        });
+        if (batchGuardTimer) {clearTimeout(batchGuardTimer); batchGuardTimer = null;}
+        panelState.batchInProgress = true;
+        let done = 0;
+        try {
+            await attributeBatch(paths, () => {done++; handle.update({value: done});});
+            loadBatchData(batchPaths);
+        } catch (e) {
+            console.error('batch attribution failed:', e);
+        } finally {
+            handle.done();
+            // Keep the watcher-rescan guard armed briefly past our own writes (see handleBatchSave).
+            batchGuardTimer = setTimeout(() => {panelState.batchInProgress = false; batchGuardTimer = null;}, 1000);
+        }
+    }
 
     // Persist textarea height via ResizeObserver — writes directly to store, no reactive state
     $effect(() => {
@@ -361,6 +410,14 @@
         }
         panelState.batchInProgress = true;
 
+        // Route through the top-most overlay and freeze the UI until the save completes (FR-020).
+        const handle = progress.run({
+            label: t('metadata.button.saveBatch.progress', {n: 0, total: paths.length}),
+            blocking: true,
+            cancelable: true,
+            onCancel: () => {cancelBatchSave();}
+        });
+
         // Resolve each file's final metadata from data already loaded for the batch (no re-read).
         const items: Metadata[] = paths.map(path => {
             const cur = batchFileMeta.get(path);
@@ -380,6 +437,7 @@
         channel.onmessage = (m) => {
             batchResults.set(m.index, m.status);
             savingCount = batchResults.size;
+            handle.update({label: t('metadata.button.saveBatch.progress', {n: savingCount, total: savingTotal})});
         };
 
         try {
@@ -388,6 +446,7 @@
             console.error('batch save failed:', e);
         }
 
+        handle.done();
         savingTotal = 0;
         batchCancelling = false;
         // Reload to reflect saved state
@@ -1224,6 +1283,12 @@
                     </button>
                 {/if}
                 <button
+                    class="btn-ghost"
+                    onclick={handleBatchAttribute}
+                    disabled={!ollama.available || isSaving || batchLoading}
+                    title={ollama.available ? t('ollama.attribute.tooltip') : t('ollama.unavailable.tooltip')}
+                >{t('ollama.attribute')}</button>
+                <button
                     class="btn-primary save-btn"
                     onclick={handleBatchSave}
                     disabled={isSaving || batchLoading}
@@ -1239,6 +1304,12 @@
                     />
                     <span>{t('metadata.button.autosave')}</span>
                 </label>
+                <button
+                    class="btn-ghost"
+                    onclick={handleAttribute}
+                    disabled={!ollama.available || !filepath}
+                    title={ollama.available ? t('ollama.attribute.tooltip') : t('ollama.unavailable.tooltip')}
+                >{t('ollama.attribute')}</button>
                 <button
                     class="btn-primary save-btn"
                     onclick={handleSave}

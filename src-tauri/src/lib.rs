@@ -2,6 +2,7 @@ pub mod batch;
 pub mod events;
 pub mod folder;
 mod keywords;
+mod ollama;
 mod photo;
 mod types;
 
@@ -137,6 +138,7 @@ pub fn run() {
         }))
         .manage(FolderState::default())
         .manage(BatchState::default())
+        .manage(ollama::OllamaState::default())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(if cfg!(debug_assertions) {
@@ -170,6 +172,13 @@ pub fn run() {
             scan_folder,
             search_keywords,
             detect_os_locale,
+            ollama::ollama_status,
+            ollama::ollama_list_models,
+            ollama::ollama_pull_model,
+            ollama::install_ollama,
+            ollama::ollama_cancel,
+            ollama::attribute_photo,
+            ollama::attribute_batch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

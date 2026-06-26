@@ -37,6 +37,9 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 little_exif = { git = "https://github.com/Ars-Mond/little_exif.git" }
 rayon = "1"
 sys-locale = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+base64 = "0.22"
+futures-util = "0.3"
 
 [dev-dependencies]
 ts-rs = "10"

@@ -20,6 +20,7 @@
     import ImageViewerPanel from "$lib/panel/ImageViewerPanel.svelte";
     import InputContextMenu from "$lib/reusable/InputContextMenu.svelte";
     import SettingsDialog from "$lib/settings/SettingsDialog.svelte";
+    import ProgressOverlay from "$lib/reusable/ProgressOverlay.svelte";
     import {settings} from "$lib/settings";
     import {shortcuts} from "$lib/shortcuts";
     import {t, initLocale, type MessageKey} from "$lib/i18n";
@@ -407,6 +408,9 @@
         onCancel={handleDialogCancel}
     />
 {/if}
+
+<!-- Top-most reusable progress overlay (Ollama pull/attribution, batch save freeze) -->
+<ProgressOverlay />
 
 <style lang="scss">
     @use 'styles/mixins' as *;

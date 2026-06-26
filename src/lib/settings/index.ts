@@ -1,6 +1,24 @@
 import {settings} from './registry.svelte';
 import {LOCALES, ENDONYMS} from '$lib/i18n/types';
 import ShortcutsPage from '$lib/shortcuts/ShortcutsPage.svelte';
+import OllamaSettingsPage from './OllamaSettingsPage.svelte';
+import OllamaModelsPage from './OllamaModelsPage.svelte';
+
+// Default enforced JSON schema for Ollama structured output (FR-006). Debug-only field; the three flags
+// are required in the schema (model returns them) but ignored by the app this feature.
+const DEFAULT_OLLAMA_FORMAT = JSON.stringify({
+    type: 'object',
+    properties: {
+        title: {type: 'string'},
+        description: {type: 'string'},
+        keywords: {type: 'array', items: {type: 'string'}},
+        categories: {type: 'array', items: {type: 'string'}},
+        editorial: {type: 'boolean'},
+        mature_content: {type: 'boolean'},
+        illustration: {type: 'boolean'}
+    },
+    required: ['title', 'description', 'keywords', 'categories', 'editorial', 'mature_content', 'illustration']
+}, null, 2);
 
 export {settings};
 
@@ -116,6 +134,44 @@ settings.register('caching',
         description: 'settings.caching.lazy.description'
     }
 );
+
+// Ollama: custom section pages own their UI; the registered keys persist via the store (component XOR fields).
+settings.registerSection({
+    id: 'ollama',
+    label: 'settings.section.ollama',
+    order: 4,
+    component: OllamaSettingsPage
+});
+settings.registerSection({
+    id: 'ollama-models',
+    label: 'settings.section.ollamaModels',
+    order: 5,
+    component: OllamaModelsPage
+});
+settings.register('ollama', {
+    key: 'ollama.baseUrl',
+    type: 'string',
+    default: 'http://localhost:11434',
+    label: 'settings.ollama.baseUrl'
+});
+settings.register('ollama', {
+    key: 'ollama.activeModel',
+    type: 'string',
+    default: '',
+    label: 'settings.ollama.activeModel'
+});
+settings.register('ollama', {
+    key: 'ollama.responseFormat',
+    type: 'string',
+    default: DEFAULT_OLLAMA_FORMAT,
+    label: 'settings.ollama.responseFormat'
+});
+settings.register('ollama-models', {
+    key: 'ollama.modelProfiles',
+    type: 'custom',
+    default: [],
+    label: 'settings.section.ollamaModels'
+});
 
 settings.registerSection({
     id: 'shortcuts',
