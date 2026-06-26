@@ -1,6 +1,7 @@
 <script lang="ts">
     import ConfirmDialog from './ConfirmDialog.svelte';
     import type {DialogButton} from '$lib/types';
+    import {t} from '$lib/i18n';
 
     let {
         filename,
@@ -14,13 +15,13 @@
         onCancel: () => void;
     } = $props();
 
-    const buttons: DialogButton[] = [
+    const buttons: DialogButton[] = $derived([
         {
-            label: 'Cancel',
+            label: t('common.cancel'),
             onClick: () => onCancel(),
         },
         {
-            label: 'Discard',
+            label: t('common.discard'),
             onClick: () => onDiscard(),
             border: 'var(--required-color)',
             color: 'var(--required-color)',
@@ -29,7 +30,7 @@
             hoverColor: 'var(--required-color)',
         },
         {
-            label: 'Save',
+            label: t('common.save'),
             onClick: () => onSave(),
             bg: 'var(--accent)',
             color: '#fff',
@@ -39,12 +40,12 @@
             activeBg: 'var(--accent-active)',
             activeBorder: 'var(--accent-active)',
         },
-    ];
+    ]);
 </script>
 
 <ConfirmDialog
-    title="Unsaved Changes"
-    body="{filename} has unsaved changes."
+    title={t('dialog.unsavedChanges.title')}
+    body={t('dialog.unsavedChanges.body', {filename})}
     icon="warning"
     {buttons}
     onClose={onCancel}

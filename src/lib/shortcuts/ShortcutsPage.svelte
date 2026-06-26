@@ -1,6 +1,7 @@
 <script lang="ts">
     import {shortcuts, normalizeBinding} from './registry.svelte';
     import {debug} from '@tauri-apps/plugin-log';
+    import {t, type MessageKey} from '$lib/i18n';
     import type {ActionDescriptor} from './types';
     import type {SettingSectionProps} from '$lib/settings/SettingsSection';
 
@@ -73,7 +74,7 @@
 <div class="shortcuts-page">
     {#each shortcuts.getSections() as sectionName}
         <div class="shortcut-section">
-            <h3 class="section-header">{sectionName}</h3>
+            <h3 class="section-header">{t(sectionName as MessageKey)}</h3>
             {#each shortcuts.getActionsBySection(sectionName) as action (action.id)}
                 {@const effective = shortcuts.getEffectiveBinding(action.id)}
                 {@const isModified = shortcuts.getUserBinding(action.id) !== null}
@@ -81,26 +82,26 @@
                 {@const hasConflict = conflictFor === action.id}
 
                 <div class="shortcut-row">
-                    <span class="action-label">{action.label}</span>
+                    <span class="action-label">{t(action.label as MessageKey)}</span>
                     <button
                         class="binding-btn"
                         class:listening={isListening}
                         class:modified={isModified}
                         onclick={() => startListening(action.id)}
-                    >{isListening ? 'Press keys...' : (effective ?? '—')}</button>
+                    >{isListening ? t('shortcuts.binding.listening') : (effective ?? '—')}</button>
                     <button
                         class="reset-action-btn"
                         disabled={!isModified}
                         onclick={() => { shortcuts.setUserBinding(action.id, null); shortcuts.save(); }}
-                        aria-label="Reset to default"
+                        aria-label={t('shortcuts.binding.resetToDefault')}
                     >↺</button>
                 </div>
 
                 {#if hasConflict && conflictWith}
                     <div class="conflict-row">
-                        <span class="conflict-msg">Already used by: {conflictWith.label}</span>
-                        <button class="conflict-btn" onclick={handleReassign}>Reassign</button>
-                        <button class="conflict-btn" onclick={handleCancelConflict}>Cancel</button>
+                        <span class="conflict-msg">{t('shortcuts.conflict.usedBy')} {t(conflictWith.label as MessageKey)}</span>
+                        <button class="conflict-btn" onclick={handleReassign}>{t('common.reassign')}</button>
+                        <button class="conflict-btn" onclick={handleCancelConflict}>{t('common.cancel')}</button>
                     </div>
                 {/if}
             {/each}
@@ -109,7 +110,7 @@
 
     <div class="page-footer">
         <button class="reset-all-btn" onclick={() => { shortcuts.resetAll(); shortcuts.save(); }}>
-            Reset all shortcuts
+            {t('shortcuts.resetAll')}
         </button>
     </div>
 </div>

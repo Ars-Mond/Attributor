@@ -24,38 +24,39 @@ shortcuts.registerLayer({
     suppressBelow: true
 });
 
+// `label`/`section` hold i18n message keys; ShortcutsPage resolves them via t() at render time.
 shortcuts.registerAction({
     id: 'file.open_folder',
-    label: 'Open Folder',
-    section: 'File',
+    label: 'shortcuts.action.openFolder',
+    section: 'shortcuts.section.file',
     defaultBinding: 'Ctrl+O',
     handler: () => {}
 });
 shortcuts.registerAction({
     id: 'file.settings',
-    label: 'Settings',
-    section: 'File',
+    label: 'shortcuts.action.settings',
+    section: 'shortcuts.section.file',
     defaultBinding: 'Ctrl+,',
     handler: () => {}
 });
 shortcuts.registerAction({
     id: 'editor.save',
-    label: 'Save',
-    section: 'Editor',
+    label: 'shortcuts.action.save',
+    section: 'shortcuts.section.editor',
     defaultBinding: 'Ctrl+S',
     handler: () => {}
 });
 shortcuts.registerAction({
     id: 'editor.copy_kw',
-    label: 'Copy Keywords',
-    section: 'Editor',
+    label: 'shortcuts.action.copyKeywords',
+    section: 'shortcuts.section.editor',
     defaultBinding: 'Ctrl+Shift+C',
     handler: () => {}
 });
 shortcuts.registerAction({
     id: 'editor.paste_kw',
-    label: 'Paste Keywords',
-    section: 'Editor',
+    label: 'shortcuts.action.pasteKeywords',
+    section: 'shortcuts.section.editor',
     defaultBinding: 'Ctrl+Shift+V',
     handler: () => {}
 });

@@ -1,6 +1,7 @@
 <script lang="ts">
     import {onMount, onDestroy} from 'svelte';
     import {readText} from '@tauri-apps/plugin-clipboard-manager';
+    import {t} from '$lib/i18n';
 
     // Approximate menu dimensions for viewport clamping before DOM measurement
     const MENU_W = 170;
@@ -92,7 +93,7 @@
             onclick={copy}
             onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && copy()}
         >
-            <span>Copy</span>
+            <span>{t('common.copy')}</span>
             <span class="ctx-shortcut">Ctrl+C</span>
         </li>
         <li
@@ -102,7 +103,7 @@
             onclick={paste}
             onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && paste()}
         >
-            <span>Paste</span>
+            <span>{t('common.paste')}</span>
             <span class="ctx-shortcut">Ctrl+V</span>
         </li>
     </ul>

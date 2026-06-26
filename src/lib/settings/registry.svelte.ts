@@ -12,6 +12,7 @@ class SettingsRegistry {
     #sections = new Map<string, SettingsSection>();
     #descriptors = new Map<string, SettingDescriptor>();
     #values = $state<Record<string, unknown>>({});
+    #loadedKeys = new Set<string>();
     #saveTimer: ReturnType<typeof setTimeout> | null = null;
 
     registerSection(config: SettingsSectionConfig): void {
@@ -52,6 +53,11 @@ class SettingsRegistry {
         return () => this.get<T>(key);
     }
 
+    /** Whether a key was present in the persisted store at load time (vs. left at its default). */
+    wasPersisted(key: string): boolean {
+        return this.#loadedKeys.has(key);
+    }
+
     reset(key: string): void {
         if (!key) return;
         const d = this.#descriptors.get(key);
@@ -86,6 +92,7 @@ class SettingsRegistry {
                 for (const [k, v] of Object.entries(stored)) {
                     if (k && this.#descriptors.has(k)) {
                         this.#values[k] = v;
+                        this.#loadedKeys.add(k);
                     }
                 }
             }

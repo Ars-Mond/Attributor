@@ -2,6 +2,7 @@
     import {onDestroy} from 'svelte';
     import {settings} from './index';
     import {shortcuts} from '$lib/shortcuts';
+    import {t, type MessageKey} from '$lib/i18n';
     import type {SettingDescriptor} from './types';
     import type {SettingsSection} from './SettingsSection';
 
@@ -75,14 +76,14 @@
             class="dialog"
             role="dialog"
             aria-modal="true"
-            aria-label="Settings"
+            aria-label={t('settings.dialog.title')}
             tabindex="-1"
             onclick={(e) => e.stopPropagation()}
             onkeydown={(e) => e.key !== 'Escape' && e.stopPropagation()}
         >
             <div class="dlg-header">
-                <span class="dlg-title">Settings</span>
-                <button class="close-btn" onclick={onClose} aria-label="Close">✕</button>
+                <span class="dlg-title">{t('settings.dialog.title')}</span>
+                <button class="close-btn" onclick={onClose} aria-label={t('common.close')}>✕</button>
             </div>
 
             <div class="dlg-body">
@@ -92,7 +93,7 @@
                             class="section-btn"
                             class:active={activeSectionId === section.id}
                             onclick={() => { activeSectionId = section.id; }}
-                        >{section.label}</button>
+                        >{t(section.label as MessageKey)}</button>
                     {/each}
                 </nav>
 
@@ -125,18 +126,18 @@
                                                 checked={settings.get<boolean>(descriptor.key)}
                                                 onchange={(e) => settings.set(descriptor.key, e.currentTarget.checked)}
                                             />
-                                            {descriptor.label}
+                                            {t(descriptor.label as MessageKey)}
                                         </label>
                                     {:else}
                                         <label class="field-label" for="setting-{descriptor.key}">
-                                            {descriptor.label}
+                                            {t(descriptor.label as MessageKey)}
                                         </label>
 
                                         {#if descriptor.type === 'int'}
                                             <div class="stepper">
                                                 <button
                                                     class="step-btn"
-                                                    aria-label="Decrease"
+                                                    aria-label={t('settings.stepper.decrease')}
                                                     onpointerdown={() => startStepper(descriptor.key, -1, descriptor)}
                                                     onpointerup={stopStepper}
                                                     onpointerleave={stopStepper}
@@ -162,7 +163,7 @@
                                                 />
                                                 <button
                                                     class="step-btn"
-                                                    aria-label="Increase"
+                                                    aria-label={t('settings.stepper.increase')}
                                                     onpointerdown={() => startStepper(descriptor.key, 1, descriptor)}
                                                     onpointerup={stopStepper}
                                                     onpointerleave={stopStepper}
@@ -211,7 +212,7 @@
                                     {/if}
 
                                     {#if descriptor.description}
-                                        <p class="field-desc">{descriptor.description}</p>
+                                        <p class="field-desc">{t(descriptor.description as MessageKey)}</p>
                                     {/if}
                                 </div>
                             {/if}
@@ -224,7 +225,7 @@
                 <button
                     class="reset-btn"
                     onclick={() => settings.resetSection(activeSection?.id ?? '')}
-                >Reset to defaults</button>
+                >{t('common.reset')}</button>
             </div>
         </div>
     </div>

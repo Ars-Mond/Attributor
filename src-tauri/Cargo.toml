@@ -36,6 +36,7 @@ nucleo-matcher = "0.3.1"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 little_exif = { git = "https://github.com/Ars-Mond/little_exif.git" }
 rayon = "1"
+sys-locale = "0.3"
 
 [dev-dependencies]
 ts-rs = "10"

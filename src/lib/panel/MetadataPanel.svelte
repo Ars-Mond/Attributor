@@ -6,6 +6,7 @@
     import ConfirmDialog from "$lib/dialog/ConfirmDialog.svelte";
     import {loadAppState, saveAppState} from "$lib/store";
     import {settings} from "$lib/settings";
+    import {t, tn, type MessageKey} from "$lib/i18n";
     import type {Metadata, ReadResult} from "$lib/types";
     import type {BatchProgress, ItemStatus} from "$lib/events";
     import {SvelteMap} from "svelte/reactivity";
@@ -141,13 +142,13 @@
     const validationErrors = $derived(
         isBatch ? [] :
         !filepath
-            ? ['No file selected']
+            ? [t('metadata.validation.noFileSelected')]
             : (
                 [
-                    !filename.trim() && 'Filename is required',
-                    !title.trim() && 'Title is required',
-                    !description.trim() && 'Description is required',
-                    keywords.length === 0 && 'At least one keyword is required',
+                    !filename.trim() && t('metadata.validation.filenameRequired'),
+                    !title.trim() && t('metadata.validation.titleRequired'),
+                    !description.trim() && t('metadata.validation.descriptionRequired'),
+                    keywords.length === 0 && t('metadata.validation.keywordRequired'),
                 ] as (string | false)[]
             ).filter((v): v is string => !!v)
     );
@@ -190,8 +191,8 @@
     // ── Field stats (depends on batch state) ──────────────────────────────
 
     const titleWords = $derived.by(() => {
-        const t = isBatch ? batchTitle : title;
-        return t.trim() ? t.split(' ').length : 0;
+        const tv = isBatch ? batchTitle : title;
+        return tv.trim() ? tv.split(' ').length : 0;
     });
     const titleChars = $derived(isBatch ? batchTitle.length : title.length);
     const descWords = $derived.by(() => {
@@ -789,25 +790,25 @@
 
 <aside class="panel">
     <div class="panel-content">
-        <h2 class="panel-title">Metadata</h2>
+        <h2 class="panel-title">{t('metadata.title')}</h2>
 
         <!-- ── File info ── -->
         {#if isBatch}
             <div class="file-info">
                 <div class="file-status-row">
                     <span class="status-dot status-dot--batch"></span>
-                    <span class="status-label status-label--batch">Batch</span>
-                    <span class="file-basename">{batchPaths.length} files</span>
+                    <span class="status-label status-label--batch">{t('metadata.fileStatus.batch')}</span>
+                    <span class="file-basename">{tn('metadata.batch.fileCount', batchPaths.length)}</span>
                 </div>
                 {#if batchLoading}
-                    <span class="file-path">Loading...</span>
+                    <span class="file-path">{t('metadata.batch.loading')}</span>
                 {/if}
             </div>
         {:else}
             <div class="file-info">
                 <div class="file-status-row">
                     <span class="status-dot status-dot--{fileStatus}"></span>
-                    <span class="status-label status-label--{fileStatus}">{fileStatus}</span>
+                    <span class="status-label status-label--{fileStatus}">{t(`metadata.fileStatus.${fileStatus}` as MessageKey)}</span>
                     {#if filename}
                         <span class="file-basename">{filename}</span>
                     {/if}
@@ -821,21 +822,21 @@
         <!-- ── Required / batch fields ── -->
         {#if isBatch}
             <section class="field-group">
-                <p class="group-label">Fields</p>
+                <p class="group-label">{t('metadata.fieldGroup.fields')}</p>
 
                 <!-- Title -->
                 <div class="field">
                     <div class="field-header">
                         <label class="batch-apply-label">
                             <input type="checkbox" bind:checked={applyTitle} />
-                            <span class="field-label">Title</span>
+                            <span class="field-label">{t('metadata.field.title')}</span>
                         </label>
-                        <span class="field-stats">{titleWords}w : {titleChars}l</span>
+                        <span class="field-stats">{tn('metadata.stats.words', titleWords)} : {tn('metadata.stats.chars', titleChars)}</span>
                     </div>
                     <input
                         class="input"
                         type="text"
-                        placeholder={batchTitleMixed ? '(mixed values)' : 'A stunning mountain sunset'}
+                        placeholder={batchTitleMixed ? t('metadata.batch.mixedValues') : t('metadata.field.title.placeholder')}
                         bind:value={batchTitle}
                         oninput={() => { if (batchTitle) applyTitle = true; }}
                     />
@@ -846,14 +847,14 @@
                     <div class="field-header">
                         <label class="batch-apply-label">
                             <input type="checkbox" bind:checked={applyDescription} />
-                            <span class="field-label">Description</span>
+                            <span class="field-label">{t('metadata.field.description')}</span>
                         </label>
-                        <span class="field-stats">{descWords}w : {descChars}l</span>
+                        <span class="field-stats">{tn('metadata.stats.words', descWords)} : {tn('metadata.stats.chars', descChars)}</span>
                     </div>
                     <textarea
                         bind:this={descriptionEl}
                         class="input textarea"
-                        placeholder={batchDescMixed ? '(mixed values)' : 'Describe the image in detail...'}
+                        placeholder={batchDescMixed ? t('metadata.batch.mixedValues') : t('metadata.field.description.placeholder')}
                         rows={4}
                         bind:value={batchDescription}
                         oninput={() => { if (batchDescription) applyDescription = true; }}
@@ -862,12 +863,12 @@
 
                 <!-- Keywords (batch) -->
                 <div class="field">
-                    <span class="field-label">Keywords <span class="hint">— Enter or ", " to add</span></span>
+                    <span class="field-label">{t('metadata.field.keywords')} <span class="hint">— {t('metadata.field.keywords.hint')}</span></span>
                     <input
                         bind:this={batchKwInputEl}
                         class="input"
                         type="text"
-                        placeholder="Add keyword to all..."
+                        placeholder={t('metadata.field.keywords.batch.placeholder')}
                         bind:value={batchKeywordInput}
                         onkeydown={handleBatchKeywordKeydown}
                         oninput={handleBatchKeywordInput}
@@ -878,36 +879,36 @@
                             class="kw-action-btn"
                             onclick={copyBatchKeywords}
                             disabled={batchKeywordStates.filter(s => s.state === 'all').length === 0}
-                            title="Copy common keywords to clipboard"
+                            title={t('metadata.button.copy.batch.title')}
                         >
                             <svg viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6z"/>
                                 <path d="M2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h-1v1H2V6h1V5H2z"/>
                             </svg>
-                            Copy
+                            {t('metadata.button.copy')}
                         </button>
                         <button
                             class="kw-action-btn"
                             onclick={pasteBatchKeywords}
-                            title="Paste keywords from clipboard"
+                            title={t('metadata.button.paste.title')}
                         >
                             <svg viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
                                 <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
                             </svg>
-                            Paste
+                            {t('metadata.button.paste')}
                         </button>
                         <button
                             class="kw-action-btn kw-action-btn--danger"
                             onclick={() => { showClearConfirm = true; }}
                             disabled={batchKeywordStates.length === 0}
-                            title="Clear all keywords"
+                            title={t('metadata.button.clear.title')}
                         >
                             <svg viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
                                 <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
                             </svg>
-                            Clear
+                            {t('metadata.button.clear')}
                         </button>
                         <span class="kw-count">{batchKeywordStates.length}</span>
                     </div>
@@ -935,14 +936,14 @@
                                             <button
                                                 class="chip-promote"
                                                 onclick={() => promoteBatchKeyword(item.word)}
-                                                title="Add to all files"
+                                                title={t('metadata.chip.promoteToAll')}
                                             ></button>
                                         {/if}
                                         {item.word}
                                         <button
                                             class="chip-remove"
                                             onclick={() => removeBatchKeyword(item.word)}
-                                            aria-label="Remove keyword {item.word}"
+                                            aria-label="{t('metadata.chip.removeKeyword')} {item.word}"
                                         >×</button>
                                     </span>
                                 {/if}
@@ -954,46 +955,46 @@
         {:else}
             <!-- ── Required fields (single mode) ── -->
             <section class="field-group">
-                <p class="group-label">Required</p>
+                <p class="group-label">{t('metadata.fieldGroup.required')}</p>
 
                 <label class="field">
                     <span class="field-label">
-                        Filename <span class="required">*</span>
-                        <span class="hint">— rename on save</span>
+                        {t('metadata.field.filename')} <span class="required">*</span>
+                        <span class="hint">— {t('metadata.field.filename.hint')}</span>
                     </span>
                     <input
                         class="input"
                         class:input--invalid={saveAttempted && !filename.trim()}
                         type="text"
-                        placeholder="mountain_sunset"
+                        placeholder={t('metadata.field.filename.placeholder')}
                         bind:value={filename}
                     />
                 </label>
 
                 <label class="field">
                     <div class="field-header">
-                        <span class="field-label">Title <span class="required">*</span></span>
-                        <span class="field-stats">{titleWords}w : {titleChars}l</span>
+                        <span class="field-label">{t('metadata.field.title')} <span class="required">*</span></span>
+                        <span class="field-stats">{tn('metadata.stats.words', titleWords)} : {tn('metadata.stats.chars', titleChars)}</span>
                     </div>
                     <input
                         class="input"
                         class:input--invalid={saveAttempted && !title.trim()}
                         type="text"
-                        placeholder="A stunning mountain sunset"
+                        placeholder={t('metadata.field.title.placeholder')}
                         bind:value={title}
                     />
                 </label>
 
                 <label class="field">
                     <div class="field-header">
-                        <span class="field-label">Description <span class="required">*</span></span>
-                        <span class="field-stats">{descWords}w : {descChars}l</span>
+                        <span class="field-label">{t('metadata.field.description')} <span class="required">*</span></span>
+                        <span class="field-stats">{tn('metadata.stats.words', descWords)} : {tn('metadata.stats.chars', descChars)}</span>
                     </div>
                     <textarea
                         bind:this={descriptionEl}
                         class="input textarea"
                         class:input--invalid={saveAttempted && !description.trim()}
-                        placeholder="Describe the image in detail..."
+                        placeholder={t('metadata.field.description.placeholder')}
                         rows={4}
                         bind:value={description}
                     ></textarea>
@@ -1001,15 +1002,15 @@
 
                 <div class="field">
                     <span class="field-label">
-                        Keywords <span class="required">*</span>
-                        <span class="hint">— Enter or ", " to add</span>
+                        {t('metadata.field.keywords')} <span class="required">*</span>
+                        <span class="hint">— {t('metadata.field.keywords.hint')}</span>
                     </span>
                     <input
                         bind:this={inputEl}
                         class="input"
                         class:input--invalid={saveAttempted && keywords.length === 0}
                         type="text"
-                        placeholder="mountain, sunset, nature..."
+                        placeholder={t('metadata.field.keywords.placeholder')}
                         bind:value={keywordInput}
                         onkeydown={handleKeywordKeydown}
                         oninput={handleKeywordInput}
@@ -1020,36 +1021,36 @@
                             class="kw-action-btn"
                             onclick={copyKeywords}
                             disabled={keywords.length === 0}
-                            title="Copy keywords to clipboard"
+                            title={t('metadata.button.copy.title')}
                         >
                             <svg viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6z"/>
                                 <path d="M2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h-1v1H2V6h1V5H2z"/>
                             </svg>
-                            Copy
+                            {t('metadata.button.copy')}
                         </button>
                         <button
                             class="kw-action-btn"
                             onclick={pasteKeywords}
-                            title="Paste keywords from clipboard"
+                            title={t('metadata.button.paste.title')}
                         >
                             <svg viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
                                 <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
                             </svg>
-                            Paste
+                            {t('metadata.button.paste')}
                         </button>
                         <button
                             class="kw-action-btn kw-action-btn--danger"
                             onclick={() => { showClearConfirm = true; }}
                             disabled={keywords.length === 0}
-                            title="Clear all keywords"
+                            title={t('metadata.button.clear.title')}
                         >
                             <svg viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
                                 <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
                             </svg>
-                            Clear
+                            {t('metadata.button.clear')}
                         </button>
                         <span class="kw-count">{keywords.length}</span>
                     </div>
@@ -1075,7 +1076,7 @@
                                         <button
                                             class="chip-remove"
                                             onclick={() => removeKeyword(item)}
-                                            aria-label="Remove keyword {item}"
+                                            aria-label="{t('metadata.chip.removeKeyword')} {item}"
                                         >×</button>
                                     </span>
                                 {/if}
@@ -1093,7 +1094,7 @@
             ontoggle={(e) => stockKeywordsOpen = (e.currentTarget as HTMLDetailsElement).open}
         >
             <summary class="optional-summary">
-                <span class="group-label" style="border: none; padding: 0;">Stock Keywords</span>
+                <span class="group-label" style="border: none; padding: 0;">{t('metadata.keywords.optionalSection')}</span>
                 <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 6l4 4 4-4"/>
                 </svg>
@@ -1101,7 +1102,8 @@
             <div class="optional-body presets">
                 {#each Object.entries(presets) as [group, tags]}
                     <div class="preset-group">
-                        <span class="preset-group-label">{group}</span>
+                        <!-- Category labels are localized; the keyword VALUES below stay English (FR-014). -->
+                        <span class="preset-group-label">{t(`metadata.keywords.stockKeywords.${group.toLowerCase()}` as MessageKey)}</span>
                         <div class="preset-tags">
                             {#each tags as tag}
                                 <button
@@ -1125,7 +1127,7 @@
             ontoggle={(e) => optionalOpen = (e.currentTarget as HTMLDetailsElement).open}
         >
             <summary class="optional-summary">
-                <span class="group-label" style="border: none; padding: 0;">Optional</span>
+                <span class="group-label" style="border: none; padding: 0;">{t('metadata.optional.section')}</span>
                 <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 6l4 4 4-4"/>
                 </svg>
@@ -1136,25 +1138,25 @@
                         <div class="field-header">
                             <label class="batch-apply-label">
                                 <input type="checkbox" bind:checked={applyCategories} />
-                                <span class="field-label">Categories</span>
+                                <span class="field-label">{t('metadata.field.categories')}</span>
                             </label>
                         </div>
                         <input
                             class="input"
                             type="text"
-                            placeholder={batchCatMixed ? '(mixed values)' : 'Travel, Landscape'}
+                            placeholder={batchCatMixed ? t('metadata.batch.mixedValues') : t('metadata.field.categories.batch.placeholder')}
                             bind:value={batchCategories}
                             oninput={() => { if (batchCategories) applyCategories = true; }}
                         />
                     </div>
                 {:else}
                     <label class="field">
-                        <span class="field-label">Categories</span>
-                        <input class="input" type="text" placeholder="Travel, Landscape" bind:value={categories} />
+                        <span class="field-label">{t('metadata.field.categories')}</span>
+                        <input class="input" type="text" placeholder={t('metadata.field.categories.placeholder')} bind:value={categories} />
                     </label>
                     <label class="field">
-                        <span class="field-label">Release Filename</span>
-                        <input class="input" type="text" placeholder="model_release.pdf" bind:value={releaseFilename} />
+                        <span class="field-label">{t('metadata.field.releaseFilename')}</span>
+                        <input class="input" type="text" placeholder={t('metadata.field.releaseFilename.placeholder')} bind:value={releaseFilename} />
                     </label>
                 {/if}
             </div>
@@ -1163,15 +1165,15 @@
 
     {#if showClearConfirm}
         <ConfirmDialog
-            title="Clear Keywords"
+            title={t('metadata.dialog.clearKeywords.title')}
             body={isBatch
-                ? `Remove all keywords from all ${batchPaths.length} selected files?`
-                : 'Remove all keywords from this image?'}
+                ? tn('metadata.dialog.clearKeywords.batch.body', batchPaths.length)
+                : t('metadata.dialog.clearKeywords.body')}
             icon="warning"
             buttons={[
-                {label: 'Cancel', onClick: () => { showClearConfirm = false; }},
+                {label: t('common.cancel'), onClick: () => { showClearConfirm = false; }},
                 {
-                    label: 'Clear All',
+                    label: t('metadata.button.clearAll'),
                     onClick: clearKeywords,
                     color: 'var(--required-color)',
                     border: 'var(--required-color)',
@@ -1203,11 +1205,11 @@
             </div>
         {:else if !isBatch && saveError}
             <div class="footer-errors">
-                Save failed: {saveError}
+                {t('metadata.error.saveFailed')}: {saveError}
             </div>
         {:else if isBatch && !isSaving && (batchFailed > 0 || batchCancelled > 0)}
             <div class="footer-errors">
-                {batchFailed} failed{#if batchCancelled > 0} · {batchCancelled} cancelled{/if} of {batchResults.size}
+                {t('metadata.batch.error.failed', {n: batchFailed})}{#if batchCancelled > 0} · {t('metadata.batch.error.cancelled', {n: batchCancelled})}{/if} {t('metadata.batch.error.of', {n: batchResults.size})}
             </div>
         {/if}
         <div class="footer-controls">
@@ -1218,7 +1220,7 @@
                         onclick={cancelBatchSave}
                         disabled={batchCancelling}
                     >
-                        {batchCancelling ? 'Cancelling...' : 'Cancel'}
+                        {batchCancelling ? t('metadata.button.cancel.batch.progress') : t('metadata.button.cancel.batch')}
                     </button>
                 {/if}
                 <button
@@ -1226,7 +1228,7 @@
                     onclick={handleBatchSave}
                     disabled={isSaving || batchLoading}
                 >
-                    {isSaving ? `Saving ${savingCount}/${savingTotal}...` : `Save ${batchPaths.length} Files`}
+                    {isSaving ? t('metadata.button.saveBatch.progress', {n: savingCount, total: savingTotal}) : tn('metadata.button.saveBatch', batchPaths.length)}
                 </button>
             {:else}
                 <label class="autosave-toggle">
@@ -1235,13 +1237,13 @@
                         checked={autoSave as boolean}
                         onchange={(e) => settings.set('editor.autosave', e.currentTarget.checked)}
                     />
-                    <span>Auto-save</span>
+                    <span>{t('metadata.button.autosave')}</span>
                 </label>
                 <button
                     class="btn-primary save-btn"
                     onclick={handleSave}
                     disabled={!filepath}
-                >Save Changes</button>
+                >{t('metadata.button.saveChanges')}</button>
             {/if}
         </div>
     </footer>

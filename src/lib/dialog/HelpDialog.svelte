@@ -2,6 +2,7 @@
     import {onMount, onDestroy} from 'svelte';
     import MarkdownPopup from '$reusable/MarkdownPopup.svelte';
     import {shortcuts} from '$lib/shortcuts';
+    import {t, locale} from '$lib/i18n';
 
     let {onClose}: {onClose: () => void} = $props();
 
@@ -10,10 +11,11 @@
     onMount(async () => {
         shortcuts.activateLayer('dialog');
         try {
-            const res = await fetch('/Help.md');
+            let res = await fetch(`/Help.${locale()}.md`);
+            if (!res.ok) res = await fetch('/Help.en.md');
             source = await res.text();
         } catch {
-            source = '_Failed to load help content._';
+            source = t('dialog.help.loadError');
         }
     });
 
@@ -29,7 +31,7 @@
     {onClose}
     buttons={[
         {
-            label: 'Close',
+            label: t('common.close'),
             onClick: onClose,
             bg: 'var(--accent)',
             color: '#fff',

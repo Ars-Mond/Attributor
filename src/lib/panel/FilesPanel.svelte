@@ -3,6 +3,7 @@
     import {convertFileSrc} from "@tauri-apps/api/core";
     import {listenEvent, EVENT} from "$lib/events";
     import {settings} from "$lib/settings";
+    import {t} from '$lib/i18n';
     import {onMount, onDestroy, untrack} from "svelte";
     import FileTree from "$reusable/FileTree.svelte";
     import type {FileNode} from "$lib/types";
@@ -298,7 +299,7 @@
 
 <aside class="panel panel--files">
     <div class="files-header">
-        <span class="files-title">Files</span>
+        <span class="files-title">{t('filesPanel.title')}</span>
         <div class="view-controls">
             <!-- View mode buttons -->
             <div class="btn-group">
@@ -306,7 +307,7 @@
                     class="view-btn"
                     class:active={panelState.viewMode === 'table'}
                     onclick={() => panelState.viewMode = 'table'}
-                    title="Table"
+                    title={t('filesPanel.viewMode.table')}
                 >
                     <!-- Table: three horizontal lines -->
                     <svg viewBox="0 0 14 14" fill="currentColor">
@@ -319,7 +320,7 @@
                     class="view-btn"
                     class:active={panelState.viewMode === 'content'}
                     onclick={() => panelState.viewMode = 'content'}
-                    title="Content"
+                    title={t('filesPanel.viewMode.content')}
                 >
                     <!-- Content: thumbnail + text row, twice -->
                     <svg viewBox="0 0 14 14" fill="currentColor">
@@ -335,7 +336,7 @@
                     class="view-btn"
                     class:active={panelState.viewMode === 'icons'}
                     onclick={() => panelState.viewMode = 'icons'}
-                    title="Icons"
+                    title={t('filesPanel.viewMode.icons')}
                 >
                     <!-- Icons: 2x2 grid -->
                     <svg viewBox="0 0 14 14" fill="currentColor">
@@ -354,7 +355,7 @@
                         class="view-btn"
                         class:active={panelState.layoutDir === 'vertical'}
                         onclick={() => panelState.layoutDir = 'vertical'}
-                        title="Vertical"
+                        title={t('filesPanel.layoutDir.vertical')}
                     >
                         <!-- Vertical: three horizontal bars (stack top-down) -->
                         <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
@@ -367,7 +368,7 @@
                         class="view-btn"
                         class:active={panelState.layoutDir === 'horizontal'}
                         onclick={() => panelState.layoutDir = 'horizontal'}
-                        title="Horizontal"
+                        title={t('filesPanel.layoutDir.horizontal')}
                     >
                         <!-- Horizontal: three vertical bars (stack left-right) -->
                         <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
@@ -430,7 +431,7 @@
                 <svg width="36" height="36" viewBox="0 0 16 16" fill="currentColor">
                     <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.56 2.311 1.184C7.985 3.648 8.48 4 9 4h4.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9z"/>
                 </svg>
-                <p>No folder open</p>
+                <p>{t('filesPanel.empty.noFolderOpen')}</p>
             </div>
         {/if}
     </div>

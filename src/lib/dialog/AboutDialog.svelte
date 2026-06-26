@@ -2,6 +2,7 @@
     import {onMount, onDestroy} from 'svelte';
     import {shortcuts} from '$lib/shortcuts';
     import {getVersion} from '@tauri-apps/api/app';
+    import {t} from '$lib/i18n';
 
     let {onClose}: {onClose: () => void} = $props();
 
@@ -37,29 +38,25 @@
             <img src="/logo.png" alt="Attributor" class="logo" />
             <div>
                 <p class="app-name" id="about-title">Attributor</p>
-                <p class="app-version">Version {version}</p>
+                <p class="app-version">{t('dialog.about.versionLabel', {version})}</p>
             </div>
         </div>
 
-        <p class="description">
-            Desktop application for editing XMP/EXIF metadata of stock photos.
-            Supports batch editing of title, description, keywords, and categories
-            directly embedded into JPEG, PNG, and WebP files.
-        </p>
+        <p class="description">{t('dialog.about.description')}</p>
 
         <div class="meta">
             <span class="meta-row">
-                <span class="meta-label">Identifier</span>
+                <span class="meta-label">{t('dialog.about.identifierLabel')}</span>
                 <span class="meta-value">loc.am.attributor</span>
             </span>
             <span class="meta-row">
-                <span class="meta-label">License</span>
+                <span class="meta-label">{t('dialog.about.licenseLabel')}</span>
                 <span class="meta-value">AGPL-3.0</span>
             </span>
         </div>
 
         <div class="actions">
-            <button class="btn-primary" onclick={onClose}>Close</button>
+            <button class="btn-primary" onclick={onClose}>{t('common.close')}</button>
         </div>
     </div>
 </div>
