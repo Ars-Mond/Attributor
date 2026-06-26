@@ -61,6 +61,8 @@ export const ru: Messages = {
     'metadata.batch.fileCount': {one: '{n} файл', few: '{n} файла', many: '{n} файлов'},
     'metadata.fieldGroup.required': 'Обязательные',
     'metadata.fieldGroup.fields': 'Поля',
+    'metadata.stats.words': {one: '{n} слово', few: '{n} слова', many: '{n} слов'},
+    'metadata.stats.chars': {one: '{n} символ', few: '{n} символа', many: '{n} символов'},
     'metadata.field.filename': 'Имя файла',
     'metadata.field.filename.hint': 'переименовать при сохранении',
     'metadata.field.filename.placeholder': 'mountain_sunset',

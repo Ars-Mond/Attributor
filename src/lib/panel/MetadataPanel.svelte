@@ -831,7 +831,7 @@
                             <input type="checkbox" bind:checked={applyTitle} />
                             <span class="field-label">{t('metadata.field.title')}</span>
                         </label>
-                        <span class="field-stats">{titleWords}w : {titleChars}l</span>
+                        <span class="field-stats">{tn('metadata.stats.words', titleWords)} : {tn('metadata.stats.chars', titleChars)}</span>
                     </div>
                     <input
                         class="input"
@@ -849,7 +849,7 @@
                             <input type="checkbox" bind:checked={applyDescription} />
                             <span class="field-label">{t('metadata.field.description')}</span>
                         </label>
-                        <span class="field-stats">{descWords}w : {descChars}l</span>
+                        <span class="field-stats">{tn('metadata.stats.words', descWords)} : {tn('metadata.stats.chars', descChars)}</span>
                     </div>
                     <textarea
                         bind:this={descriptionEl}
@@ -974,7 +974,7 @@
                 <label class="field">
                     <div class="field-header">
                         <span class="field-label">{t('metadata.field.title')} <span class="required">*</span></span>
-                        <span class="field-stats">{titleWords}w : {titleChars}l</span>
+                        <span class="field-stats">{tn('metadata.stats.words', titleWords)} : {tn('metadata.stats.chars', titleChars)}</span>
                     </div>
                     <input
                         class="input"
@@ -988,7 +988,7 @@
                 <label class="field">
                     <div class="field-header">
                         <span class="field-label">{t('metadata.field.description')} <span class="required">*</span></span>
-                        <span class="field-stats">{descWords}w : {descChars}l</span>
+                        <span class="field-stats">{tn('metadata.stats.words', descWords)} : {tn('metadata.stats.chars', descChars)}</span>
                     </div>
                     <textarea
                         bind:this={descriptionEl}

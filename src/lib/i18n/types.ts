@@ -92,6 +92,8 @@ export interface Messages {
     'metadata.batch.fileCount': PluralForms;
     'metadata.fieldGroup.required': string;
     'metadata.fieldGroup.fields': string;
+    'metadata.stats.words': PluralForms;
+    'metadata.stats.chars': PluralForms;
     'metadata.field.filename': string;
     'metadata.field.filename.hint': string;
     'metadata.field.filename.placeholder': string;

@@ -61,6 +61,8 @@ export const en: Messages = {
     'metadata.batch.fileCount': {one: '{n} file', other: '{n} files'},
     'metadata.fieldGroup.required': 'Required',
     'metadata.fieldGroup.fields': 'Fields',
+    'metadata.stats.words': {one: '{n} word', other: '{n} words'},
+    'metadata.stats.chars': {one: '{n} character', other: '{n} characters'},
     'metadata.field.filename': 'Filename',
     'metadata.field.filename.hint': 'rename on save',
     'metadata.field.filename.placeholder': 'mountain_sunset',
