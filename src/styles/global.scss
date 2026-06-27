@@ -78,6 +78,12 @@ h6 { font-size: $fs-h6; font-weight: 500; line-height: 1.4;  }
     font-weight: 500;
     padding: 7px 16px;
     @include transition(background, color, border-color);
+
+    // Greyed, non-interactive look for unavailable actions (e.g. attribute button when Ollama is absent).
+    &:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
 }
 
 .btn-primary {
@@ -85,8 +91,8 @@ h6 { font-size: $fs-h6; font-weight: 500; line-height: 1.4;  }
     background: $accent;
     color: #fff;
 
-    &:hover  { background: $accent-hover; }
-    &:active { background: var(--accent-active); }
+    &:hover:not(:disabled)  { background: $accent-hover; }
+    &:active:not(:disabled) { background: var(--accent-active); }
 }
 
 .btn-ghost {
@@ -95,7 +101,7 @@ h6 { font-size: $fs-h6; font-weight: 500; line-height: 1.4;  }
     border: 1px solid $border;
     color: $text-secondary;
 
-    &:hover {
+    &:hover:not(:disabled) {
         background: $bg-surface;
         color: $text;
         border-color: $text-muted;

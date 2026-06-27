@@ -70,7 +70,14 @@
     async function handleAttribute() {
         if (!ollama.available || !filepath) return;
         attributeError = null;
-        const handle = progress.run({label: t('ollama.attribute.progress')});
+        // Blocking overlay with a cancel button — freezes the whole app until the inference finishes
+        // or the user cancels (which aborts the backend request).
+        const handle = progress.run({
+            label: t('ollama.attribute.progress'),
+            blocking: true,
+            cancelable: true,
+            onCancel: () => {cancelOllama();}
+        });
         try {
             const r = await attributePhoto(filepath);
             title = r.title;
@@ -78,7 +85,11 @@
             categories = r.categories.join(', ');
             for (const kw of r.keywords) addKeyword(kw);
         } catch (e) {
-            attributeError = t('ollama.attribute.failed', {error: e instanceof Error ? e.message : String(e)});
+            const msg = e instanceof Error ? e.message : String(e);
+            // A user-initiated cancel surfaces as "cancelled" from the backend — not a real error.
+            if (msg !== 'cancelled') {
+                attributeError = t('ollama.attribute.failed', {error: msg});
+            }
         } finally {
             handle.done();
         }
@@ -581,6 +592,35 @@
         } catch (e) {
             saveError = e instanceof Error ? e.message : String(e);
         }
+    }
+
+    // ── Footer error (resolved text + dismiss action, shared close/copy controls) ──
+
+    interface FooterError {
+        text: string;
+        dismiss: () => void;
+    }
+
+    const footerError = $derived.by((): FooterError | null => {
+        if (!isBatch && saveAttempted && hasErrors) {
+            return {text: validationErrors.join(' · '), dismiss: () => { saveAttempted = false; }};
+        }
+        if (!isBatch && saveError) {
+            return {text: `${t('metadata.error.saveFailed')}: ${saveError}`, dismiss: () => { saveError = null; }};
+        }
+        if (!isBatch && attributeError) {
+            return {text: attributeError, dismiss: () => { attributeError = null; }};
+        }
+        if (isBatch && !isSaving && (batchFailed > 0 || batchCancelled > 0)) {
+            const tail = batchCancelled > 0 ? ` · ${t('metadata.batch.error.cancelled', {n: batchCancelled})}` : '';
+            const text = `${t('metadata.batch.error.failed', {n: batchFailed})}${tail} ${t('metadata.batch.error.of', {n: batchResults.size})}`;
+            return {text, dismiss: () => { batchResults.clear(); }};
+        }
+        return null;
+    });
+
+    async function copyFooterError() {
+        if (footerError) await writeText(footerError.text);
     }
 
     // ── Preset keywords ────────────────────────────────────────────────────
@@ -1263,21 +1303,32 @@
 
     <!-- ── Footer ── -->
     <footer class="panel-footer">
-        {#if !isBatch && saveAttempted && hasErrors}
+        {#if footerError}
             <div class="footer-errors">
-                {validationErrors.join(' · ')}
-            </div>
-        {:else if !isBatch && saveError}
-            <div class="footer-errors">
-                {t('metadata.error.saveFailed')}: {saveError}
-            </div>
-        {:else if !isBatch && attributeError}
-            <div class="footer-errors">
-                {attributeError}
-            </div>
-        {:else if isBatch && !isSaving && (batchFailed > 0 || batchCancelled > 0)}
-            <div class="footer-errors">
-                {t('metadata.batch.error.failed', {n: batchFailed})}{#if batchCancelled > 0} · {t('metadata.batch.error.cancelled', {n: batchCancelled})}{/if} {t('metadata.batch.error.of', {n: batchResults.size})}
+                <span class="footer-error-text">{footerError.text}</span>
+                <div class="footer-error-actions">
+                    <button
+                        class="footer-error-btn"
+                        onclick={copyFooterError}
+                        title={t('metadata.error.copy')}
+                        aria-label={t('metadata.error.copy')}
+                    >
+                        <svg viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6z"/>
+                            <path d="M2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h-1v1H2V6h1V5H2z"/>
+                        </svg>
+                    </button>
+                    <button
+                        class="footer-error-btn"
+                        onclick={footerError.dismiss}
+                        title={t('metadata.error.dismiss')}
+                        aria-label={t('metadata.error.dismiss')}
+                    >
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4l8 8M12 4l-8 8"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
         {/if}
         <div class="footer-controls">
@@ -1529,12 +1580,47 @@
     }
 
     .footer-errors {
+        @include flex(row, flex-start, flex-start);
+        gap: 8px;
         padding: 6px 16px;
         font-size: $fs-footnote1;
         color: $required-color;
         border-bottom: 1px solid var(--required-alpha-20);
         background: var(--required-alpha-06);
         line-height: 1.5;
+    }
+
+    .footer-error-text {
+        flex: 1;
+        min-width: 0;
+        word-break: break-word;
+    }
+
+    .footer-error-actions {
+        @include flex(row, flex-start, center);
+        gap: 2px;
+        flex-shrink: 0;
+    }
+
+    .footer-error-btn {
+        @include btn-reset;
+        @include flex(row, center, center);
+        padding: 3px;
+        border-radius: $radius-sm;
+        color: $required-color;
+        cursor: pointer;
+        opacity: 0.7;
+        @include transition(opacity, background);
+
+        svg {
+            width: 13px;
+            height: 13px;
+        }
+
+        &:hover {
+            opacity: 1;
+            background: var(--required-alpha-08);
+        }
     }
 
     .footer-controls {
