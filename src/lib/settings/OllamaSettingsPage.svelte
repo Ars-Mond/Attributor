@@ -2,42 +2,28 @@
     import {onMount} from 'svelte';
     import {settings} from './index';
     import {t} from '$lib/i18n';
-    import {ollamaStatus, listModels, pullModel, installOllama, cancelOllama, type OllamaModel, type OllamaStatus} from '$lib/ollama/ollama';
+    import {pullModel, installOllama, cancelOllama} from '$lib/ollama/ollama';
     import {OFFERED_MODELS} from '$lib/ollama/models';
     import {progress} from '$lib/progress.svelte';
     import {ollama} from '$lib/ollama/availability.svelte';
+    import ModelCombobox from '$lib/ollama/ModelCombobox.svelte';
     import type {SettingSectionProps} from './SettingsSection';
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     let {section, resetSection}: SettingSectionProps = $props();
 
-    let status = $state<OllamaStatus | null>(null);
-    let checking = $state(false);
     let installing = $state(false);
     let installError = $state<string | null>(null);
-    let installed = $state<OllamaModel[]>([]);
     let toDownload = $state(OFFERED_MODELS[0]?.id ?? '');
 
     const baseUrl = $derived(settings.subscribe<string>('ollama.baseUrl')());
     const activeModel = $derived(settings.subscribe<string>('ollama.activeModel')());
     const responseFormat = $derived(settings.subscribe<string>('ollama.responseFormat')());
 
-    async function refreshModels() {
-        try {installed = await listModels();}
-        catch {installed = [];}
-    }
-
+    // "Check" updates status (and refreshes installed models if it is now reachable).
     async function check() {
-        checking = true;
-        try {
-            status = await ollamaStatus();
-            await ollama.refresh();
-            if (status.reachable) await refreshModels();
-        } catch {
-            status = {installed: false, reachable: false, version: null};
-        } finally {
-            checking = false;
-        }
+        await ollama.refresh();
+        if (ollama.reachable) await ollama.refreshModels();
     }
 
     async function install() {
@@ -45,7 +31,7 @@
         installError = null;
         try {
             await installOllama();
-            await check();
+            await ollama.init();
         } catch (e) {
             installError = e instanceof Error ? e.message : String(e);
         } finally {
@@ -70,7 +56,7 @@
                     handle.update({label: p.status});
                 }
             });
-            await refreshModels();
+            await ollama.refreshModels();
         } catch (e) {
             console.error('ollama pull failed:', e);
         } finally {
@@ -78,22 +64,23 @@
         }
     }
 
-    onMount(check);
+    // Data is prefetched at app startup; only fetch here if that has not happened yet (no wait normally).
+    onMount(() => {if (!ollama.status) ollama.init();});
 </script>
 
 <div class="ollama-page">
     <div class="ob-field">
         <span class="ob-label">{t('settings.ollama.status')}</span>
         <div class="ob-row">
-            <span class="ob-status" class:ok={status?.reachable} class:bad={status && !status.installed}>
-                {#if checking}{t('settings.ollama.checking')}
-                {:else if status?.reachable}{t('settings.ollama.status.reachable', {version: status.version ?? ''})}
-                {:else if status?.installed}{t('settings.ollama.status.installedNotRunning')}
-                {:else if status}{t('settings.ollama.status.notInstalled')}
+            <span class="ob-status" class:ok={ollama.reachable} class:bad={ollama.status && !ollama.installed}>
+                {#if ollama.checking}{t('settings.ollama.checking')}
+                {:else if ollama.reachable}{t('settings.ollama.status.reachable', {version: ollama.version ?? ''})}
+                {:else if ollama.installed}{t('settings.ollama.status.installedNotRunning')}
+                {:else if ollama.status}{t('settings.ollama.status.notInstalled')}
                 {:else}{t('settings.ollama.status.unknown')}{/if}
             </span>
-            <button class="ob-btn" onclick={check} disabled={checking}>{t('settings.ollama.check')}</button>
-            {#if status && !status.installed}
+            <button class="ob-btn" onclick={check} disabled={ollama.checking}>{t('settings.ollama.check')}</button>
+            {#if ollama.status && !ollama.installed}
                 <button class="ob-btn" onclick={install} disabled={installing}>
                     {installing ? t('settings.ollama.installing') : t('settings.ollama.install')}
                 </button>
@@ -110,13 +97,17 @@
     <div class="ob-field">
         <span class="ob-label">{t('settings.ollama.activeModel')}</span>
         <div class="ob-row">
-            <select class="ob-input" value={activeModel} onchange={(e) => settings.set('ollama.activeModel', e.currentTarget.value)}>
-                <option value="">{t('settings.ollama.activeModel.none')}</option>
-                {#each installed as m (m.name)}<option value={m.name}>{m.name}</option>{/each}
-            </select>
-            <button class="ob-btn" onclick={refreshModels}>{t('settings.ollama.refresh')}</button>
+            <div class="ob-grow">
+                <ModelCombobox
+                    value={activeModel}
+                    installed={ollama.installedModels}
+                    placeholder={t('settings.ollama.activeModel.none')}
+                    onChange={(v) => settings.set('ollama.activeModel', v)}
+                />
+            </div>
+            <button class="ob-btn" onclick={() => ollama.refreshModels()}>{t('settings.ollama.refresh')}</button>
         </div>
-        {#if installed.length === 0}<p class="ob-desc">{t('settings.ollama.noModels')}</p>{/if}
+        {#if ollama.installedModels.length === 0}<p class="ob-desc">{t('settings.ollama.noModels')}</p>{/if}
     </div>
 
     <div class="ob-field">
@@ -125,7 +116,7 @@
             <select class="ob-input" bind:value={toDownload}>
                 {#each OFFERED_MODELS as m (m.id)}<option value={m.id}>{m.label}</option>{/each}
             </select>
-            <button class="ob-btn" onclick={download} disabled={!status?.installed}>{t('settings.ollama.download.button')}</button>
+            <button class="ob-btn" onclick={download} disabled={!ollama.installed}>{t('settings.ollama.download.button')}</button>
         </div>
     </div>
 
@@ -163,6 +154,11 @@
         @include flex(row, flex-start, center);
         gap: 8px;
         flex-wrap: wrap;
+    }
+
+    .ob-grow {
+        flex: 1;
+        min-width: 0;
     }
 
     .ob-status {

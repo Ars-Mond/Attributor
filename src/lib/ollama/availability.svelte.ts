@@ -1,31 +1,46 @@
-// Reactive Ollama availability used to enable/disable the attribute action (FR-007/009).
-// `available` = Ollama is INSTALLED AND an active model is selected. The daemon is auto-started on
-// inference if it is not running, so the button does not require it to be running up front.
+// Shared reactive Ollama state: installed/running status + the list of installed models.
+// Prefetched once at app startup so the settings page shows suggestions instantly (no wait).
 import {settings} from '$lib/settings';
-import {ollamaStatus} from './ollama';
+import {ollamaStatus, listModels, type OllamaStatus} from './ollama';
 
-let installed = $state(false);
-let reachable = $state(false);
+let status = $state<OllamaStatus | null>(null);
+let installedModels = $state<string[]>([]);
 let checking = $state(false);
 
 export const ollama = {
-    get installed() {return installed;},
-    get reachable() {return reachable;},
+    get status() {return status;},
+    get installed() {return status?.installed ?? false;},
+    get reachable() {return status?.reachable ?? false;},
+    get version() {return status?.version ?? null;},
     get checking() {return checking;},
-    // Reactive: tracks the installed state and the active-model setting.
-    get available() {return installed && !!settings.subscribe<string>('ollama.activeModel')();},
+    get installedModels() {return installedModels;},
+    // Reactive: attribution is available when Ollama is installed AND an active model is selected.
+    get available() {return (status?.installed ?? false) && !!settings.subscribe<string>('ollama.activeModel')();},
 
+    /** Re-check installed/running status (the settings "Check" button + startup). */
     async refresh(): Promise<void> {
         checking = true;
         try {
-            const status = await ollamaStatus();
-            installed = status.installed;
-            reachable = status.reachable;
+            status = await ollamaStatus();
         } catch {
-            installed = false;
-            reachable = false;
+            status = {installed: false, reachable: false, version: null};
         } finally {
             checking = false;
         }
+    },
+
+    /** Re-fetch the installed-models list (the settings "Refresh" button + startup). */
+    async refreshModels(): Promise<void> {
+        try {
+            installedModels = (await listModels()).map(m => m.name);
+        } catch {
+            installedModels = [];
+        }
+    },
+
+    /** Startup prefetch: status + installed models. */
+    async init(): Promise<void> {
+        await this.refresh();
+        await this.refreshModels();
     }
 };

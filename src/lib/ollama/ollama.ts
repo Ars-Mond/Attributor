@@ -88,7 +88,8 @@ const FALLBACK_PROMPT =
 export function attributionConfig(): AttributionConfig {
     const model = settings.get<string>('ollama.activeModel');
     const profiles = settings.get<ModelProfile[]>('ollama.modelProfiles') ?? [];
-    const profile = profiles.find(p => p.modelId === model);
+    // Use the profile matching the active model; fall back to the special "base" profile if present.
+    const profile = profiles.find(p => p.modelId === model) ?? profiles.find(p => p.modelId === 'base');
 
     let format: unknown = {};
     try {

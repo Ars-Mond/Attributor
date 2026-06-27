@@ -195,5 +195,10 @@ export const en: Messages = {
     'ollama.unavailable.tooltip': 'Ollama is not available (start it and select a model in settings)',
     'ollama.attribute.progress': 'Attributing...',
     'ollama.attribute.batch.progress': 'Attributing photos...',
-    'ollama.attribute.failed': 'Attribution failed: {error}'
+    'ollama.attribute.failed': 'Attribution failed: {error}',
+    'ollama.model.installed': 'installed',
+    'ollama.model.local': 'local',
+    'ollama.model.cloud': 'cloud',
+    'settings.ollamaModel.duplicateModel': 'A profile for this model id already exists.',
+    'settings.ollamaModel.modelId.hint': 'Type a model id or pick one; use "base" as the fallback profile for any model without its own.'
 };

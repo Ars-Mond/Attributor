@@ -21,6 +21,7 @@
     import InputContextMenu from "$lib/reusable/InputContextMenu.svelte";
     import SettingsDialog from "$lib/settings/SettingsDialog.svelte";
     import ProgressOverlay from "$lib/reusable/ProgressOverlay.svelte";
+    import {ollama} from "$lib/ollama/availability.svelte";
     import {settings} from "$lib/settings";
     import {shortcuts} from "$lib/shortcuts";
     import {t, initLocale, type MessageKey} from "$lib/i18n";
@@ -272,6 +273,9 @@
         // Resolve the interface language (first-run OS detection) before the window is shown, so the
         // first painted frame is already localized.
         await initLocale();
+
+        // Prefetch Ollama status + installed models so settings show suggestions with no wait.
+        void ollama.init();
 
         // 3. Restore last folder, then last file
         if (state.lastFolder) {

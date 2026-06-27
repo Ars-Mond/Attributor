@@ -1,10 +1,9 @@
 <script lang="ts">
-    import {onMount} from 'svelte';
     import {settings} from './index';
     import {t} from '$lib/i18n';
     import OllamaModelDialog from './OllamaModelDialog.svelte';
-    import {listModels, type ModelProfile} from '$lib/ollama/ollama';
-    import {OFFERED_MODELS} from '$lib/ollama/models';
+    import {ollama} from '$lib/ollama/availability.svelte';
+    import type {ModelProfile} from '$lib/ollama/ollama';
     import type {SettingSectionProps} from './SettingsSection';
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -12,17 +11,11 @@
 
     const profiles = $derived(settings.subscribe<ModelProfile[]>('ollama.modelProfiles')() ?? []);
 
-    // Suggestions for the model-id field: offered models + already-installed models.
-    let installed = $state<string[]>([]);
-    const modelOptions = $derived([...new Set([...OFFERED_MODELS.map(m => m.id), ...installed])]);
-
-    onMount(async () => {
-        try {installed = (await listModels()).map(m => m.name);}
-        catch {installed = [];}
-    });
-
     let editing = $state<ModelProfile | null>(null);
     let isNew = $state(false);
+
+    // modelIds used by OTHER profiles than the one being edited — passed to the dialog for dedup.
+    const takenModelIds = $derived(editing ? profiles.filter(p => p.id !== editing!.id).map(p => p.modelId) : []);
 
     function uid(): string {
         return 'p' + Math.random().toString(36).slice(2, 10);
@@ -71,7 +64,14 @@
 </div>
 
 {#if editing}
-    <OllamaModelDialog profile={editing} {isNew} {modelOptions} onSave={save} onCancel={() => (editing = null)} />
+    <OllamaModelDialog
+        profile={editing}
+        {isNew}
+        installed={ollama.installedModels}
+        {takenModelIds}
+        onSave={save}
+        onCancel={() => (editing = null)}
+    />
 {/if}
 
 <style lang="scss">

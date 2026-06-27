@@ -196,5 +196,10 @@ export const ru: Messages = {
     'ollama.unavailable.tooltip': 'Ollama недоступна (запустите её и выберите модель в настройках)',
     'ollama.attribute.progress': 'Атрибутация...',
     'ollama.attribute.batch.progress': 'Атрибутация фотографий...',
-    'ollama.attribute.failed': 'Ошибка атрибутации: {error}'
+    'ollama.attribute.failed': 'Ошибка атрибутации: {error}',
+    'ollama.model.installed': 'установлена',
+    'ollama.model.local': 'локальная',
+    'ollama.model.cloud': 'облачная',
+    'settings.ollamaModel.duplicateModel': 'Профиль для этого идентификатора модели уже существует.',
+    'settings.ollamaModel.modelId.hint': 'Введите идентификатор модели или выберите; «base» — запасной профиль для любой модели без своего.'
 };

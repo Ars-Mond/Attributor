@@ -227,6 +227,11 @@ export interface Messages {
     'ollama.attribute.progress': string;
     'ollama.attribute.batch.progress': string;
     'ollama.attribute.failed': string;
+    'ollama.model.installed': string;
+    'ollama.model.local': string;
+    'ollama.model.cloud': string;
+    'settings.ollamaModel.duplicateModel': string;
+    'settings.ollamaModel.modelId.hint': string;
 }
 
 // Keys whose value is a plain string (usable with t()).

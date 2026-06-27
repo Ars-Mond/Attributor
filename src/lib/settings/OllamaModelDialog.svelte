@@ -1,11 +1,13 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
+    import ModelCombobox from '$lib/ollama/ModelCombobox.svelte';
     import type {ModelProfile} from '$lib/ollama/ollama';
 
-    let {profile, isNew, modelOptions, closeOnBackdrop = false, onSave, onCancel}: {
+    let {profile, isNew, installed = [], takenModelIds = [], closeOnBackdrop = false, onSave, onCancel}: {
         profile: ModelProfile;
         isNew: boolean;
-        modelOptions: string[];
+        installed?: string[];
+        takenModelIds?: string[];    // modelIds used by OTHER profiles — disallow duplicates
         closeOnBackdrop?: boolean;   // whether clicking the empty backdrop dismisses the dialog
         onSave: (p: ModelProfile) => void;
         onCancel: () => void;
@@ -21,6 +23,7 @@
     let keepAlive = $state(seed.keepAlive ?? '');
     let optionsText = $state(JSON.stringify(seed.options ?? {}, null, 2));
     let optionsError = $state<string | null>(null);
+    let modelError = $state<string | null>(null);
 
     function parseThink(v: string): boolean | string | null {
         if (v === '') return null;
@@ -30,6 +33,17 @@
     }
 
     function save() {
+        const id = modelId.trim();
+        if (!id) {
+            modelError = t('settings.ollamaModel.modelId.hint');
+            return;
+        }
+        if (takenModelIds.includes(id)) {
+            modelError = t('settings.ollamaModel.duplicateModel');
+            return;
+        }
+        modelError = null;
+
         let options: Record<string, number | string | boolean> = {};
         const txt = optionsText.trim();
         if (txt) {
@@ -71,13 +85,18 @@
                 <span class="md-label">{t('settings.ollamaModel.name')}</span>
                 <input class="md-input" type="text" bind:value={name} />
             </label>
-            <label class="md-field">
+            <div class="md-field">
                 <span class="md-label">{t('settings.ollamaModel.modelId')}</span>
-                <input class="md-input" type="text" list="ollama-model-options" bind:value={modelId} placeholder="llama3.2-vision:11b" />
-                <datalist id="ollama-model-options">
-                    {#each modelOptions as o (o)}<option value={o}></option>{/each}
-                </datalist>
-            </label>
+                <ModelCombobox
+                    value={modelId}
+                    {installed}
+                    includeBase={true}
+                    placeholder="llama3.2-vision:11b"
+                    onChange={(v) => {modelId = v; modelError = null;}}
+                />
+                <p class="md-desc">{t('settings.ollamaModel.modelId.hint')}</p>
+                {#if modelError}<p class="md-desc md-desc--err">{modelError}</p>{/if}
+            </div>
             <label class="md-field">
                 <span class="md-label">{t('settings.ollamaModel.prompt')}</span>
                 <textarea class="md-input md-textarea" rows={5} bind:value={prompt}></textarea>
