@@ -35,7 +35,11 @@
         return v.join(';');
     }
 
-    onMount(() => { shortcuts.activateLayer('dialog'); });
+    onMount(() => {
+        shortcuts.activateLayer('dialog');
+        // Re-measure once web fonts are ready (final glyph metrics → final button widths).
+        document.fonts?.ready.then(() => requestAnimationFrame(measure));
+    });
     onDestroy(() => { shortcuts.deactivateLayer('dialog'); });
 
     // Width is driven by the buttons (min 360), NOT by the body text — so long text only grows the
@@ -44,20 +48,24 @@
     let dialogWidth = $state(360);
 
     function measure() {
-        if (!footerEl) { dialogWidth = 360; return; }
-        const cs = getComputedStyle(footerEl);
-        const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+        const el = footerEl;
+        if (!el) { dialogWidth = 360; return; }
+        const kids = Array.from(el.children) as HTMLElement[];
+        if (!kids.length) { dialogWidth = 360; return; }
+        const cs = getComputedStyle(el);
+        const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
         const gap = parseFloat(cs.columnGap) || parseFloat(cs.gap) || 0;
-        const kids = Array.from(footerEl.children) as HTMLElement[];
-        const content = kids.reduce((sum, k) => sum + k.offsetWidth, 0) + gap * Math.max(0, kids.length - 1);
+        // Sub-pixel button widths summed — independent of the current dialog width, so no feedback.
+        const content = kids.reduce((sum, k) => sum + k.getBoundingClientRect().width, 0) + gap * (kids.length - 1);
         const maxW = window.innerWidth - 48;
-        dialogWidth = Math.min(Math.max(360, Math.ceil(content + padX)), maxW);
+        dialogWidth = Math.min(Math.max(360, Math.ceil(content + padX) + 2), maxW);
     }
 
-    // Recompute after the button row renders / changes.
+    // Recompute after the button row renders/changes, after layout settles, and after fonts load
+    // (font metrics change button widths — measuring too early undersizes and wraps the row).
     $effect(() => {
         buttons;
-        tick().then(measure);
+        tick().then(() => requestAnimationFrame(measure));
     });
 
     function handleKeydown(e: KeyboardEvent) {
@@ -194,7 +202,7 @@
 
     .dlg-footer {
         @include flex(row, flex-end, center);
-        flex-wrap: wrap; // never clip: extra buttons drop to a new row instead of overflowing
+        flex-wrap: nowrap; // buttons always stay on one row; the dialog is sized to fit them
         gap: 8px;
         padding: 12px 20px;
         border-top: 1px solid $border;
