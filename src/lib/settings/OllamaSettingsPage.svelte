@@ -19,6 +19,7 @@
     const baseUrl = $derived(settings.subscribe<string>('ollama.baseUrl')());
     const activeModel = $derived(settings.subscribe<string>('ollama.activeModel')());
     const responseFormat = $derived(settings.subscribe<string>('ollama.responseFormat')());
+    const answerFormatLabel = $derived(settings.subscribe<string>('ollama.answerFormatLabel')());
 
     // "Check" updates status (and refreshes installed models if it is now reachable).
     async function check() {
@@ -118,6 +119,12 @@
             </select>
             <button class="ob-btn" onclick={download} disabled={!ollama.installed}>{t('settings.ollama.download.button')}</button>
         </div>
+    </div>
+
+    <div class="ob-field">
+        <span class="ob-label">{t('settings.ollama.answerFormatLabel')}</span>
+        <input class="ob-input" type="text" value={answerFormatLabel} onchange={(e) => settings.set('ollama.answerFormatLabel', e.currentTarget.value)} />
+        <p class="ob-desc">{t('settings.ollama.answerFormatLabel.description')}</p>
     </div>
 
     <div class="ob-field">

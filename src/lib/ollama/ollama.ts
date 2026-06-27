@@ -84,6 +84,16 @@ const FALLBACK_PROMPT =
     'Analyze this stock photo and respond with JSON matching the schema: a concise title, a detailed ' +
     'description, relevant keywords, and broad categories.';
 
+/** Append the response schema (in a fenced code block, after a configurable heading) to the prompt, so
+ *  models that don't strictly honor Ollama's `format` field still see the expected JSON shape. */
+function appendAnswerFormat(prompt: string, schemaText: string): string {
+    const schema = schemaText.trim();
+    if (!schema) return prompt;
+    const heading = (settings.get<string>('ollama.answerFormatLabel') ?? '').trim();
+    const lead = heading ? `${heading}\n` : '';
+    return `${prompt}\n\n${lead}\`\`\`json\n${schema}\n\`\`\``;
+}
+
 /** Assemble the per-request config from settings + the profile matching the active model. */
 export function attributionConfig(): AttributionConfig {
     const model = settings.get<string>('ollama.activeModel');
@@ -91,17 +101,22 @@ export function attributionConfig(): AttributionConfig {
     // Use the profile matching the active model; fall back to the special "base" profile if present.
     const profile = profiles.find(p => p.modelId === model) ?? profiles.find(p => p.modelId === 'base');
 
+    const schemaText = settings.get<string>('ollama.responseFormat') ?? '';
     let format: unknown = {};
     try {
-        format = JSON.parse(settings.get<string>('ollama.responseFormat'));
+        format = JSON.parse(schemaText);
     } catch {
         format = {};
     }
 
+    const basePrompt = profile?.prompt?.trim() || FALLBACK_PROMPT;
+
     return {
         baseUrl: baseUrl(),
         model,
-        prompt: profile?.prompt?.trim() || FALLBACK_PROMPT,
+        // The schema is both enforced via `format` (local models) and appended to the prompt text so
+        // cloud / lenient models that ignore `format` still receive the expected JSON structure.
+        prompt: appendAnswerFormat(basePrompt, schemaText),
         think: profile?.think ?? null,
         keepAlive: profile?.keepAlive ?? null,
         options: profile?.options ?? {},
