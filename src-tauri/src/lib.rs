@@ -21,7 +21,28 @@ use folder::{FileNode, FolderState, GenConfig, PhotoFolder};
 use log::info;
 use std::path::Path;
 use tauri::Manager;
+use tauri_plugin_log::TimezoneStrategy;
 use tauri_plugin_prevent_default::Flags;
+
+// Log line layout: `[date][time][LEVEL][target] message` — level (fixed 5-wide) before target.
+const LOG_TS_FORMAT: &[time::format_description::FormatItem<'_>] =
+    time::macros::format_description!("[[[year]-[month]-[day]][[[hour]:[minute]:[second]]");
+
+/// Current UTC timestamp formatted as `[YYYY-MM-DD][HH:MM:SS]` for a log line.
+fn log_timestamp() -> String {
+    TimezoneStrategy::UseUtc.get_now().format(&LOG_TS_FORMAT).unwrap_or_default()
+}
+
+/// ANSI SGR foreground color per level — applied to the colored stdout target only (the file stays plain).
+fn level_ansi(level: log::Level) -> &'static str {
+    match level {
+        log::Level::Error => "1;31", // bold red
+        log::Level::Warn => "33",    // yellow
+        log::Level::Info => "32",    // green
+        log::Level::Debug => "36",   // cyan
+        log::Level::Trace => "90",   // bright black
+    }
+}
 
 // ── Tauri command mirrors ─────────────────────────────────────────────────
 
@@ -146,11 +167,39 @@ pub fn run() {
                 } else {
                     log::LevelFilter::Info
                 })
-                .target(tauri_plugin_log::Target::new(
-                    tauri_plugin_log::TargetKind::LogDir {
+                // Per-target formatting: neutralize the shared format, then format each target itself —
+                // stdout gets ANSI colors, the log file stays plain (no escape codes).
+                .clear_format()
+                .clear_targets()
+                .target(
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout).format(
+                        |out, message, record| {
+                            let level = record.level();
+                            out.finish(format_args!(
+                                "{}[\x1b[{}m{:<5}\x1b[0m][{}] {}",
+                                log_timestamp(),
+                                level_ansi(level),
+                                level,
+                                record.target(),
+                                message
+                            ));
+                        },
+                    ),
+                )
+                .target(
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
                         file_name: Some("attributor".into()),
-                    },
-                ))
+                    })
+                    .format(|out, message, record| {
+                        out.finish(format_args!(
+                            "{}[{:<5}][{}] {}",
+                            log_timestamp(),
+                            record.level(),
+                            record.target(),
+                            message
+                        ));
+                    }),
+                )
                 .build(),
         )
         .plugin(tauri_plugin_clipboard_manager::init())
