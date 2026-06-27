@@ -105,8 +105,7 @@
                                 section={activeSection}
                                 resetSection={() => settings.resetSection(activeSection.id)}
                             />
-                        {/if}
-
+                        {:else}
                         {#each activeSection.fields as descriptor (descriptor.key || descriptor.label)}
                             {#if descriptor.type === 'custom' && descriptor.render}
                                 {@const FieldComp = descriptor.render}
@@ -217,6 +216,7 @@
                                 </div>
                             {/if}
                         {/each}
+                        {/if}
                     {/if}
                 </div>
             </div>

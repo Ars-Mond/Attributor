@@ -9,3 +9,4 @@ export type BatchProgress = {
  * Index into the input items list; the frontend keys UI by this (order-independent).
  */
 index: number, status: ItemStatus, };
+export type PullProgress = { status: string, digest: string | null, total: bigint | null, completed: bigint | null, };

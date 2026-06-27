@@ -20,6 +20,9 @@
     import ImageViewerPanel from "$lib/panel/ImageViewerPanel.svelte";
     import InputContextMenu from "$lib/reusable/InputContextMenu.svelte";
     import SettingsDialog from "$lib/settings/SettingsDialog.svelte";
+    import ProgressOverlay from "$lib/reusable/ProgressOverlay.svelte";
+    import {progress} from "$lib/progress.svelte";
+    import {ollama} from "$lib/ollama/availability.svelte";
     import {settings} from "$lib/settings";
     import {shortcuts} from "$lib/shortcuts";
     import {t, initLocale, type MessageKey} from "$lib/i18n";
@@ -229,6 +232,11 @@
     let winResizeTimer: ReturnType<typeof setTimeout> | null = null;
 
     function handleGlobalKeyDown(e: KeyboardEvent) {
+        // A blocking progress overlay (attribution / batch save) freezes the whole app, shortcuts included.
+        if (progress.blocking) {
+            e.preventDefault();
+            return;
+        }
         if (shortcuts.handleKeyDown(e)) e.preventDefault();
     }
 
@@ -272,6 +280,9 @@
         // first painted frame is already localized.
         await initLocale();
 
+        // Prefetch Ollama status + installed models so settings show suggestions with no wait.
+        void ollama.init();
+
         // 3. Restore last folder, then last file
         if (state.lastFolder) {
             const ok = await filesPanel?.openFolderByPath(state.lastFolder);
@@ -292,6 +303,10 @@
         shortcuts.setHandler('file.open_folder', () => filesPanel?.openFolderDialog());
         shortcuts.setHandler('file.settings',    () => { showSettings = true; });
         shortcuts.setHandler('editor.save',      () => metaPanel?.save());
+        shortcuts.setHandler('files.navigate_up',          () => filesPanel?.navigate('up', false));
+        shortcuts.setHandler('files.navigate_down',        () => filesPanel?.navigate('down', false));
+        shortcuts.setHandler('files.navigate_up_extend',   () => filesPanel?.navigate('up', true));
+        shortcuts.setHandler('files.navigate_down_extend', () => filesPanel?.navigate('down', true));
 
         // 6. Show window after full UI init
         await win.show();
@@ -407,6 +422,9 @@
         onCancel={handleDialogCancel}
     />
 {/if}
+
+<!-- Top-most reusable progress overlay (Ollama pull/attribution, batch save freeze) -->
+<ProgressOverlay />
 
 <style lang="scss">
     @use 'styles/mixins' as *;

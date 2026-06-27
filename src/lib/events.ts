@@ -23,4 +23,4 @@ export function listenEvent<K extends keyof EventPayloads>(
     return listen<EventPayloads[K]>(name, (e) => cb(e.payload));
 }
 
-export type {FolderChanged, ThumbnailReady, BatchProgress, ItemStatus} from "./generated/events";
+export type {FolderChanged, ThumbnailReady, BatchProgress, ItemStatus, PullProgress} from "./generated/events";

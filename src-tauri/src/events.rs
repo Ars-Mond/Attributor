@@ -47,6 +47,7 @@ pub enum ItemStatus {
 }
 
 /// Incremental progress message streamed over the batch Channel; one per file.
+/// Reused by batch save AND batch Ollama attribution.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -54,6 +55,18 @@ pub struct BatchProgress {
     /// Index into the input items list; the frontend keys UI by this (order-independent).
     pub index: usize,
     pub status: ItemStatus,
+}
+
+/// Streamed over the model-pull Channel: one per NDJSON line from `/api/pull`. `completed` is absent
+/// until bytes flow, and `total`/`completed` are per layer (digest) — compute % for the current digest.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct PullProgress {
+    pub status: String,
+    pub digest: Option<String>,
+    pub total: Option<u64>,
+    pub completed: Option<u64>,
 }
 
 /// Drift guard: the committed `src/lib/generated/events.d.ts` must match the TypeScript
@@ -78,6 +91,7 @@ mod tests {
             ThumbnailReady::decl(),
             ItemStatus::decl(),
             BatchProgress::decl(),
+            PullProgress::decl(),
         ] {
             out.push_str("export ");
             out.push_str(&decl);

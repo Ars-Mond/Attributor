@@ -3,7 +3,7 @@
 </script>
 
 <script lang="ts">
-    import {onMount, onDestroy} from 'svelte';
+    import {onMount, onDestroy, tick} from 'svelte';
     import type {DialogButton} from '$lib/types';
     import {shortcuts} from '$lib/shortcuts';
 
@@ -35,8 +35,38 @@
         return v.join(';');
     }
 
-    onMount(() => { shortcuts.activateLayer('dialog'); });
+    onMount(() => {
+        shortcuts.activateLayer('dialog');
+        // Re-measure once web fonts are ready (final glyph metrics → final button widths).
+        document.fonts?.ready.then(() => requestAnimationFrame(measure));
+    });
     onDestroy(() => { shortcuts.deactivateLayer('dialog'); });
+
+    // Width is driven by the buttons (min 360), NOT by the body text — so long text only grows the
+    // dialog vertically (the body wraps), while a wide button row expands it horizontally.
+    let footerEl = $state<HTMLDivElement | undefined>(undefined);
+    let dialogWidth = $state(360);
+
+    function measure() {
+        const el = footerEl;
+        if (!el) { dialogWidth = 360; return; }
+        const kids = Array.from(el.children) as HTMLElement[];
+        if (!kids.length) { dialogWidth = 360; return; }
+        const cs = getComputedStyle(el);
+        const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+        const gap = parseFloat(cs.columnGap) || parseFloat(cs.gap) || 0;
+        // Sub-pixel button widths summed — independent of the current dialog width, so no feedback.
+        const content = kids.reduce((sum, k) => sum + k.getBoundingClientRect().width, 0) + gap * (kids.length - 1);
+        const maxW = window.innerWidth - 48;
+        dialogWidth = Math.min(Math.max(360, Math.ceil(content + padX) + 2), maxW);
+    }
+
+    // Recompute after the button row renders/changes, after layout settles, and after fonts load
+    // (font metrics change button widths — measuring too early undersizes and wraps the row).
+    $effect(() => {
+        buttons;
+        tick().then(() => requestAnimationFrame(measure));
+    });
 
     function handleKeydown(e: KeyboardEvent) {
         if (e.key === 'Escape') onClose?.();
@@ -58,6 +88,7 @@
         aria-modal="true"
         aria-labelledby="cd-title"
         tabindex="-1"
+        style="width: {dialogWidth}px"
         onclick={(e) => e.stopPropagation()}
         onkeydown={(e) => e.key !== 'Escape' && e.stopPropagation()}
     >
@@ -92,7 +123,7 @@
         </div>
 
         {#if buttons.length > 0}
-            <div class="dlg-footer">
+            <div class="dlg-footer" bind:this={footerEl}>
                 {#each buttons as btn}
                     <button class="dlg-btn" style={btnStyle(btn)} onclick={btn.onClick}>
                         {btn.label}
@@ -119,7 +150,7 @@
         background: $bg-panel;
         border: 1px solid $border;
         border-radius: $radius-md;
-        width: 360px;
+        min-width: 360px;
         max-width: calc(100vw - 48px);
         @include flex(column, flex-start, stretch);
         box-shadow: 0 12px 40px var(--shadow-heavy);
@@ -171,6 +202,7 @@
 
     .dlg-footer {
         @include flex(row, flex-end, center);
+        flex-wrap: nowrap; // buttons always stay on one row; the dialog is sized to fit them
         gap: 8px;
         padding: 12px 20px;
         border-top: 1px solid $border;
@@ -185,6 +217,7 @@
         border-radius: $radius-sm;
         font-size: $fs-small;
         font-family: $font-base;
+        white-space: nowrap;
         border: 1px solid var(--_border, $border);
         background: var(--_bg, transparent);
         color: var(--_color, $text-secondary);

@@ -131,6 +131,8 @@ export interface Messages {
     'metadata.validation.descriptionRequired': string;
     'metadata.validation.keywordRequired': string;
     'metadata.error.saveFailed': string;
+    'metadata.error.copy': string;
+    'metadata.error.dismiss': string;
     'metadata.batch.error.failed': string;
     'metadata.batch.error.cancelled': string;
     'metadata.batch.error.of': string;
@@ -154,8 +156,13 @@ export interface Messages {
     'shortcuts.action.save': string;
     'shortcuts.action.copyKeywords': string;
     'shortcuts.action.pasteKeywords': string;
+    'shortcuts.action.navUp': string;
+    'shortcuts.action.navDown': string;
+    'shortcuts.action.navUpExtend': string;
+    'shortcuts.action.navDownExtend': string;
     'shortcuts.section.file': string;
     'shortcuts.section.editor': string;
+    'shortcuts.section.navigation': string;
     'shortcuts.binding.listening': string;
     'shortcuts.binding.resetToDefault': string;
     'shortcuts.conflict.usedBy': string;
@@ -183,6 +190,57 @@ export interface Messages {
     'settings.caching.smallThumbnails.description': string;
     'settings.caching.lazy.label': string;
     'settings.caching.lazy.description': string;
+
+    // Ollama (feature 007)
+    'common.create': string;
+    'common.edit': string;
+    'common.delete': string;
+    'settings.section.ollama': string;
+    'settings.section.ollamaModels': string;
+    'settings.ollama.status': string;
+    'settings.ollama.status.reachable': string;
+    'settings.ollama.status.notReachable': string;
+    'settings.ollama.status.installedNotRunning': string;
+    'settings.ollama.status.notInstalled': string;
+    'settings.ollama.status.unknown': string;
+    'settings.ollama.check': string;
+    'settings.ollama.checking': string;
+    'settings.ollama.install': string;
+    'settings.ollama.installing': string;
+    'settings.ollama.installFailed': string;
+    'settings.ollama.baseUrl': string;
+    'settings.ollama.activeModel': string;
+    'settings.ollama.activeModel.none': string;
+    'settings.ollama.refresh': string;
+    'settings.ollama.noModels': string;
+    'settings.ollama.download': string;
+    'settings.ollama.download.button': string;
+    'settings.ollama.download.progress': string;
+    'settings.ollama.responseFormat': string;
+    'settings.ollama.responseFormat.description': string;
+    'settings.ollama.answerFormatLabel': string;
+    'settings.ollama.answerFormatLabel.description': string;
+    'settings.ollamaModels.empty': string;
+    'settings.ollamaModel.createTitle': string;
+    'settings.ollamaModel.editTitle': string;
+    'settings.ollamaModel.name': string;
+    'settings.ollamaModel.modelId': string;
+    'settings.ollamaModel.prompt': string;
+    'settings.ollamaModel.think': string;
+    'settings.ollamaModel.keepAlive': string;
+    'settings.ollamaModel.options': string;
+    'settings.ollamaModel.options.description': string;
+    'ollama.attribute': string;
+    'ollama.attribute.tooltip': string;
+    'ollama.unavailable.tooltip': string;
+    'ollama.attribute.progress': string;
+    'ollama.attribute.batch.progress': string;
+    'ollama.attribute.failed': string;
+    'ollama.model.installed': string;
+    'ollama.model.local': string;
+    'ollama.model.cloud': string;
+    'settings.ollamaModel.duplicateModel': string;
+    'settings.ollamaModel.modelId.hint': string;
 }
 
 // Keys whose value is a plain string (usable with t()).
