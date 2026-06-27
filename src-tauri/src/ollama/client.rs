@@ -138,6 +138,23 @@ pub async fn generate(cfg: &AttributionConfig, image_b64: String) -> Result<Stri
         obj.insert("keep_alive".into(), serde_json::Value::String(keep_alive.clone()));
     }
 
+    // Log the effective run parameters so an operator can confirm which options actually reached the
+    // model. An empty `options` here means no profile matched the active model (and no `base` profile
+    // exists), so Ollama silently falls back to its own defaults instead of the configured values.
+    let format_state = match cfg.format.as_object() {
+        Some(o) if !o.is_empty() => "set",
+        _ => "none",
+    };
+    log::info!(
+        "ollama generate → model={} options={} think={:?} keepAlive={:?} format={} promptChars={}",
+        cfg.model,
+        cfg.options,
+        cfg.think,
+        cfg.keep_alive,
+        format_state,
+        cfg.prompt.chars().count()
+    );
+
     #[derive(Deserialize)]
     struct Gen {
         response: String,
@@ -158,6 +175,9 @@ pub async fn generate(cfg: &AttributionConfig, image_b64: String) -> Result<Stri
         return Err(format!("Ollama returned {status}: {}", detail.trim()));
     }
     let g: Gen = resp.json().await.map_err(|e| e.to_string())?;
+    log::info!("ollama generate ← model={} responseChars={}", cfg.model, g.response.chars().count());
+    // Full model output, for diagnosing parse failures (non-JSON, markdown fences, reasoning text, …).
+    log::debug!("ollama generate raw response: {}", g.response);
     Ok(g.response)
 }
 
