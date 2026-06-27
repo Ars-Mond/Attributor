@@ -109,12 +109,15 @@ pub fn ollama_cancel(state: tauri::State<'_, OllamaState>) {
 }
 
 /// Single-photo attribution → parsed result; the frontend applies it to the form (no save).
+/// Cancelable via `ollama_cancel` (the progress overlay's Cancel button) — aborts the inference.
 #[tauri::command]
 pub async fn attribute_photo(
     path: String,
     config: AttributionConfig,
+    state: tauri::State<'_, OllamaState>,
 ) -> Result<AttributionResult, String> {
-    attribute::attribute_one(&path, &config).await
+    let cancel = swap_cancel(state.inner());
+    attribute::attribute_one(&path, &config, &cancel).await
 }
 
 /// Batch attribution: sequentially attribute and ALWAYS save each photo; stream per-file progress.
