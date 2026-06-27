@@ -131,6 +131,8 @@ export interface Messages {
     'metadata.validation.descriptionRequired': string;
     'metadata.validation.keywordRequired': string;
     'metadata.error.saveFailed': string;
+    'metadata.error.copy': string;
+    'metadata.error.dismiss': string;
     'metadata.batch.error.failed': string;
     'metadata.batch.error.cancelled': string;
     'metadata.batch.error.of': string;
@@ -154,8 +156,13 @@ export interface Messages {
     'shortcuts.action.save': string;
     'shortcuts.action.copyKeywords': string;
     'shortcuts.action.pasteKeywords': string;
+    'shortcuts.action.navUp': string;
+    'shortcuts.action.navDown': string;
+    'shortcuts.action.navUpExtend': string;
+    'shortcuts.action.navDownExtend': string;
     'shortcuts.section.file': string;
     'shortcuts.section.editor': string;
+    'shortcuts.section.navigation': string;
     'shortcuts.binding.listening': string;
     'shortcuts.binding.resetToDefault': string;
     'shortcuts.conflict.usedBy': string;
@@ -211,6 +218,8 @@ export interface Messages {
     'settings.ollama.download.progress': string;
     'settings.ollama.responseFormat': string;
     'settings.ollama.responseFormat.description': string;
+    'settings.ollama.answerFormatLabel': string;
+    'settings.ollama.answerFormatLabel.description': string;
     'settings.ollamaModels.empty': string;
     'settings.ollamaModel.createTitle': string;
     'settings.ollamaModel.editTitle': string;
