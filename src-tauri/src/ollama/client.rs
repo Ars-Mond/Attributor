@@ -149,9 +149,14 @@ pub async fn generate(cfg: &AttributionConfig, image_b64: String) -> Result<Stri
         .timeout(Duration::from_secs(600))
         .send()
         .await
-        .map_err(|e| e.to_string())?
-        .error_for_status()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("Ollama not reachable: {e}"))?;
+    let status = resp.status();
+    if !status.is_success() {
+        // Surface Ollama's real error body (e.g. out-of-memory, model not found) instead of a
+        // misleading downstream "invalid JSON" parse failure.
+        let detail = resp.text().await.unwrap_or_default();
+        return Err(format!("Ollama returned {status}: {}", detail.trim()));
+    }
     let g: Gen = resp.json().await.map_err(|e| e.to_string())?;
     Ok(g.response)
 }
@@ -162,36 +167,67 @@ pub fn image_to_base64(path: &str) -> Result<String, String> {
     Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
 }
 
+/// Candidate `ollama` executables: PATH first, then the platform's default install location — so a
+/// missing/stale PATH in the app's environment doesn't hide an installed Ollama or block auto-start.
+fn binary_candidates() -> Vec<String> {
+    let mut v = vec!["ollama".to_string()];
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            v.push(format!("{local}\\Programs\\Ollama\\ollama.exe"));
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        v.push("/usr/local/bin/ollama".to_string());
+        v.push("/opt/homebrew/bin/ollama".to_string());
+        v.push("/Applications/Ollama.app/Contents/Resources/ollama".to_string());
+    }
+    #[cfg(target_os = "linux")]
+    {
+        v.push("/usr/local/bin/ollama".to_string());
+        v.push("/usr/bin/ollama".to_string());
+    }
+    v
+}
+
 /// Whether the `ollama` command exists on the system (installed), regardless of the daemon running.
 /// Blocking — call inside `spawn_blocking`.
 pub fn is_installed() -> bool {
-    std::process::Command::new("ollama")
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    binary_candidates().iter().any(|bin| {
+        std::process::Command::new(bin)
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    })
 }
 
 /// Ensure the daemon is running before an operation: if the heartbeat fails, spawn `ollama serve`
-/// (detached) and poll until it answers (~15 s). Returns Err if Ollama is missing or never comes up.
+/// (detached, trying each candidate binary) and poll until it answers (~30 s). Auto-starts Ollama.
 pub async fn ensure_running(base_url: &str) -> Result<(), String> {
     if version(base_url).await.is_ok() {
         return Ok(());
     }
     log::info!("ensure_running: Ollama not reachable, starting `ollama serve`");
-    std::process::Command::new("ollama")
-        .arg("serve")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|_| "Ollama is not installed or could not be started".to_string())?;
-    for _ in 0..30 {
+    let started = binary_candidates().into_iter().any(|bin| {
+        std::process::Command::new(&bin)
+            .arg("serve")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .is_ok()
+    });
+    if !started {
+        return Err("Ollama is not installed or could not be started".to_string());
+    }
+    for _ in 0..60 {
         tokio::time::sleep(Duration::from_millis(500)).await;
         if version(base_url).await.is_ok() {
             return Ok(());
         }
     }
-    Err("Ollama did not become ready in time".to_string())
+    Err("Ollama started but did not become ready in time".to_string())
 }
