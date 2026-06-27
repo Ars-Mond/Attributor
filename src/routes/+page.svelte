@@ -21,6 +21,7 @@
     import InputContextMenu from "$lib/reusable/InputContextMenu.svelte";
     import SettingsDialog from "$lib/settings/SettingsDialog.svelte";
     import ProgressOverlay from "$lib/reusable/ProgressOverlay.svelte";
+    import {progress} from "$lib/progress.svelte";
     import {ollama} from "$lib/ollama/availability.svelte";
     import {settings} from "$lib/settings";
     import {shortcuts} from "$lib/shortcuts";
@@ -231,6 +232,11 @@
     let winResizeTimer: ReturnType<typeof setTimeout> | null = null;
 
     function handleGlobalKeyDown(e: KeyboardEvent) {
+        // A blocking progress overlay (attribution / batch save) freezes the whole app, shortcuts included.
+        if (progress.blocking) {
+            e.preventDefault();
+            return;
+        }
         if (shortcuts.handleKeyDown(e)) e.preventDefault();
     }
 

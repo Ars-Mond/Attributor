@@ -70,7 +70,14 @@
     async function handleAttribute() {
         if (!ollama.available || !filepath) return;
         attributeError = null;
-        const handle = progress.run({label: t('ollama.attribute.progress')});
+        // Blocking overlay with a cancel button — freezes the whole app until the inference finishes
+        // or the user cancels (which aborts the backend request).
+        const handle = progress.run({
+            label: t('ollama.attribute.progress'),
+            blocking: true,
+            cancelable: true,
+            onCancel: () => {cancelOllama();}
+        });
         try {
             const r = await attributePhoto(filepath);
             title = r.title;
@@ -78,7 +85,11 @@
             categories = r.categories.join(', ');
             for (const kw of r.keywords) addKeyword(kw);
         } catch (e) {
-            attributeError = t('ollama.attribute.failed', {error: e instanceof Error ? e.message : String(e)});
+            const msg = e instanceof Error ? e.message : String(e);
+            // A user-initiated cancel surfaces as "cancelled" from the backend — not a real error.
+            if (msg !== 'cancelled') {
+                attributeError = t('ollama.attribute.failed', {error: msg});
+            }
         } finally {
             handle.done();
         }
