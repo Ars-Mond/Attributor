@@ -119,7 +119,7 @@
         background: $bg-panel;
         border: 1px solid $border;
         border-radius: $radius-md;
-        width: 360px;
+        width: 400px;
         max-width: calc(100vw - 48px);
         @include flex(column, flex-start, stretch);
         box-shadow: 0 12px 40px var(--shadow-heavy);
@@ -171,6 +171,7 @@
 
     .dlg-footer {
         @include flex(row, flex-end, center);
+        flex-wrap: wrap; // never clip: extra buttons drop to a new row instead of overflowing
         gap: 8px;
         padding: 12px 20px;
         border-top: 1px solid $border;
