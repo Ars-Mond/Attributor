@@ -303,6 +303,10 @@
         shortcuts.setHandler('file.open_folder', () => filesPanel?.openFolderDialog());
         shortcuts.setHandler('file.settings',    () => { showSettings = true; });
         shortcuts.setHandler('editor.save',      () => metaPanel?.save());
+        shortcuts.setHandler('files.navigate_up',          () => filesPanel?.navigate('up', false));
+        shortcuts.setHandler('files.navigate_down',        () => filesPanel?.navigate('down', false));
+        shortcuts.setHandler('files.navigate_up_extend',   () => filesPanel?.navigate('up', true));
+        shortcuts.setHandler('files.navigate_down_extend', () => filesPanel?.navigate('down', true));
 
         // 6. Show window after full UI init
         await win.show();

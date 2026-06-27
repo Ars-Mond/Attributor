@@ -18,6 +18,13 @@ shortcuts.registerLayer({
     suppressBelow: true,
     autoActivate: () => ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName ?? ''),
 });
+// File-list navigation layer: active only when NOT typing in a field, so arrow keys move between files
+// but still work normally inside inputs/textareas. Its actions are scoped to this layer (see below).
+shortcuts.registerLayer({
+    id: 'files',
+    priority: 5,
+    autoActivate: () => !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName ?? ''),
+});
 shortcuts.registerLayer({
     id: 'dialog',
     priority: 100,
@@ -58,5 +65,38 @@ shortcuts.registerAction({
     label: 'shortcuts.action.pasteKeywords',
     section: 'shortcuts.section.editor',
     defaultBinding: 'Ctrl+Shift+V',
+    handler: () => {}
+});
+// File navigation — scoped to the 'files' layer so the arrows don't fire while typing in a field.
+shortcuts.registerAction({
+    id: 'files.navigate_up',
+    label: 'shortcuts.action.navUp',
+    section: 'shortcuts.section.navigation',
+    defaultBinding: 'ArrowUp',
+    layer: 'files',
+    handler: () => {}
+});
+shortcuts.registerAction({
+    id: 'files.navigate_down',
+    label: 'shortcuts.action.navDown',
+    section: 'shortcuts.section.navigation',
+    defaultBinding: 'ArrowDown',
+    layer: 'files',
+    handler: () => {}
+});
+shortcuts.registerAction({
+    id: 'files.navigate_up_extend',
+    label: 'shortcuts.action.navUpExtend',
+    section: 'shortcuts.section.navigation',
+    defaultBinding: 'Shift+ArrowUp',
+    layer: 'files',
+    handler: () => {}
+});
+shortcuts.registerAction({
+    id: 'files.navigate_down_extend',
+    label: 'shortcuts.action.navDownExtend',
+    section: 'shortcuts.section.navigation',
+    defaultBinding: 'Shift+ArrowDown',
+    layer: 'files',
     handler: () => {}
 });

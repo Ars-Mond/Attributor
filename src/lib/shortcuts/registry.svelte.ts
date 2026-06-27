@@ -99,6 +99,9 @@ class ShortcutRegistry {
             if (!isActive) continue;
 
             for (const action of this.#actions.values()) {
+                // Layer-scoped actions only fire while their own layer is being evaluated; unscoped
+                // actions (no `layer`) are eligible in every active layer, as before.
+                if (action.layer && action.layer !== layer.id) continue;
                 if (this.getEffectiveBinding(action.id) === binding) {
                     debug(`[shortcuts] fired: ${action.id} (${binding}) via layer "${layer.id}"`);
                     action.handler();

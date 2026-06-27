@@ -9,6 +9,7 @@
     import type {FileNode} from "$lib/types";
     import {panelState} from './filesPanelStore.svelte';
     import type {ViewMode, LayoutDir} from './filesPanelStore.svelte';
+    import {progress} from "$lib/progress.svelte";
 
     let {
         onFileSelect,
@@ -175,30 +176,27 @@
         }
     }
 
-    function handleKeyDown(e: KeyboardEvent) {
-        if (disabled) return;
-        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    /**
+     * Move the active file up/down in the list (optionally extending the selection). Wired to the
+     * configurable file-navigation shortcuts; the 'files' shortcut layer guarantees this isn't invoked
+     * while a field is focused, so no input-focus check is needed here.
+     */
+    export function navigate(direction: 'up' | 'down', extend: boolean) {
+        if (disabled || progress.blocking) return;
         if (!contentEl || !panelState.fileTree) return;
-
-        // Don't hijack keyboard when user is typing
-        const active = document.activeElement;
-        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
-
-        e.preventDefault();
 
         const items = [...contentEl.querySelectorAll<HTMLElement>('[data-path]')];
         if (items.length === 0) return;
 
         const currentIdx = items.findIndex(el => el.dataset.path === panelState.activePath);
-        const nextIdx = e.key === 'ArrowDown'
+        const nextIdx = direction === 'down'
             ? (currentIdx === -1 ? 0 : Math.min(currentIdx + 1, items.length - 1))
             : (currentIdx === -1 ? 0 : Math.max(currentIdx - 1, 0));
 
         if (nextIdx === currentIdx && currentIdx !== -1) return;
 
         const path = items[nextIdx].dataset.path!;
-
-        if (e.shiftKey) {
+        if (extend) {
             doRangeSelect(path);
         } else {
             doSingleSelect(path);
@@ -208,7 +206,6 @@
     }
 
     onMount(async () => {
-        window.addEventListener('keydown', handleKeyDown);
         // readyThumbs records which paths have a ready cached thumbnail. It may retain paths after a
         // setting is turned off; that is harmless because the display branches independently gate on
         // the live cacheSmall value, so a cached thumbnail is never shown while caching is off (FR-009).
@@ -251,7 +248,6 @@
     });
 
     onDestroy(() => {
-        window.removeEventListener('keydown', handleKeyDown);
         unlisten?.();
         unlistenThumb?.();
         if (refreshTimer) clearTimeout(refreshTimer);
