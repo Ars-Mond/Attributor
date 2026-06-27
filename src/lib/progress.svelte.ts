@@ -52,6 +52,8 @@ export const progress = {
             },
             done() {
                 active = false;
+                blocking = false;
+                cancelable = false;
                 onCancel = null;
             }
         };
