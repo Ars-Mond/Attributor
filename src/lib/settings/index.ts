@@ -173,6 +173,12 @@ settings.register('ollama', {
     default: DEFAULT_OLLAMA_FORMAT,
     label: 'settings.ollama.responseFormat'
 });
+settings.register('ollama', {
+    key: 'ollama.answerFormatLabel',
+    type: 'string',
+    default: 'Answer format:',
+    label: 'settings.ollama.answerFormatLabel'
+});
 settings.register('ollama-models', {
     key: 'ollama.modelProfiles',
     type: 'custom',
