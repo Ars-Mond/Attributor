@@ -3,7 +3,7 @@
 </script>
 
 <script lang="ts">
-    import {onMount, onDestroy} from 'svelte';
+    import {onMount, onDestroy, tick} from 'svelte';
     import type {DialogButton} from '$lib/types';
     import {shortcuts} from '$lib/shortcuts';
 
@@ -38,6 +38,28 @@
     onMount(() => { shortcuts.activateLayer('dialog'); });
     onDestroy(() => { shortcuts.deactivateLayer('dialog'); });
 
+    // Width is driven by the buttons (min 360), NOT by the body text — so long text only grows the
+    // dialog vertically (the body wraps), while a wide button row expands it horizontally.
+    let footerEl = $state<HTMLDivElement | undefined>(undefined);
+    let dialogWidth = $state(360);
+
+    function measure() {
+        if (!footerEl) { dialogWidth = 360; return; }
+        const cs = getComputedStyle(footerEl);
+        const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+        const gap = parseFloat(cs.columnGap) || parseFloat(cs.gap) || 0;
+        const kids = Array.from(footerEl.children) as HTMLElement[];
+        const content = kids.reduce((sum, k) => sum + k.offsetWidth, 0) + gap * Math.max(0, kids.length - 1);
+        const maxW = window.innerWidth - 48;
+        dialogWidth = Math.min(Math.max(360, Math.ceil(content + padX)), maxW);
+    }
+
+    // Recompute after the button row renders / changes.
+    $effect(() => {
+        buttons;
+        tick().then(measure);
+    });
+
     function handleKeydown(e: KeyboardEvent) {
         if (e.key === 'Escape') onClose?.();
     }
@@ -58,6 +80,7 @@
         aria-modal="true"
         aria-labelledby="cd-title"
         tabindex="-1"
+        style="width: {dialogWidth}px"
         onclick={(e) => e.stopPropagation()}
         onkeydown={(e) => e.key !== 'Escape' && e.stopPropagation()}
     >
@@ -92,7 +115,7 @@
         </div>
 
         {#if buttons.length > 0}
-            <div class="dlg-footer">
+            <div class="dlg-footer" bind:this={footerEl}>
                 {#each buttons as btn}
                     <button class="dlg-btn" style={btnStyle(btn)} onclick={btn.onClick}>
                         {btn.label}
@@ -119,7 +142,7 @@
         background: $bg-panel;
         border: 1px solid $border;
         border-radius: $radius-md;
-        width: 400px;
+        min-width: 360px;
         max-width: calc(100vw - 48px);
         @include flex(column, flex-start, stretch);
         box-shadow: 0 12px 40px var(--shadow-heavy);
