@@ -201,6 +201,7 @@
         @include btn-reset;
         @include transition(background, color, border-color);
         padding: 5px 12px;
+        white-space: nowrap;
         border: 1px solid $border;
         border-radius: $radius-sm;
         font-size: $fs-small;

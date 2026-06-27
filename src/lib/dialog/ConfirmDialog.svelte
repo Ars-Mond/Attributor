@@ -185,6 +185,7 @@
         border-radius: $radius-sm;
         font-size: $fs-small;
         font-family: $font-base;
+        white-space: nowrap;
         border: 1px solid var(--_border, $border);
         background: var(--_bg, transparent);
         color: var(--_color, $text-secondary);

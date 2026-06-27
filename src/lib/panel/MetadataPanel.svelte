@@ -42,6 +42,7 @@
     const autoSave = $derived(settings.subscribe('editor.autosave')());
     let saveAttempted = $state(false);
     let saveError = $state<string | null>(null);
+    let attributeError = $state<string | null>(null);
     let showClearConfirm = $state(false);
 
     // ── UI preferences (persisted) ─────────────────────────────────────────
@@ -68,6 +69,7 @@
     /** Single-photo attribution: fill the form from the model (overwrite text, append+dedupe keywords). */
     async function handleAttribute() {
         if (!ollama.available || !filepath) return;
+        attributeError = null;
         const handle = progress.run({label: t('ollama.attribute.progress')});
         try {
             const r = await attributePhoto(filepath);
@@ -76,7 +78,7 @@
             categories = r.categories.join(', ');
             for (const kw of r.keywords) addKeyword(kw);
         } catch (e) {
-            saveError = t('ollama.attribute.failed', {error: e instanceof Error ? e.message : String(e)});
+            attributeError = t('ollama.attribute.failed', {error: e instanceof Error ? e.message : String(e)});
         } finally {
             handle.done();
         }
@@ -482,6 +484,8 @@
         categories = '';
         releaseFilename = '';
         saveAttempted = false;
+        saveError = null;
+        attributeError = null;
         snapshot = null;
 
         try {
@@ -570,6 +574,7 @@
     async function handleSave() {
         saveAttempted = true;
         saveError = null;
+        attributeError = null;
         if (hasErrors) return;
         try {
             await doSave();
@@ -1266,6 +1271,10 @@
             <div class="footer-errors">
                 {t('metadata.error.saveFailed')}: {saveError}
             </div>
+        {:else if !isBatch && attributeError}
+            <div class="footer-errors">
+                {attributeError}
+            </div>
         {:else if isBatch && !isSaving && (batchFailed > 0 || batchCancelled > 0)}
             <div class="footer-errors">
                 {t('metadata.batch.error.failed', {n: batchFailed})}{#if batchCancelled > 0} · {t('metadata.batch.error.cancelled', {n: batchCancelled})}{/if} {t('metadata.batch.error.of', {n: batchResults.size})}
@@ -1534,6 +1543,8 @@
         padding: 0 16px;
         flex: 1;
         min-height: $footer-height;
+
+        button { white-space: nowrap; }
     }
 
     .autosave-toggle {

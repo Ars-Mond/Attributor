@@ -2,10 +2,11 @@
     import {t} from '$lib/i18n';
     import type {ModelProfile} from '$lib/ollama/ollama';
 
-    let {profile, isNew, modelOptions, onSave, onCancel}: {
+    let {profile, isNew, modelOptions, closeOnBackdrop = false, onSave, onCancel}: {
         profile: ModelProfile;
         isNew: boolean;
         modelOptions: string[];
+        closeOnBackdrop?: boolean;   // whether clicking the empty backdrop dismisses the dialog
         onSave: (p: ModelProfile) => void;
         onCancel: () => void;
     } = $props();
@@ -59,7 +60,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div class="overlay" role="presentation" onclick={onCancel} onkeydown={() => {}}>
+<div class="overlay" role="presentation" onclick={() => {if (closeOnBackdrop) onCancel();}} onkeydown={() => {}}>
     <div class="dialog" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
         <div class="dlg-header">
             <span class="dlg-title">{t(isNew ? 'settings.ollamaModel.createTitle' : 'settings.ollamaModel.editTitle')}</span>
@@ -210,6 +211,7 @@
         @include btn-reset;
         @include transition(background, color, border-color);
         padding: 5px 14px;
+        white-space: nowrap;
         border: 1px solid $border;
         border-radius: $radius-sm;
         font-size: $fs-small;

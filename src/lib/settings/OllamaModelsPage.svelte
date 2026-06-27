@@ -132,6 +132,7 @@
         @include btn-reset;
         @include transition(background, color, border-color);
         padding: 4px 12px;
+        white-space: nowrap;
         border: 1px solid $border;
         border-radius: $radius-sm;
         font-size: $fs-footnote1;
