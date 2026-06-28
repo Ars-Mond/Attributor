@@ -21,6 +21,9 @@ export interface SettingDescriptor<T = unknown> {
     max?: number;
     step?: number;
     options?: {value: string; label: string}[];
+    // When true, each option `label` is an i18n message key resolved via t() at render time (e.g. theme
+    // names). Left false for options whose labels are literal (e.g. language endonyms).
+    localizeOptions?: boolean;
     render?: SettingComponent;   // only for type === 'custom'
 }
 

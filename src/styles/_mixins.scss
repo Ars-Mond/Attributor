@@ -37,17 +37,19 @@ $font-base:      'Geologica', system-ui, sans-serif;
 $font-mono:      'JetBrains Mono', monospace;
 
 // ── Typographic scale ──
-$fs-h1:          48px;
-$fs-h2:          38px;
-$fs-h3:          30px;
-$fs-h4:          24px;
-$fs-h5:          20px;
-$fs-h6:          18px;
+// Each size is multiplied by --font-scale (set from the appearance.font_size setting; defaults to 1
+// so the design baseline is unchanged). See applyFontScale() in src/lib/themes.ts.
+$fs-h1:          calc(48px * var(--font-scale, 1));
+$fs-h2:          calc(38px * var(--font-scale, 1));
+$fs-h3:          calc(30px * var(--font-scale, 1));
+$fs-h4:          calc(24px * var(--font-scale, 1));
+$fs-h5:          calc(20px * var(--font-scale, 1));
+$fs-h6:          calc(18px * var(--font-scale, 1));
 
-$fs-regular:     16px;
-$fs-small:       14px;
-$fs-footnote1:   12px;
-$fs-footnote2:   11px;
+$fs-regular:     calc(16px * var(--font-scale, 1));
+$fs-small:       calc(14px * var(--font-scale, 1));
+$fs-footnote1:   calc(12px * var(--font-scale, 1));
+$fs-footnote2:   calc(11px * var(--font-scale, 1));
 
 // ─────────────────────────────────────────────
 // Mixins

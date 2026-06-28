@@ -15,7 +15,6 @@ export const en: Messages = {
 
     'menu.file.label': 'File',
     'menu.file.openDirectory': 'Open directory...',
-    'menu.file.theme': 'Theme',
     'menu.file.settings': 'Settings',
     'menu.windows.label': 'Windows',
     'menu.windows.showControl': 'Show Control',
@@ -24,6 +23,7 @@ export const en: Messages = {
     'menu.help.help': 'Help',
     'menu.help.about': 'About',
 
+    'theme.system': 'System',
     'theme.dark': 'Dark',
     'theme.light': 'Light',
     'dock.window.control': 'Control',
@@ -152,7 +152,7 @@ export const en: Messages = {
     'settings.general.nestedFolders.description': 'Show nested folders in the Content view and include them when generating thumbnails. Does not affect the Table view.',
     'settings.editor.autosave.label': 'Auto-save',
     'settings.editor.autosaveDelay.label': 'Auto-save delay (ms)',
-    'settings.editor.keywordLimit.label': 'Max keywords per file',
+    'settings.appearance.theme.label': 'Theme',
     'settings.appearance.fontSize.label': 'Font size',
     'settings.caching.photo.label': 'Photo caching',
     'settings.caching.photo.description': 'Show the viewed photo via a cached thumbnail instead of the original (off shows the original directly). Note: the first run takes longer while thumbnails are generated; with a large number of photos the app may briefly become unresponsive, and the cache increases the disk space used.',

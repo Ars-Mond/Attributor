@@ -6,7 +6,7 @@
     import FilesPanel from "$lib/panel/FilesPanel.svelte";
     import UnsavedChangesDialog from "$lib/dialog/UnsavedChangesDialog.svelte";
     import {loadAppState, saveAppState} from "$lib/store";
-    import {themes, applyTheme, DEFAULT_THEME} from "$lib/themes";
+    import {applyTheme, applyFontScale} from "$lib/themes";
     import DockLayout from "$lib/docking/DockLayout.svelte";
     import type {LayoutNode, WindowConfig} from "$lib/docking/dockTypes";
     import {getDefaultLayout, removePanel, addPanelToRoot, findPanel, findSavePoint, insertPanel, serializeLayout, deserializeLayout} from "$lib/docking/dockStore";
@@ -25,7 +25,7 @@
     import {ollama} from "$lib/ollama/availability.svelte";
     import {settings} from "$lib/settings";
     import {shortcuts} from "$lib/shortcuts";
-    import {t, initLocale, type MessageKey} from "$lib/i18n";
+    import {t, initLocale} from "$lib/i18n";
 
     // --- Docking ---
     // $derived so dock tab titles re-render on a language switch.
@@ -113,8 +113,23 @@
     let showAbout = $state(false);
     let showHelp = $state(false);
     let showSettings = $state(false);
-    let currentTheme = $state(DEFAULT_THEME);
     let batchPaths = $state<string[]>([]);
+
+    // --- Appearance (theme + font scale) ---
+    // Reactively apply the persisted appearance settings; re-runs when the user changes them in the dialog.
+    $effect(() => {
+        applyTheme(settings.subscribe<string>('appearance.theme')());
+    });
+    $effect(() => {
+        applyFontScale(settings.subscribe<number>('appearance.font_size')());
+    });
+    // Re-apply on OS color-scheme change (only affects the 'system' theme).
+    $effect(() => {
+        const mq = window.matchMedia('(prefers-color-scheme: dark)');
+        const onChange = () => applyTheme(settings.get<string>('appearance.theme'));
+        mq.addEventListener('change', onChange);
+        return () => mq.removeEventListener('change', onChange);
+    });
 
     // --- Unsaved changes dialog ---
     let showDialog = $state(false);
@@ -245,14 +260,6 @@
         const win = getCurrentWindow();
         const state = await loadAppState();
 
-        // 0. Restore theme
-        if (state.theme) {
-            currentTheme = state.theme;
-            applyTheme(state.theme);
-        } else {
-            applyTheme(DEFAULT_THEME);
-        }
-
         // 1. Restore window size / maximize
         if (state.windowMaximized) {
             await win.maximize();
@@ -275,6 +282,11 @@
         // Load settings before restoring the folder so the cache config (cacheGenConfig) and the
         // viewer reflect the user's saved settings instead of the defaults.
         await settings.load();
+
+        // One-time migration: carry the pre-settings theme choice (old ui-state.json) into the registry.
+        if (!settings.wasPersisted('appearance.theme') && state.theme) {
+            settings.set('appearance.theme', state.theme);
+        }
 
         // Resolve the interface language (first-run OS detection) before the window is shown, so the
         // first painted frame is already localized.
@@ -337,15 +349,6 @@
     <MenuBar>
         <MenuTab label={t('menu.file.label')}>
             <MenuItem label={t('menu.file.openDirectory')} shortcut={shortcuts.getEffectiveBinding('file.open_folder') ?? undefined} onClick={() => filesPanel?.openFolderDialog()} />
-            <MenuSeparator />
-            <MenuTab label={t('menu.file.theme')}>
-                {#each themes as theme}
-                    <MenuItem
-                        label={t(`theme.${theme.id}` as MessageKey)}
-                        onClick={() => { currentTheme = theme.id; applyTheme(theme.id); saveAppState({theme: theme.id}); }}
-                    />
-                {/each}
-            </MenuTab>
             <MenuSeparator />
             <MenuItem label={t('menu.file.settings')} shortcut={shortcuts.getEffectiveBinding('file.settings') ?? undefined} onClick={() => {showSettings = true;}} />
         </MenuTab>

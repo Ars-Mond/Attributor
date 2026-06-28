@@ -15,7 +15,6 @@ export const ru: Messages = {
 
     'menu.file.label': 'Файл',
     'menu.file.openDirectory': 'Открыть папку...',
-    'menu.file.theme': 'Тема',
     'menu.file.settings': 'Настройки',
     'menu.windows.label': 'Окна',
     'menu.windows.showControl': 'Показать панель управления',
@@ -24,6 +23,7 @@ export const ru: Messages = {
     'menu.help.help': 'Справка',
     'menu.help.about': 'О программе',
 
+    'theme.system': 'Системная',
     'theme.dark': 'Тёмная',
     'theme.light': 'Светлая',
     'dock.window.control': 'Управление',
@@ -153,7 +153,7 @@ export const ru: Messages = {
     'settings.general.nestedFolders.description': 'Показывать вложенные папки в режиме «Содержимое» и включать их при генерации миниатюр. Не влияет на режим «Таблица».',
     'settings.editor.autosave.label': 'Автосохранение',
     'settings.editor.autosaveDelay.label': 'Задержка автосохранения (мс)',
-    'settings.editor.keywordLimit.label': 'Макс. ключевых слов на файл',
+    'settings.appearance.theme.label': 'Тема',
     'settings.appearance.fontSize.label': 'Размер шрифта',
     'settings.caching.photo.label': 'Кэширование фото',
     'settings.caching.photo.description': 'Показывать просматриваемое фото через кэшированную миниатюру вместо оригинала (выкл. — показывается оригинал напрямую). Примечание: первый запуск займёт больше времени, пока генерируются миниатюры; при большом количестве фотографий приложение может ненадолго перестать отвечать, а кэш увеличивает занимаемое место на диске.',

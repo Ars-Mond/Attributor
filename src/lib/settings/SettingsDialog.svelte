@@ -195,7 +195,7 @@
                                                     <option
                                                         value={opt.value}
                                                         selected={opt.value === settings.get<string>(descriptor.key)}
-                                                    >{opt.label}</option>
+                                                    >{descriptor.localizeOptions ? t(opt.label as MessageKey) : opt.label}</option>
                                                 {/each}
                                             </select>
 

@@ -41,7 +41,6 @@ export interface Messages {
     // Menu bar
     'menu.file.label': string;
     'menu.file.openDirectory': string;
-    'menu.file.theme': string;
     'menu.file.settings': string;
     'menu.windows.label': string;
     'menu.windows.showControl': string;
@@ -50,7 +49,8 @@ export interface Messages {
     'menu.help.help': string;
     'menu.help.about': string;
 
-    // Theme names (menu) and dock window titles
+    // Theme names (appearance settings) and dock window titles
+    'theme.system': string;
     'theme.dark': string;
     'theme.light': string;
     'dock.window.control': string;
@@ -182,7 +182,7 @@ export interface Messages {
     'settings.general.nestedFolders.description': string;
     'settings.editor.autosave.label': string;
     'settings.editor.autosaveDelay.label': string;
-    'settings.editor.keywordLimit.label': string;
+    'settings.appearance.theme.label': string;
     'settings.appearance.fontSize.label': string;
     'settings.caching.photo.label': string;
     'settings.caching.photo.description': string;

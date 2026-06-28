@@ -4,6 +4,7 @@ import ShortcutsPage from '$lib/shortcuts/ShortcutsPage.svelte';
 import OllamaSettingsPage from './OllamaSettingsPage.svelte';
 import OllamaModelsPage from './OllamaModelsPage.svelte';
 import type {ModelProfile} from '$lib/ollama/ollama';
+import {THEME_OPTIONS, DEFAULT_THEME} from '$lib/themes';
 
 // Default enforced JSON schema for Ollama structured output (FR-006). Debug-only field; the three flags
 // are required in the schema (model returns them) but ignored by the app this feature.
@@ -153,17 +154,16 @@ settings.register('editor',
         step: 100
     }
 );
-settings.register('editor',
+settings.register('appearance',
     {
-        key: 'editor.keyword_limit',
-        type: 'int',
-        default: 50,
-        label: 'settings.editor.keywordLimit.label',
-        min: 1,
-        max: 200
+        key: 'appearance.theme',
+        type: 'string',
+        default: DEFAULT_THEME,
+        label: 'settings.appearance.theme.label',
+        options: THEME_OPTIONS,
+        localizeOptions: true
     }
 );
-
 settings.register('appearance',
     {
         key: 'appearance.font_size',
