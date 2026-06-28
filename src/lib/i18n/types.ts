@@ -125,6 +125,9 @@ export interface Messages {
     'metadata.field.categories.batch.placeholder': string;
     'metadata.field.releaseFilename': string;
     'metadata.field.releaseFilename.placeholder': string;
+    'metadata.field.editorial': string;
+    'metadata.field.matureContent': string;
+    'metadata.field.illustration': string;
     'metadata.validation.noFileSelected': string;
     'metadata.validation.filenameRequired': string;
     'metadata.validation.titleRequired': string;

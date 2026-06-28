@@ -36,8 +36,8 @@ fn extract_json(raw: &str) -> &str {
     }
 }
 
-/// Parse and validate the model's strict-JSON `response` string into the applied fields.
-/// The editorial/mature_content/illustration flags are present in the schema but ignored here.
+/// Parse and validate the model's strict-JSON `response` string into the applied fields. The
+/// editorial/mature_content/illustration flags are lenient (default false if missing or non-bool).
 fn parse_result(raw: &str) -> Result<AttributionResult, String> {
     let v: serde_json::Value =
         serde_json::from_str(extract_json(raw)).map_err(|e| format!("invalid JSON from model: {e}"))?;
@@ -53,11 +53,15 @@ fn parse_result(raw: &str) -> Result<AttributionResult, String> {
             .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
             .ok_or_else(|| format!("response missing array field '{key}'"))
     };
+    let bool_field = |key: &str| -> bool { v.get(key).and_then(|x| x.as_bool()).unwrap_or(false) };
     Ok(AttributionResult {
         title: str_field("title")?,
         description: str_field("description")?,
         keywords: arr_field("keywords")?,
         categories: arr_field("categories")?,
+        editorial: bool_field("editorial"),
+        mature_content: bool_field("mature_content"),
+        illustration: bool_field("illustration"),
     })
 }
 

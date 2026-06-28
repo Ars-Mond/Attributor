@@ -19,6 +19,9 @@ export interface AttributionResult {
     description: string;
     keywords: string[];
     categories: string[];
+    editorial: boolean;
+    matureContent: boolean;
+    illustration: boolean;
 }
 
 export interface AttributionConfig {

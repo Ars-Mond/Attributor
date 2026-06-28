@@ -17,7 +17,6 @@ export interface AppState {
     windowWidth: number;
     windowHeight: number;
     descriptionHeight: number;
-    stockKeywordsOpen: boolean;
     optionalOpen: boolean;
     theme: string;
     dockLayout: string;
@@ -31,7 +30,7 @@ export async function loadAppState(): Promise<Partial<AppState>> {
             'lastFolder', 'lastFile',
             'leftPanelWidth', 'rightPanelWidth',
             'windowMaximized', 'windowWidth', 'windowHeight',
-            'descriptionHeight', 'stockKeywordsOpen', 'optionalOpen', 'theme',
+            'descriptionHeight', 'optionalOpen', 'theme',
             'dockLayout', 'dockHiddenWindows',
         ];
         const values = await Promise.all(keys.map(k => s.get(k)));

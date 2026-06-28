@@ -46,8 +46,8 @@ pub struct AttributionConfig {
     pub format: serde_json::Value,
 }
 
-/// Applied fields of a single attribution. The model also returns editorial/mature_content/illustration,
-/// which are accepted in the schema but ignored this feature (deferred follow-up).
+/// Applied fields of a single attribution. The editorial/mature_content/illustration flags are surfaced
+/// to the frontend as checkboxes; they are not written to file metadata.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AttributionResult {
@@ -55,4 +55,7 @@ pub struct AttributionResult {
     pub description: String,
     pub keywords: Vec<String>,
     pub categories: Vec<String>,
+    pub editorial: bool,
+    pub mature_content: bool,
+    pub illustration: bool,
 }

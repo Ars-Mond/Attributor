@@ -39,6 +39,12 @@
     let keywords = $state<string[]>([]);
     let categories = $state('');
     let releaseFilename = $state('');
+    // Attribution-only flags (filled by Ollama, shown as checkboxes; not written to file metadata).
+    let editorial = $state(false);
+    let matureContent = $state(false);
+    let illustration = $state(false);
+    // Stock-keyword presets popup (moved out of the inline spoiler into an on-demand dialog).
+    let showStockKeywords = $state(false);
     const autoSave = $derived(settings.subscribe('editor.autosave')());
     let saveAttempted = $state(false);
     let saveError = $state<string | null>(null);
@@ -48,7 +54,6 @@
     // ── UI preferences (persisted) ─────────────────────────────────────────
 
     let descriptionEl = $state<HTMLTextAreaElement | undefined>(undefined);
-    let stockKeywordsOpen = $state(false);
     let optionalOpen = $state(false);
     let uiLoaded = $state(false);
 
@@ -58,7 +63,6 @@
         if (s.descriptionHeight && descriptionEl) {
             descriptionEl.style.height = `${s.descriptionHeight}px`;
         }
-        if (s.stockKeywordsOpen !== undefined) stockKeywordsOpen = s.stockKeywordsOpen;
         if (s.optionalOpen !== undefined) optionalOpen = s.optionalOpen;
         uiLoaded = true;
         void ollama.refresh();
@@ -83,6 +87,9 @@
             title = r.title;
             description = r.description;
             categories = r.categories.join(', ');
+            editorial = r.editorial;
+            matureContent = r.matureContent;
+            illustration = r.illustration;
             for (const kw of r.keywords) addKeyword(kw);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
@@ -140,10 +147,10 @@
         };
     });
 
-    // Persist spoiler states
+    // Persist spoiler state
     $effect(() => {
         if (!uiLoaded) return;
-        saveAppState({stockKeywordsOpen, optionalOpen});
+        saveAppState({optionalOpen});
     });
 
     // ── Snapshot (dirty tracking) ──────────────────────────────────────────
@@ -494,6 +501,9 @@
         keywords = [];
         categories = '';
         releaseFilename = '';
+        editorial = false;
+        matureContent = false;
+        illustration = false;
         saveAttempted = false;
         saveError = null;
         attributeError = null;
@@ -523,6 +533,9 @@
         keywords = [];
         categories = '';
         releaseFilename = '';
+        editorial = false;
+        matureContent = false;
+        illustration = false;
         snapshot = null;
         saveAttempted = false;
     }
@@ -892,6 +905,8 @@
     }
 </script>
 
+<svelte:window onkeydown={(e) => { if (showStockKeywords && e.key === 'Escape') { e.stopPropagation(); showStockKeywords = false; } }} />
+
 <aside class="panel">
     <div class="panel-content">
         <h2 class="panel-title">{t('metadata.title')}</h2>
@@ -1013,6 +1028,16 @@
                                 <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
                             </svg>
                             {t('metadata.button.clear')}
+                        </button>
+                        <button
+                            class="kw-action-btn"
+                            onclick={() => { showStockKeywords = true; }}
+                            title={t('metadata.keywords.optionalSection')}
+                        >
+                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M2 2a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 2 6.586V2zm3.5 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
+                            </svg>
+                            {t('metadata.keywords.optionalSection')}
                         </button>
                         <span class="kw-count">{batchKeywordStates.length}</span>
                     </div>
@@ -1156,6 +1181,16 @@
                             </svg>
                             {t('metadata.button.clear')}
                         </button>
+                        <button
+                            class="kw-action-btn"
+                            onclick={() => { showStockKeywords = true; }}
+                            title={t('metadata.keywords.optionalSection')}
+                        >
+                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M2 2a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 2 6.586V2zm3.5 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
+                            </svg>
+                            {t('metadata.keywords.optionalSection')}
+                        </button>
                         <span class="kw-count">{keywords.length}</span>
                     </div>
                     {#if keywords.length > 0}
@@ -1190,39 +1225,6 @@
                 </div>
             </section>
         {/if}
-
-        <!-- ── Preset keywords ── -->
-        <details
-            class="optional-details"
-            open={stockKeywordsOpen}
-            ontoggle={(e) => stockKeywordsOpen = (e.currentTarget as HTMLDetailsElement).open}
-        >
-            <summary class="optional-summary">
-                <span class="group-label" style="border: none; padding: 0;">{t('metadata.keywords.optionalSection')}</span>
-                <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 6l4 4 4-4"/>
-                </svg>
-            </summary>
-            <div class="optional-body presets">
-                {#each Object.entries(presets) as [group, tags]}
-                    <div class="preset-group">
-                        <!-- Category labels are localized; the keyword VALUES below stay English (FR-014). -->
-                        <span class="preset-group-label">{t(`metadata.keywords.stockKeywords.${group.toLowerCase()}` as MessageKey)}</span>
-                        <div class="preset-tags">
-                            {#each tags as tag}
-                                <button
-                                    class="preset-btn"
-                                    class:active={isBatch
-                                        ? batchKeywordStates.some(s => s.word === tag && s.state === 'all')
-                                        : keywords.includes(tag)}
-                                    onclick={() => handleAddKeyword(tag)}
-                                >{tag}</button>
-                            {/each}
-                        </div>
-                    </div>
-                {/each}
-            </div>
-        </details>
 
         <!-- ── Optional fields ── -->
         <details
@@ -1262,6 +1264,20 @@
                         <span class="field-label">{t('metadata.field.releaseFilename')}</span>
                         <input class="input" type="text" placeholder={t('metadata.field.releaseFilename.placeholder')} bind:value={releaseFilename} />
                     </label>
+                    <div class="field flags-row">
+                        <label class="flag-check">
+                            <input type="checkbox" bind:checked={editorial} />
+                            <span class="field-label">{t('metadata.field.editorial')}</span>
+                        </label>
+                        <label class="flag-check">
+                            <input type="checkbox" bind:checked={matureContent} />
+                            <span class="field-label">{t('metadata.field.matureContent')}</span>
+                        </label>
+                        <label class="flag-check">
+                            <input type="checkbox" bind:checked={illustration} />
+                            <span class="field-label">{t('metadata.field.illustration')}</span>
+                        </label>
+                    </div>
                 {/if}
             </div>
         </details>
@@ -1383,6 +1399,46 @@
         </div>
     </footer>
 </aside>
+
+<!-- ── Stock-keyword presets popup (triggered from the keyword actions) ── -->
+{#if showStockKeywords}
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div class="sk-overlay" role="presentation" onclick={() => { showStockKeywords = false; }} onkeydown={() => {}}>
+        <div
+            class="sk-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('metadata.keywords.optionalSection')}
+            tabindex="-1"
+            onclick={(e) => e.stopPropagation()}
+            onkeydown={(e) => e.key !== 'Escape' && e.stopPropagation()}
+        >
+            <div class="sk-header">
+                <span class="sk-title">{t('metadata.keywords.optionalSection')}</span>
+                <button class="sk-close" onclick={() => { showStockKeywords = false; }} aria-label={t('common.close')}>✕</button>
+            </div>
+            <div class="sk-body presets">
+                {#each Object.entries(presets) as [group, tags]}
+                    <div class="preset-group">
+                        <!-- Category labels are localized; the keyword VALUES below stay English (FR-014). -->
+                        <span class="preset-group-label">{t(`metadata.keywords.stockKeywords.${group.toLowerCase()}` as MessageKey)}</span>
+                        <div class="preset-tags">
+                            {#each tags as tag}
+                                <button
+                                    class="preset-btn"
+                                    class:active={isBatch
+                                        ? batchKeywordStates.some(s => s.word === tag && s.state === 'all')
+                                        : keywords.includes(tag)}
+                                    onclick={() => handleAddKeyword(tag)}
+                                >{tag}</button>
+                            {/each}
+                        </div>
+                    </div>
+                {/each}
+            </div>
+        </div>
+    </div>
+{/if}
 
 <style lang="scss">
     @use 'styles/mixins' as *;
@@ -1529,6 +1585,61 @@
         &.active { background: $chip-bg; border-color: $chip-border; color: $chip-text; }
     }
 
+    // ── Stock-keyword presets popup ──
+    .sk-overlay {
+        position: fixed;
+        inset: 0;
+        background: var(--overlay-bg);
+        backdrop-filter: blur(3px);
+        @include flex(row, center, center);
+        z-index: 500;
+    }
+
+    .sk-dialog {
+        background: $bg-panel;
+        border: 1px solid $border;
+        border-radius: $radius-md;
+        width: 460px;
+        max-width: calc(100vw - 48px);
+        max-height: 80vh;
+        @include flex(column, flex-start, stretch);
+        box-shadow: 0 12px 40px var(--shadow-heavy);
+        overflow: hidden;
+    }
+
+    .sk-header {
+        @include flex(row, space-between, center);
+        padding: 12px 16px;
+        border-bottom: 1px solid $border;
+        flex-shrink: 0;
+    }
+
+    .sk-title {
+        font-size: $fs-regular;
+        font-weight: 600;
+        color: $text;
+    }
+
+    .sk-close {
+        @include btn-reset;
+        @include transition(color);
+        color: $text-muted;
+        font-size: $fs-small;
+        width: 24px;
+        height: 24px;
+        @include flex(row, center, center);
+        border-radius: $radius-sm;
+
+        &:hover { color: $text; }
+    }
+
+    .sk-body {
+        padding: 14px 16px;
+        overflow-y: auto;
+        @include flex(column, flex-start, stretch);
+        @include scrollbar;
+    }
+
     // ── Optional spoiler ──
     .optional-details {
         border: 1px solid $border;
@@ -1567,6 +1678,29 @@
         padding: 12px;
         background: $bg-panel;
         border-radius: 0 0 $radius-md $radius-md;
+    }
+
+    // ── Attribution flag checkboxes (inline row) ──
+    .flags-row {
+        @include flex(row, flex-start, center);
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .flag-check {
+        @include flex(row, flex-start, center);
+        gap: 6px;
+        cursor: pointer;
+
+        input {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+            cursor: pointer;
+            accent-color: $accent;
+        }
+
+        .field-label { font-weight: 400; cursor: pointer; }
     }
 
     // ── Footer ──
