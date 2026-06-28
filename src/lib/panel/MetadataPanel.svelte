@@ -983,16 +983,28 @@
                 <!-- Keywords (batch) -->
                 <div class="field">
                     <span class="field-label">{t('metadata.field.keywords')} <span class="hint">— {t('metadata.field.keywords.hint')}</span></span>
-                    <input
-                        bind:this={batchKwInputEl}
-                        class="input"
-                        type="text"
-                        placeholder={t('metadata.field.keywords.batch.placeholder')}
-                        bind:value={batchKeywordInput}
-                        onkeydown={handleBatchKeywordKeydown}
-                        oninput={handleBatchKeywordInput}
-                        onblur={() => suggestionsComp?.handleBlur()}
-                    />
+                    <div class="kw-input-row">
+                        <input
+                            bind:this={batchKwInputEl}
+                            class="input"
+                            type="text"
+                            placeholder={t('metadata.field.keywords.batch.placeholder')}
+                            bind:value={batchKeywordInput}
+                            onkeydown={handleBatchKeywordKeydown}
+                            oninput={handleBatchKeywordInput}
+                            onblur={() => suggestionsComp?.handleBlur()}
+                        />
+                        <button
+                            class="kw-stock-btn"
+                            onclick={() => { showStockKeywords = true; }}
+                            title={t('metadata.keywords.optionalSection')}
+                            aria-label={t('metadata.keywords.optionalSection')}
+                        >
+                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M2 2a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 2 6.586V2zm3.5 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
+                            </svg>
+                        </button>
+                    </div>
                     <div class="keyword-actions">
                         <button
                             class="kw-action-btn"
@@ -1028,16 +1040,6 @@
                                 <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
                             </svg>
                             {t('metadata.button.clear')}
-                        </button>
-                        <button
-                            class="kw-action-btn"
-                            onclick={() => { showStockKeywords = true; }}
-                            title={t('metadata.keywords.optionalSection')}
-                        >
-                            <svg viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M2 2a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 2 6.586V2zm3.5 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
-                            </svg>
-                            {t('metadata.keywords.optionalSection')}
                         </button>
                         <span class="kw-count">{batchKeywordStates.length}</span>
                     </div>
@@ -1134,17 +1136,29 @@
                         {t('metadata.field.keywords')} <span class="required">*</span>
                         <span class="hint">— {t('metadata.field.keywords.hint')}</span>
                     </span>
-                    <input
-                        bind:this={inputEl}
-                        class="input"
-                        class:input--invalid={saveAttempted && keywords.length === 0}
-                        type="text"
-                        placeholder={t('metadata.field.keywords.placeholder')}
-                        bind:value={keywordInput}
-                        onkeydown={handleKeywordKeydown}
-                        oninput={handleKeywordInput}
-                        onblur={() => suggestionsComp?.handleBlur()}
-                    />
+                    <div class="kw-input-row">
+                        <input
+                            bind:this={inputEl}
+                            class="input"
+                            class:input--invalid={saveAttempted && keywords.length === 0}
+                            type="text"
+                            placeholder={t('metadata.field.keywords.placeholder')}
+                            bind:value={keywordInput}
+                            onkeydown={handleKeywordKeydown}
+                            oninput={handleKeywordInput}
+                            onblur={() => suggestionsComp?.handleBlur()}
+                        />
+                        <button
+                            class="kw-stock-btn"
+                            onclick={() => { showStockKeywords = true; }}
+                            title={t('metadata.keywords.optionalSection')}
+                            aria-label={t('metadata.keywords.optionalSection')}
+                        >
+                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M2 2a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 2 6.586V2zm3.5 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
+                            </svg>
+                        </button>
+                    </div>
                     <div class="keyword-actions">
                         <button
                             class="kw-action-btn"
@@ -1180,16 +1194,6 @@
                                 <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
                             </svg>
                             {t('metadata.button.clear')}
-                        </button>
-                        <button
-                            class="kw-action-btn"
-                            onclick={() => { showStockKeywords = true; }}
-                            title={t('metadata.keywords.optionalSection')}
-                        >
-                            <svg viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M2 2a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 2 6.586V2zm3.5 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
-                            </svg>
-                            {t('metadata.keywords.optionalSection')}
                         </button>
                         <span class="kw-count">{keywords.length}</span>
                     </div>
@@ -1508,6 +1512,34 @@
         @include flex(row, flex-start, center);
         gap: 6px;
         margin-top: 4px;
+    }
+
+    // Keyword input + stock-presets icon button on one row
+    .kw-input-row {
+        @include flex(row, flex-start, stretch);
+        gap: 6px;
+
+        .input { flex: 1; min-width: 0; }
+    }
+
+    .kw-stock-btn {
+        @include btn-reset;
+        @include flex(row, center, center);
+        flex-shrink: 0;
+        aspect-ratio: 1;
+        border: 1px solid $border;
+        border-radius: $radius-sm;
+        background: $bg-surface;
+        color: $text-secondary;
+        @include transition(background, color, border-color);
+
+        svg { width: 14px; height: 14px; }
+
+        &:hover {
+            background: var(--hover-bg-strong);
+            color: $text;
+            border-color: $text-muted;
+        }
     }
 
     .kw-action-btn {
