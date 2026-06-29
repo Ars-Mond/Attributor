@@ -11,6 +11,7 @@
     import {ollama} from "$lib/ollama/availability.svelte";
     import {progress} from "$lib/progress.svelte";
     import {openMetadata, storeMetadata, revertToFile} from "$lib/store/metadata";
+    import {warn, error} from "@tauri-apps/plugin-log";
     import type {Metadata, ReadResult, SyncState, StoredMetadata} from "$lib/types";
     import type {BatchProgress, ItemStatus} from "$lib/events";
     import {SvelteMap} from "svelte/reactivity";
@@ -125,7 +126,7 @@
             await attributeBatch(paths, () => {done++; handle.update({value: done});});
             loadBatchData(batchPaths);
         } catch (e) {
-            console.error('batch attribution failed:', e);
+            error(`batch attribution failed: ${e}`);
         } finally {
             handle.done();
             // Keep the watcher-rescan guard armed briefly past our own writes (see handleBatchSave).
@@ -228,7 +229,7 @@
                 // Rebaseline the metadata fields so the status flips edit → app (keep filename dirty).
                 snapshot = {...snapshot, title: fields.title, description: fields.description, keywords: [...fields.keywords], categories: fields.categories, releaseFilename: fields.releaseFilename, editorial: fields.editorial, matureContent: fields.matureContent, illustration: fields.illustration};
             } catch (e) {
-                console.warn('storeMetadata failed:', e);
+                warn(`storeMetadata failed: ${e}`);
             }
         }, delay);
         return () => clearTimeout(timer);
@@ -507,7 +508,7 @@
         try {
             await invoke<ItemStatus[]>('save_metadata_batch', {items, onProgress: channel});
         } catch (e) {
-            console.error('batch save failed:', e);
+            error(`batch save failed: ${e}`);
         }
 
         handle.done();
@@ -529,7 +530,7 @@
         try {
             await invoke('cancel_batch');
         } catch (e) {
-            console.error('cancel_batch failed:', e);
+            error(`cancel_batch failed: ${e}`);
         }
     }
 
@@ -561,7 +562,7 @@
             const meta = res.kind === 'resolved' ? res.metadata : res.file;
             syncState = res.kind === 'resolved' ? res.syncState : 'synced';
             if (res.kind === 'conflict') {
-                console.warn(`metadata conflict for ${path}; defaulting to file version`);
+                warn(`metadata conflict for ${path}; defaulting to file version`);
             }
             title = meta.title;
             description = meta.description;
@@ -572,7 +573,7 @@
             matureContent = meta.matureContent;
             illustration = meta.illustration;
         } catch (e) {
-            console.warn('openMetadata failed:', e);
+            warn(`openMetadata failed: ${e}`);
         }
 
         snapshot = captureSnapshot();
@@ -692,7 +693,7 @@
             saveAttempted = false;
             snapshot = captureSnapshot();
         } catch (e) {
-            console.warn('revertToFile failed:', e);
+            warn(`revertToFile failed: ${e}`);
         }
     }
 
