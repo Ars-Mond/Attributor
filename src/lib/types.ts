@@ -15,6 +15,9 @@ export interface Metadata {
     keywords: string[];
     categories: string;
     releaseFilename: string;
+    editorial: boolean;
+    matureContent: boolean;
+    illustration: boolean;
 }
 
 /** Configurable button for dialog/popup footers. Color fields accept any CSS value. */
@@ -54,6 +57,9 @@ export interface StoredMetadata {
     keywords: string[];
     categories: string;
     releaseFilename: string;
+    editorial: boolean;
+    matureContent: boolean;
+    illustration: boolean;
 }
 
 /** Result of resolving a photo's metadata on open: load directly, or a conflict to prompt on. */

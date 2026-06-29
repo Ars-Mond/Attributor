@@ -12,6 +12,11 @@ pub struct StoredMetadata {
     pub keywords: Vec<String>,
     pub categories: String,
     pub release_filename: String,
+    // Attribution flags. Like `release_filename`, they have no file-side equivalent and live only in
+    // the store (retained when resolving from the file / on revert).
+    pub editorial: bool,
+    pub mature_content: bool,
+    pub illustration: bool,
 }
 
 /// Whether the stored record matches the file (`Synced`) or holds app-only changes not yet written

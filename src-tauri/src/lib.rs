@@ -92,6 +92,9 @@ fn save_metadata(
         keywords: metadata.keywords.clone(),
         categories: metadata.categories.clone(),
         release_filename: metadata.release_filename.clone(),
+        editorial: metadata.editorial,
+        mature_content: metadata.mature_content,
+        illustration: metadata.illustration,
     };
     let final_path = batch::save_one(metadata)?;
     // After the file write, refresh the store record and mark it synced (FR-016).

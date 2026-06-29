@@ -18,9 +18,22 @@ pub fn init(conn: &Connection) -> Result<(), rusqlite::Error> {
             keywords         TEXT NOT NULL DEFAULT '[]',
             categories       TEXT NOT NULL DEFAULT '',
             release_filename TEXT NOT NULL DEFAULT '',
+            editorial        INTEGER NOT NULL DEFAULT 0,
+            mature_content   INTEGER NOT NULL DEFAULT 0,
+            illustration     INTEGER NOT NULL DEFAULT 0,
             synced           INTEGER NOT NULL DEFAULT 1,
             created_at       INTEGER NOT NULL,
             updated_at       INTEGER NOT NULL
          );",
-    )
+    )?;
+
+    // Migrate databases created before the attribution-flag columns existed. ALTER ... ADD COLUMN
+    // errors with "duplicate column name" when already present — ignore that (idempotent).
+    for col in ["editorial", "mature_content", "illustration"] {
+        let _ = conn.execute(
+            &format!("ALTER TABLE photo_metadata ADD COLUMN {col} INTEGER NOT NULL DEFAULT 0"),
+            [],
+        );
+    }
+    Ok(())
 }

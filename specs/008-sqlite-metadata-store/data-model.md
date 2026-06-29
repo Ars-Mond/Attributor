@@ -14,17 +14,22 @@ The app's stored copy of one photo's metadata + its fingerprint + sync state. Ke
 | `description` | TEXT NOT NULL DEFAULT '' | Metadata field. |
 | `keywords` | TEXT NOT NULL DEFAULT '[]' | JSON array of strings (`serde_json`). |
 | `categories` | TEXT NOT NULL DEFAULT '' | Comma-joined categories (matches the file pipeline's single `category` string). |
-| `release_filename` | TEXT NOT NULL DEFAULT '' | Stored here only — the file pipeline does not carry it (see note). |
+| `release_filename` | TEXT NOT NULL DEFAULT '' | Store-only field — the file pipeline does not carry it (see note). |
+| `editorial` | INTEGER NOT NULL DEFAULT 0 | Attribution flag (store-only; bool as 0/1). |
+| `mature_content` | INTEGER NOT NULL DEFAULT 0 | Attribution flag (store-only; bool as 0/1). |
+| `illustration` | INTEGER NOT NULL DEFAULT 0 | Attribution flag (store-only; bool as 0/1). |
 | `synced` | INTEGER NOT NULL DEFAULT 1 | 1 = in sync with the file; 0 = app-only changes not yet written (FR-005). |
 | `created_at` | INTEGER NOT NULL | Unix seconds at insert. |
 | `updated_at` | INTEGER NOT NULL | Unix seconds at last update (drives "store is newer" reasoning). |
 
-- **Field set** mirrors what the editor edits (FR-004). The three attribution flags
-  (editorial / mature content / illustration) are **not** stored (UI-only).
-- **`release_filename` note**: today's file read/write neither reads nor writes it
-  (`read_metadata` → `""`, `save_one` ignores it). The store is its source of truth and the file
-  side **never overwrites it**: resolving a conflict to "file" and Cancel/`revert_to_file` both
-  **retain** the stored value (analyze-review decision).
+- **Field set**: the file-backed fields (title / description / keywords / categories) plus the
+  store-only fields with no file equivalent — `release_filename` and the three attribution flags
+  (editorial / mature content / illustration) (FR-004).
+- **Store-only fields** (`release_filename`, attribution flags): the file pipeline neither reads
+  nor writes them (`read_metadata` → defaults, `save_one` ignores them). The store is their source
+  of truth and the file side **never overwrites them**: resolving a conflict to "file" and
+  Cancel/`revert_to_file` both **retain** the stored values. Older databases are migrated with
+  `ALTER TABLE ADD COLUMN` for the flag columns.
 - **Indexes**: PRIMARY KEY on `path` suffices for all lookups. (No `hash` index — content-based
   lookup / move-rename re-link is out of scope.)
 - **Pragmas at open**: `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON` (none used yet).

@@ -13,6 +13,13 @@ pub struct SaveRequest {
     pub keywords: Vec<String>,
     pub categories: String,
     pub release_filename: String,
+    // Attribution flags — persisted to the store only (no file equivalent); `save_one` ignores them.
+    #[serde(default)]
+    pub editorial: bool,
+    #[serde(default)]
+    pub mature_content: bool,
+    #[serde(default)]
+    pub illustration: bool,
 }
 
 /// XMP fields returned when reading an image.

@@ -151,9 +151,10 @@ the store fingerprint is updated.
 - **FR-002**: Each photo MUST be identified in the store primarily by its file path.
 - **FR-003**: Each record MUST carry a fingerprint composed of the file size, the file
   modification time, and a fast hash of the whole file content.
-- **FR-004**: Each record MUST store the same editable metadata fields the app writes to
-  files (filename, title, description, keywords, categories, release filename). The
-  attribution-only flags (editorial, mature content, illustration) MUST NOT be stored.
+- **FR-004**: Each record MUST store the editable metadata fields (title, description, keywords,
+  categories) plus the store-only fields that have no file-side equivalent: release filename and
+  the attribution flags (editorial, mature content, illustration). The store-only fields are kept
+  in the store and never written to the file.
 - **FR-005**: Each record MUST track whether its metadata is currently in sync with the photo
   file or has app-only changes not yet written to the file.
 
@@ -247,8 +248,10 @@ the store fingerprint is updated.
   has app-only changes (it was modified by the app after the last successful file write). In
   that state a fingerprint mismatch is resolved in favor of the store without prompting, per the
   read-flow diagram — including the rare case where the file was also changed externally.
-- **Metadata field set**: the stored fields mirror exactly what the app already writes to files;
-  the three attribution flags remain UI-only and are persisted neither to files nor to the store.
+- **Metadata field set**: the store holds the file-backed fields (title, description, keywords,
+  categories) plus store-only fields with no file equivalent — release filename and the three
+  attribution flags (editorial, mature content, illustration). The store-only fields are retained
+  when resolving from the file and on Cancel/revert; the file pipeline never reads or writes them.
 - **Fast hash**: the full-file content hash is a non-cryptographic fast hash (xxHash), computed
   over the whole file on every open and used only for change detection, not for security.
 - **Storage engine (constitution exception)**: the store is SQLite accessed via the `rusqlite`

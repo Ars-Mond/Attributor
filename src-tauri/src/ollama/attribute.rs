@@ -127,6 +127,9 @@ async fn attribute_and_save(
             keywords,
             categories: result.categories.join(", "),
             release_filename: String::new(),
+            editorial: result.editorial,
+            mature_content: result.mature_content,
+            illustration: result.illustration,
         })
     })
     .await

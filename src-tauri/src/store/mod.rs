@@ -100,7 +100,8 @@ fn decide(stored_hash: u64, synced: bool, current_hash: u64) -> Decision {
 
 fn read_record(conn: &Connection, path: &str) -> Result<Option<Record>, String> {
     conn.query_row(
-        "SELECT size, mtime, hash, title, description, keywords, categories, release_filename, synced
+        "SELECT size, mtime, hash, title, description, keywords, categories, release_filename,
+                editorial, mature_content, illustration, synced
          FROM photo_metadata WHERE path = ?1",
         [path],
         |r| {
@@ -112,13 +113,16 @@ fn read_record(conn: &Connection, path: &str) -> Result<Option<Record>, String> 
                     keywords: serde_json::from_str(&keywords_json).unwrap_or_default(),
                     categories: r.get(6)?,
                     release_filename: r.get(7)?,
+                    editorial: r.get(8)?,
+                    mature_content: r.get(9)?,
+                    illustration: r.get(10)?,
                 },
                 fp: Fingerprint {
                     size: r.get::<_, i64>(0)? as u64,
                     mtime: r.get(1)?,
                     hash: r.get::<_, i64>(2)? as u64,
                 },
-                synced: r.get::<_, i64>(8)? != 0,
+                synced: r.get::<_, i64>(11)? != 0,
             })
         },
     )
@@ -138,17 +142,19 @@ fn upsert_record(
     let kw = serde_json::to_string(&meta.keywords).unwrap_or_else(|_| "[]".to_string());
     conn.execute(
         "INSERT INTO photo_metadata
-            (path,size,mtime,hash,title,description,keywords,categories,release_filename,synced,created_at,updated_at)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?11)
+            (path,size,mtime,hash,title,description,keywords,categories,release_filename,
+             editorial,mature_content,illustration,synced,created_at,updated_at)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?14)
          ON CONFLICT(path) DO UPDATE SET
             size=excluded.size, mtime=excluded.mtime, hash=excluded.hash,
             title=excluded.title, description=excluded.description, keywords=excluded.keywords,
             categories=excluded.categories, release_filename=excluded.release_filename,
-            synced=excluded.synced, updated_at=excluded.updated_at",
+            editorial=excluded.editorial, mature_content=excluded.mature_content,
+            illustration=excluded.illustration, synced=excluded.synced, updated_at=excluded.updated_at",
         params![
             path, fp.size as i64, fp.mtime, fp.hash as i64,
             meta.title, meta.description, kw, meta.categories, meta.release_filename,
-            synced as i64, now
+            meta.editorial, meta.mature_content, meta.illustration, synced as i64, now
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -163,7 +169,11 @@ fn read_file_metadata(path: &str) -> Result<StoredMetadata, String> {
         description: m.description,
         keywords: m.keywords,
         categories: m.category,
+        // No file-side equivalent — defaults; the store retains its own values on file-source resolution.
         release_filename: String::new(),
+        editorial: false,
+        mature_content: false,
+        illustration: false,
     })
 }
 
@@ -221,8 +231,12 @@ fn persist_app_only(conn: &Mutex<Connection>, path: &str, meta: &StoredMetadata)
         let c = conn.lock().unwrap_or_else(|e| e.into_inner());
         c.execute(
             "UPDATE photo_metadata SET title=?1, description=?2, keywords=?3, categories=?4,
-                release_filename=?5, synced=0, updated_at=?6 WHERE path=?7",
-            params![meta.title, meta.description, kw, meta.categories, meta.release_filename, now, path],
+                release_filename=?5, editorial=?6, mature_content=?7, illustration=?8,
+                synced=0, updated_at=?9 WHERE path=?10",
+            params![
+                meta.title, meta.description, kw, meta.categories, meta.release_filename,
+                meta.editorial, meta.mature_content, meta.illustration, now, path
+            ],
         )
         .map_err(|e| e.to_string())?
     };
@@ -241,7 +255,11 @@ fn revert(conn: &Mutex<Connection>, path: &str) -> Result<StoredMetadata, String
     {
         let c = conn.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(rec) = read_record(&c, path)? {
-            meta.release_filename = rec.meta.release_filename; // retained (no file equivalent)
+            // Retain the store-only fields (no file equivalent).
+            meta.release_filename = rec.meta.release_filename;
+            meta.editorial = rec.meta.editorial;
+            meta.mature_content = rec.meta.mature_content;
+            meta.illustration = rec.meta.illustration;
         }
     }
     let fp = fingerprint::compute(Path::new(path))?;
@@ -334,6 +352,9 @@ mod tests {
             keywords: vec!["a".into(), "b".into()],
             categories: "Nature".into(),
             release_filename: "r.pdf".into(),
+            editorial: true,
+            mature_content: false,
+            illustration: true,
         }
     }
 
@@ -359,6 +380,7 @@ mod tests {
         let c = conn.lock().unwrap();
         let rec = read_record(&c, "p").unwrap().expect("record exists");
         assert_eq!(rec.meta.keywords, vec!["a".to_string(), "b".to_string()]);
+        assert!(rec.meta.editorial && !rec.meta.mature_content && rec.meta.illustration);
         assert_eq!(rec.fp, fp);
         assert!(rec.synced);
     }

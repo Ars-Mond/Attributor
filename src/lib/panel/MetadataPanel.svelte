@@ -167,12 +167,15 @@
         keywords: string[];
         categories: string;
         releaseFilename: string;
+        editorial: boolean;
+        matureContent: boolean;
+        illustration: boolean;
     }
 
     let snapshot = $state<Snapshot | null>(null);
 
     function captureSnapshot(): Snapshot {
-        return {filename, title, description, keywords: [...keywords], categories, releaseFilename};
+        return {filename, title, description, keywords: [...keywords], categories, releaseFilename, editorial, matureContent, illustration};
     }
 
     const isDirtyComputed = $derived.by(() => {
@@ -185,7 +188,10 @@
             keywords.length !== snap.keywords.length ||
             keywords.some((k, i) => k !== snap.keywords[i]) ||
             categories !== snap.categories ||
-            releaseFilename !== snap.releaseFilename
+            releaseFilename !== snap.releaseFilename ||
+            editorial !== snap.editorial ||
+            matureContent !== snap.matureContent ||
+            illustration !== snap.illustration
         );
     });
 
@@ -196,7 +202,7 @@
     // ── Auto-save ──────────────────────────────────────────────────────────
 
     $effect(() => {
-        filename; title; description; keywords; categories; releaseFilename;
+        filename; title; description; keywords; categories; releaseFilename; editorial; matureContent; illustration;
         if (!autoSave || !isDirtyComputed || hasErrors) return;
         const delay = settings.get<number>('editor.autosave_delay');
         const timer = setTimeout(() => { doSave().catch(() => {}); }, delay);
@@ -208,11 +214,11 @@
     // working layer). Skipped when file-autosave is on — then doSave writes the file and syncs the
     // store, making a separate app-only write redundant.
     $effect(() => {
-        title; description; keywords; categories; releaseFilename;
+        title; description; keywords; categories; releaseFilename; editorial; matureContent; illustration;
         if (isBatch || !filepath || snapshot === null || autoSave) return;
         if (!isDirtyComputed) return;
         const path = filepath;
-        const fields: StoredMetadata = {title, description, keywords: [...keywords], categories, releaseFilename};
+        const fields: StoredMetadata = {title, description, keywords: [...keywords], categories, releaseFilename, editorial, matureContent, illustration};
         const delay = settings.get<number>('editor.autosave_delay');
         const timer = setTimeout(async () => {
             try {
@@ -220,7 +226,7 @@
                 if (filepath !== path || snapshot === null) return;
                 syncState = s;
                 // Rebaseline the metadata fields so the status flips edit → app (keep filename dirty).
-                snapshot = {...snapshot, title: fields.title, description: fields.description, keywords: [...fields.keywords], categories: fields.categories, releaseFilename: fields.releaseFilename};
+                snapshot = {...snapshot, title: fields.title, description: fields.description, keywords: [...fields.keywords], categories: fields.categories, releaseFilename: fields.releaseFilename, editorial: fields.editorial, matureContent: fields.matureContent, illustration: fields.illustration};
             } catch (e) {
                 console.warn('storeMetadata failed:', e);
             }
@@ -482,6 +488,11 @@
                 keywords: computeNewKeywords(cur?.keywords ?? []),
                 categories: applyCategories ? batchCategories : (cur?.categories ?? ''),
                 releaseFilename: cur?.releaseFilename ?? '',
+                // Attribution flags are single-mode only; batch save does not edit them (US3 will carry
+                // them through the store). Backend SaveRequest defaults these, so false is a no-op here.
+                editorial: false,
+                matureContent: false,
+                illustration: false,
             };
         });
 
@@ -557,6 +568,9 @@
             keywords = meta.keywords;
             categories = meta.categories;
             releaseFilename = meta.releaseFilename;
+            editorial = meta.editorial;
+            matureContent = meta.matureContent;
+            illustration = meta.illustration;
         } catch (e) {
             console.warn('openMetadata failed:', e);
         }
@@ -621,6 +635,9 @@
             keywords,
             categories,
             releaseFilename,
+            editorial,
+            matureContent,
+            illustration,
         };
 
         const newPath = await invoke<string>('save_metadata', {metadata});
@@ -666,6 +683,9 @@
             keywords = meta.keywords;
             categories = meta.categories;
             releaseFilename = meta.releaseFilename;
+            editorial = meta.editorial;
+            matureContent = meta.matureContent;
+            illustration = meta.illustration;
             syncState = 'synced';
             saveError = null;
             attributeError = null;
