@@ -13,9 +13,14 @@
 ### Session 2026-06-29
 
 - Q: Where do manual field edits (and autosave) go before an explicit Save to file? → A: Immediately to the store — any value typed into a field is saved to the database at once (app-only); the photo file is untouched until Save.
-- Q: How is an unchanged file detected on open, given full-file hashing cost? → A: Always compute the full-file xxHash; a record matches the file only when size, modification time, AND full-file hash all match simultaneously (no short-circuit).
+- Q: How is an unchanged file detected on open, given full-file hashing cost? → A: Always compute the full-file xxHash (no short-circuit). *(Superseded by the analyze-review refinement below: the hash alone is authoritative; an mtime-only difference is silently refreshed, not a change.)*
 - Q: Which storage engine, given the Pure-Rust constitution vs SQLite? → A: SQLite via the `rusqlite` crate with the `bundled` feature, accepted as a documented exception to Constitution Principle I (to be justified in the plan).
 - Q: What happens to store records for deleted/missing files? → A: No automatic cleanup; records are kept. A manual "clean up database" action may be added later (out of scope now).
+
+### Session 2026-06-29 (analyze review)
+
+- Q: On an mtime-only change with identical content (full-file hash matches), prompt or accept silently? → A: The full-file hash is authoritative — a hash match means the content is unchanged; silently refresh the stored mtime and load from the store, no prompt. Only a hash difference counts as a change. (Refines the earlier "all three must match" answer.)
+- Q: `releaseFilename` has no file-side equivalent — clear it when resolving a conflict to "file" or on Cancel, or keep it? → A: Keep the store's `releaseFilename`; the file side never overwrites it.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -116,9 +121,9 @@ the store fingerprint is updated.
 
 ### Edge Cases
 
-- **File content identical but mtime changed** (e.g., touched or copied): because a match
-  requires size, mtime, AND hash to all agree, a changed mtime counts as a mismatch and enters
-  the read-flow's mismatch branch (FR-010/FR-011) even though the content hash still matches.
+- **File content identical but mtime changed** (e.g., touched or copied): the full-file hash
+  still matches, so the photo is treated as unchanged — the stored mtime is silently refreshed,
+  the store metadata loads, and no prompt is shown (FR-009).
 - **Photo file deleted** while a store record exists: the store record is retained but the
   photo is unavailable to open; the store is not silently purged (no automatic cleanup — see
   Assumptions).
@@ -158,12 +163,13 @@ the store fingerprint is updated.
 - **FR-007**: When no record exists, the system MUST read metadata from the file and create a
   store record with the file's current fingerprint.
 - **FR-008**: When a record exists, the system MUST compute the file's current fingerprint —
-  always including a full-file xxHash — and compare all three identifiers (size, modification
-  time, and full-file hash) against the stored fingerprint.
-- **FR-009**: The file is considered unchanged only when size, modification time, AND full-file
-  hash all match simultaneously; in that case the system MUST load metadata from the store and
-  MUST NOT parse the file's embedded metadata. If any of the three differs, the read-flow's
-  mismatch branch (FR-010/FR-011) applies.
+  always including a full-file xxHash — and compare it against the stored fingerprint, treating
+  the **full-file hash as authoritative** for content identity.
+- **FR-009**: The file is considered unchanged when the **full-file hash matches** the stored
+  hash (content identical); a differing modification time alone is NOT a change — the system MUST
+  silently refresh the stored mtime and load metadata from the store, MUST NOT parse the file's
+  embedded metadata, and MUST NOT prompt. Only a **hash difference** enters the read-flow's
+  mismatch branch (FR-010/FR-011).
 - **FR-010**: When the fingerprints differ but the store holds app-only changes (store treated
   as newer), the system MUST load metadata from the store.
 - **FR-011**: When the fingerprints differ and the store does not hold app-only changes
@@ -171,7 +177,8 @@ the store fingerprint is updated.
   the file metadata.
 - **FR-012**: When the user chooses the store, the system MUST refresh the stored fingerprint
   and load metadata from the store; when the user chooses the file, the system MUST read
-  metadata from the file and update the store record to match.
+  metadata from the file and update the store record to match, EXCEPT it MUST retain the store's
+  `releaseFilename` (which has no file-side equivalent).
 
 **Attribution & status**
 
@@ -190,7 +197,8 @@ the store fingerprint is updated.
 - **FR-017**: A Cancel control MUST be presented between the Ollama (attribute) button and the
   Save button in single-photo editing.
 - **FR-018**: The Cancel action MUST restore the working fields from the photo file's current
-  metadata and update the store record to mirror the file (discarding app-only changes).
+  metadata and update the store record to mirror the file (discarding app-only changes), EXCEPT
+  the store's `releaseFilename` MUST be retained (it has no file-side equivalent).
 - **FR-019**: The Cancel control MUST be unavailable when there is nothing to revert (the record
   is already in sync with the file and there are no in-memory edits).
 

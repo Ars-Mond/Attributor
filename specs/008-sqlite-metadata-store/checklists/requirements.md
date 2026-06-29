@@ -37,7 +37,9 @@
   "full-file hash"); the concrete engine is recorded as a documented exception to Constitution
   Principle I (Pure Rust Backend), to be justified in the plan's Complexity Tracking.
 - Clarified in Session 2026-06-29: edit-persistence target (store, immediate), change-detection
-  rule (all three identifiers must match; full hash always computed), storage engine (rusqlite
-  bundled), and record cleanup (manual, deferred). The read-flow "store is newer" rule
-  (FR-010/FR-011) and batch apply-to-all (FR-020) remain as specified defaults.
+  rule, storage engine (rusqlite bundled), and record cleanup (manual, deferred). Refined in the
+  analyze review (2026-06-29): the full-file hash is authoritative (an mtime-only change is
+  silently refreshed, not a conflict) and the file side never overwrites `releaseFilename`. The
+  read-flow "store is newer" rule (FR-010/FR-011) and batch apply-to-all (FR-020) remain as
+  specified defaults.
 - Items marked incomplete require spec updates before `/speckit-plan`.

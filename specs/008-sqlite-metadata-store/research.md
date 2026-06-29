@@ -35,12 +35,15 @@ the resulting technical decisions and the alternatives weighed.
 
 - **Decision**: Fingerprint = `(size: u64, mtime: i64, hash: u64)` where `hash` is the **xxh3-64**
   of the **whole file**, via `xxhash-rust = { features = ["xxh3"] }`, streamed in fixed chunks
-  (e.g. 64 KiB) so large files are not fully buffered. A record matches the file only when **all
-  three** values match (clarify Q2 — no size+mtime short-circuit; the hash is always computed).
+  (e.g. 64 KiB) so large files are not fully buffered. The hash is **always computed** on open and
+  is **authoritative for content identity** (analyze-review refinement): a hash match means the
+  file is unchanged even if mtime differs — the stored mtime is silently refreshed, no prompt.
+  Only a hash difference is a real change. `size`/`mtime` are stored for the record but do not
+  override a hash match.
 - **Rationale**: `xxhash-rust` is pure Rust (Principle I-compliant) and multi-GB/s, so hashing
-  the whole file on open stays within the 200 ms budget (SC-001) for typical photos. Requiring all
-  three to match is the maintainer's explicit rule; it makes any out-of-band touch enter the
-  conflict branch deterministically.
+  the whole file on open stays within the 200 ms budget (SC-001) for typical photos. Making the
+  hash authoritative avoids needless conflict prompts on harmless touches/copies while still
+  detecting every real content change.
 - **Storage form**: `mtime` as Unix nanoseconds (`i64`) from `std::fs::metadata().modified()`;
   `hash` as `INTEGER` (i64 reinterpretation of the u64) or TEXT hex — `INTEGER` chosen for compact
   comparison.
@@ -90,9 +93,10 @@ the resulting technical decisions and the alternatives weighed.
 - **Rationale**: Reuses the proven write path; the store update is the only addition. Cancel gives
   the diagram's "accept from photo" outcome on demand.
 - **Edge — `releaseFilename`**: today the file pipeline neither reads nor writes it
-  (`read_metadata` returns `""`, `save_one` ignores it). The **store** can persist it, so the store
-  becomes its source of truth; a conflict resolved to "file" or a Cancel will clear it (the file
-  has none). Documented in data-model; acceptable for this feature.
+  (`read_metadata` returns `""`, `save_one` ignores it). The **store** is its source of truth, and
+  (analyze-review decision) the file side **never overwrites it**: resolving a conflict to "file"
+  and Cancel/`revert_to_file` both **retain** the store's `releaseFilename`. Documented in
+  data-model and the IPC contract.
 
 ## 7. New file status "saved in app"
 

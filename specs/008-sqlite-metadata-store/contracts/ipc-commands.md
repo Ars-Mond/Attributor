@@ -32,14 +32,17 @@ Rust mirror: `enum SyncState { Synced, AppOnly }` (camelCase), `struct StoredMet
 ### `open_metadata(path: string) -> MetadataResolution`
 
 Store-first resolution of one photo's metadata (read-flow, FR-006…FR-011). Computes the
-fingerprint and returns either `resolved` (load proceeds) or `conflict` (frontend must prompt).
-Falls back to a plain file read returned as `resolved`/`synced` on any store error (FR-021).
-Replaces the panel's direct `read_metadata` call for single open.
+fingerprint (hash authoritative) and returns either `resolved` (load proceeds) or `conflict`
+(frontend must prompt). On a hash match with a differing mtime, it silently refreshes the stored
+mtime and returns `resolved` — no prompt. Falls back to a plain file read returned as
+`resolved`/`synced` on any store error (FR-021). Replaces the panel's direct `read_metadata` call
+for single open.
 
 ### `apply_metadata_source(path: string, source: 'store' | 'file') -> MetadataResolution`
 
 Finalizes a `conflict` from `open_metadata` (FR-012). `store` → keep store metadata, refresh
-fingerprint; `file` → read file metadata, overwrite store. Always returns `resolved`.
+fingerprint; `file` → read file metadata, overwrite store **but retain the store's
+`releaseFilename`** (no file equivalent). Always returns `resolved`.
 
 ### `store_metadata(path: string, fields: StoredMetadata) -> SyncState`
 
@@ -50,7 +53,8 @@ new sync state (`appOnly`) so the UI can update the status. No-op-with-warning o
 ### `revert_to_file(path: string) -> StoredMetadata`
 
 Cancel / "revert to file" (FR-018): read the file's metadata, overwrite the store record to
-mirror it, set `synced=1`, and return the metadata for the frontend to reload into the form.
+mirror it (but **retain the store's `releaseFilename`** — no file equivalent), set `synced=1`, and
+return the metadata for the frontend to reload into the form.
 
 ## CHANGED commands
 

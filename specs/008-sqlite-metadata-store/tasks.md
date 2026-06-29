@@ -39,7 +39,7 @@ every user story depends on.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 [P] Implement `fingerprint::compute(path) -> Result<Fingerprint, String>` in `src-tauri/src/store/fingerprint.rs`: read `std::fs::metadata` for size + mtime (Unix nanos as `i64`) and stream the whole file in 64 KiB chunks through xxh3-64; define `struct Fingerprint { size: u64, mtime: i64, hash: u64 }` with an all-three equality helper. Log on read error.
+- [ ] T003 [P] Implement `fingerprint::compute(path) -> Result<Fingerprint, String>` in `src-tauri/src/store/fingerprint.rs`: read `std::fs::metadata` for size + mtime (Unix nanos as `i64`) and stream the whole file in 64 KiB chunks through xxh3-64; define `struct Fingerprint { size: u64, mtime: i64, hash: u64 }` with a **hash-match** helper (`hash` is authoritative for content identity; a differing mtime is not a change). Log on read error.
 - [ ] T004 [P] Define the record/IPC types in `src-tauri/src/store/record.rs`: `StoredMetadata { title, description, keywords: Vec<String>, categories, release_filename }`, `enum SyncState { Synced, AppOnly }`, `StoreRecord` (metadata + fingerprint + sync state + timestamps), and `enum MetadataResolution { Resolved { metadata, sync_state }, Conflict { store, file } }` — all `#[serde(rename_all = "camelCase")]`, with `MetadataResolution` tagged `#[serde(tag = "kind", rename_all = "camelCase")]` (per contracts/ipc-commands.md).
 - [ ] T005 Implement the schema in `src-tauri/src/store/schema.rs`: `init(conn)` runs `CREATE TABLE IF NOT EXISTS photo_metadata (...)` exactly per data-model.md (columns, defaults, PK on `path`) and sets `PRAGMA journal_mode=WAL; synchronous=NORMAL`.
 - [ ] T006 Implement `DbState` and CRUD in `src-tauri/src/store/mod.rs` (depends on T004, T005): `DbState { conn: Mutex<rusqlite::Connection> }`; an `open(db_path)` that opens the connection and calls `schema::init`; helpers `get_by_path`, `upsert_app_only`, `mark_synced_with_fingerprint`, `move_path`, `read_record`; keywords (de)serialized as JSON via `serde_json`; a `with_db<T>(state, f)` wrapper that logs and signals fallback on any error (FR-021/FR-022). All callers will run these inside `spawn_blocking`.
@@ -60,14 +60,14 @@ Ollama attribution persist to the store immediately (app-only) without touching 
 "in app", row in `metadata.db` with `synced=0`; restart the app and reopen → metadata loads from
 the store (quickstart Scenarios A, B, C).
 
-- [ ] T009 [US1] Implement the `open_metadata(path) -> MetadataResolution` command in `src-tauri/src/store/mod.rs` and register it in `src-tauri/src/lib.rs` (depends on T006, T007): apply the read-flow from data-model.md — no record → read file (via `crate::photo::read_metadata`) + insert (`synced=1`) → `Resolved/synced`; all-three fingerprint match → `Resolved` with the stored sync state; mismatch with `synced=0` → `Resolved/appOnly` (store wins); mismatch with `synced=1` → `Conflict { store, file }`. Fall back to a plain file read returned as `Resolved/synced` on store error.
+- [ ] T009 [US1] Implement the `open_metadata(path) -> MetadataResolution` command in `src-tauri/src/store/mod.rs` and register it in `src-tauri/src/lib.rs` (depends on T006, T007): apply the read-flow from data-model.md — no record → read file (via `crate::photo::read_metadata`) + insert (`synced=1`) → `Resolved/synced`; **hash match** → silently refresh the stored mtime if it differs, then `Resolved` with the stored sync state; **hash differs** with `synced=0` → `Resolved/appOnly` (store wins); **hash differs** with `synced=1` → `Conflict { store, file }`. Fall back to a plain file read returned as `Resolved/synced` on store error.
 - [ ] T010 [US1] Implement the `store_metadata(path, fields) -> SyncState` command in `src-tauri/src/store/mod.rs` and register it in `src-tauri/src/lib.rs` (depends on T006, T007): upsert the fields as `synced=0` (app-only), do not touch the file, bump `updated_at`, return `AppOnly`; no-op-with-warning on store error.
 - [ ] T011 [P] [US1] Fill the `openMetadata(path)` and `storeMetadata(path, fields)` typed wrappers in `src/lib/store/metadata.ts` (depends on T008).
 - [ ] T012 [US1] Switch single-file loading to the store in `src/lib/panel/MetadataPanel.svelte` `loadFile()`: call `openMetadata` instead of `read_metadata`; on `resolved` populate fields + track `syncState`; on `conflict` default to the file version and log a warning (the prompt arrives in US3) (depends on T011).
 - [ ] T013 [US1] Add the debounced app-only persistence in `src/lib/panel/MetadataPanel.svelte`: an `$effect` that, when a single file is open and the working fields change (including right after single attribution fills them), calls `storeMetadata` after the existing autosave-style debounce and updates the tracked `syncState` to `appOnly` (depends on T011, T012).
 - [ ] T014 [P] [US1] Add the new file status in `src/lib/panel/MetadataPanel.svelte`: extend the `fileStatus` `$derived` to yield `app` when the open record's `syncState === 'appOnly'` (precedence per data-model.md: none → edit → app → open), and add a `status-dot--app` / `status-label--app` color from theme tokens (in the component styles).
 - [ ] T015 [P] [US1] Add the status i18n keys `metadata.fileStatus.app` (EN "in app", RU "в приложении") in `src/lib/i18n/en.ts`, `src/lib/i18n/ru.ts`, and `src/lib/i18n/types.ts`.
-- [ ] T016 [P] [US1] Add Rust unit tests (in `src-tauri/src/store/fingerprint.rs` and `src-tauri/src/store/mod.rs` `#[cfg(test)]`, or `src-tauri/tests/store_test.rs`): fingerprint all-three match vs mtime-only mismatch; resolution decisions for no-record, match, and store-newer (`synced=0`) cases using a temp `:memory:`/tempfile DB.
+- [ ] T016 [P] [US1] Add Rust unit tests (in `src-tauri/src/store/fingerprint.rs` and `src-tauri/src/store/mod.rs` `#[cfg(test)]`, or `src-tauri/tests/store_test.rs`): hash match treated as unchanged including the mtime-only case (silent mtime refresh, no conflict) vs a hash difference; resolution decisions for no-record, hash-match, and store-newer (`synced=0`) cases using a temp `:memory:`/tempfile DB.
 
 **Checkpoint**: Single-photo store-first persistence works end to end and survives restart.
 
@@ -83,7 +83,7 @@ becomes "open", row `synced=1`; Cancel on another → fields + row return to the
 Cancel disabled when already synced and clean (quickstart Scenarios D, E).
 
 - [ ] T017 [US2] Update the store after a single file write in `src-tauri/src/lib.rs` `save_metadata` (using a helper in `src-tauri/src/store/mod.rs`, depends on T006): after `batch::save_one` returns the final path, recompute the fingerprint from the written file and `mark_synced_with_fingerprint`; if the file was renamed, `move_path(old, new)` first. Log; tolerate store errors (file write already succeeded).
-- [ ] T018 [US2] Implement `revert_to_file(path) -> StoredMetadata` in `src-tauri/src/store/mod.rs` and register it in `src-tauri/src/lib.rs` (depends on T006, T007): read file metadata, overwrite the store record to mirror it, set `synced=1` with the current fingerprint, and return the metadata.
+- [ ] T018 [US2] Implement `revert_to_file(path) -> StoredMetadata` in `src-tauri/src/store/mod.rs` and register it in `src-tauri/src/lib.rs` (depends on T006, T007): read file metadata, overwrite the store record to mirror it **but retain the existing `release_filename`** (no file equivalent), set `synced=1` with the current fingerprint, and return the metadata.
 - [ ] T019 [P] [US2] Fill the `revertToFile(path)` typed wrapper in `src/lib/store/metadata.ts` (depends on T008).
 - [ ] T020 [US2] Add the Cancel control between the Ollama and Save buttons in `src/lib/panel/MetadataPanel.svelte` (single mode footer): on click call `revertToFile`, reload the returned fields, set status to synced; disable it when the record is `synced` and the form is not dirty (FR-019) (depends on T019).
 - [ ] T021 [US2] After a successful Save in `src/lib/panel/MetadataPanel.svelte` (`doSave`), set the tracked `syncState` to `synced` so the status flips to "open" (depends on T012).
@@ -101,10 +101,10 @@ choice; bring batch operations into the store model (store-first batch load, bat
 the store, batch save sync) with a single apply-to-all conflict resolution.
 
 **Independent Test**: Modify a stored photo's file externally and reopen → store-vs-file prompt;
-choose file/store and verify the right source loads and `synced=1`; mtime-only touch still prompts;
+choose file/store and verify the right source loads and `synced=1`; an mtime-only touch does NOT prompt (silent mtime refresh);
 batch conflicts resolve with one apply-to-all choice (quickstart Scenarios F, G + batch checks).
 
-- [ ] T024 [US3] Implement `apply_metadata_source(path, source) -> MetadataResolution` in `src-tauri/src/store/mod.rs` and register it in `src-tauri/src/lib.rs` (depends on T009): `store` → refresh fingerprint only, return `Resolved/synced`; `file` → read file, overwrite record, `synced=1`, return `Resolved/synced`.
+- [ ] T024 [US3] Implement `apply_metadata_source(path, source) -> MetadataResolution` in `src-tauri/src/store/mod.rs` and register it in `src-tauri/src/lib.rs` (depends on T009): `store` → refresh fingerprint only, return `Resolved/synced`; `file` → read file, overwrite record **but retain the stored `release_filename`**, `synced=1`, return `Resolved/synced`.
 - [ ] T025 [P] [US3] Fill the `applyMetadataSource(path, source)` typed wrapper in `src/lib/store/metadata.ts` (depends on T008).
 - [ ] T026 [US3] Single-photo conflict prompt in `src/lib/panel/MetadataPanel.svelte`: when `openMetadata` returns `conflict`, show a `ConfirmDialog` (reused primitive) offering "keep store" vs "keep file", then call `applyMetadataSource` and load the result (replaces the US1 default-to-file behavior) (depends on T012, T025).
 - [ ] T027 [US3] Make batch loading store-first in `src/lib/panel/MetadataPanel.svelte` `loadBatchData()`: resolve each path via `openMetadata` (instead of `read_metadata`), using stored metadata for the batch union (depends on T011).
@@ -112,7 +112,7 @@ batch conflicts resolve with one apply-to-all choice (quickstart Scenarios F, G 
 - [ ] T029 [US3] Sync the store after batch file saves in `src-tauri/src/batch/mod.rs` (`save_metadata_batch`): for each `Ok` item, `mark_synced_with_fingerprint` (and `move_path` on rename) via the T017 helper (depends on T017).
 - [ ] T030 [US3] Batch apply-to-all conflict resolution in `src/lib/panel/MetadataPanel.svelte`: collect photos that returned `conflict` during batch load, present one apply-to-all choice (store vs file), then call `applyMetadataSource` per file (FR-020) (depends on T026, T027).
 - [ ] T031 [P] [US3] Add the conflict-dialog i18n keys (title, body, "keep store", "keep file", batch apply-to-all) in `src/lib/i18n/en.ts`, `src/lib/i18n/ru.ts`, `src/lib/i18n/types.ts`.
-- [ ] T032 [P] [US3] Add Rust tests in `src-tauri/tests/store_test.rs`: `apply_metadata_source` for both `store` and `file`; conflict is produced for a synced record whose file changed (incl. mtime-only).
+- [ ] T032 [P] [US3] Add Rust tests in `src-tauri/tests/store_test.rs`: `apply_metadata_source` for both `store` and `file` (the `file` branch retains `release_filename`); a conflict is produced for a synced record whose file content changed (hash differs), while an mtime-only touch does NOT produce a conflict.
 
 **Checkpoint**: External-change conflicts and all batch flows work in the store model.
 
@@ -191,7 +191,8 @@ single-photo store-first persistence + "in app" status, surviving restart.
 - Commit per Spec Kit phase (constitution Principle VII) — the implementation phase is one commit.
 - **Behavior change carried by US3 (T028)**: batch Ollama attribution stops writing files and writes
   the store instead (FR-013) — call this out when implementing so 007's batch flow is updated knowingly.
-- `releaseFilename` lives only in the store (the file pipeline neither reads nor writes it); a
-  conflict resolved to "file" or a Cancel clears it — expected (data-model.md).
+- `releaseFilename` lives only in the store (the file pipeline neither reads nor writes it); the
+  file side never overwrites it — a conflict resolved to "file" and Cancel both retain it (T018,
+  T024, data-model.md).
 - [P] = different files, no incomplete dependencies. Avoid two [P] tasks touching
   `MetadataPanel.svelte` simultaneously — they share the file and must be sequenced.

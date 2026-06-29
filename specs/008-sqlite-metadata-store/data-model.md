@@ -22,8 +22,9 @@ The app's stored copy of one photo's metadata + its fingerprint + sync state. Ke
 - **Field set** mirrors what the editor edits (FR-004). The three attribution flags
   (editorial / mature content / illustration) are **not** stored (UI-only).
 - **`release_filename` note**: today's file read/write neither reads nor writes it
-  (`read_metadata` → `""`, `save_one` ignores it). The store therefore becomes its source of
-  truth; resolving a conflict to "file" or pressing Cancel clears it (the file has none).
+  (`read_metadata` → `""`, `save_one` ignores it). The store is its source of truth and the file
+  side **never overwrites it**: resolving a conflict to "file" and Cancel/`revert_to_file` both
+  **retain** the stored value (analyze-review decision).
 - **Indexes**: PRIMARY KEY on `path` suffices for all lookups. (No `hash` index — content-based
   lookup / move-rename re-link is out of scope.)
 - **Pragmas at open**: `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON` (none used yet).
@@ -33,8 +34,10 @@ The app's stored copy of one photo's metadata + its fingerprint + sync state. Ke
 `(size: u64, mtime_nanos: i64, hash: u64)` — computed by `store::fingerprint::compute(path)`:
 read `std::fs::metadata` for size + modified→nanos, and stream the whole file through xxh3-64.
 
-**Match rule (clarify Q2)**: a record matches the file **iff** `size`, `mtime`, **and** `hash`
-all equal the stored values. Any single difference (including mtime-only) is a mismatch.
+**Match rule (analyze-review refinement)**: the **full-file hash is authoritative**. A record
+matches the file when the stored `hash` equals the current `hash` (content identical), even if
+`mtime` differs — the stored `mtime` is then silently refreshed. Only a **hash difference** is a
+mismatch. The hash is always computed on open.
 
 ## Enum: Sync state
 
@@ -55,19 +58,20 @@ open_metadata(path):
       → Resolved(meta, synced)
   else:
       fp = compute(path)
-      if fp == rec.fingerprint (all three):
+      if fp.hash == rec.hash:                            # content identical (hash authoritative)
+          if fp.mtime != rec.mtime: UPDATE mtime         # silently refresh, no prompt
           → Resolved(rec.meta, rec.syncState)            # unchanged file → trust store
       else if rec.synced == 0 (appOnly):
           → Resolved(rec.meta, appOnly)                  # store is newer → store wins (no prompt)
       else:
-          → Conflict(store=rec.meta, file=read file)     # external edit → ask the user
+          → Conflict(store=rec.meta, file=read file)     # external content edit → ask the user
 
 apply_metadata_source(path, source):
   if source == "store":
       UPDATE fingerprint = compute(path)                 # keep store, adopt new fingerprint
       → Resolved(rec.meta, synced)
   if source == "file":
-      meta = read file; UPDATE meta + fingerprint, synced=1
+      meta = read file (keep store's release_filename); UPDATE meta + fingerprint, synced=1
       → Resolved(meta, synced)
 ```
 
@@ -80,9 +84,9 @@ apply_metadata_source(path, source):
 | Batch attribution (per item) | UPSERT fields, `synced=0`, file untouched | `appOnly` |
 | **Save** (file write) | After file write: refresh fingerprint, `synced=1`; on rename move row to new path | `synced` |
 | Batch **Save** (per item) | Same as Save, per file | `synced` |
-| **Cancel** (`revert_to_file`) | Overwrite store from file, refresh fingerprint, `synced=1` | `synced` |
+| **Cancel** (`revert_to_file`) | Overwrite store from file (keep `release_filename`), refresh fingerprint, `synced=1` | `synced` |
 | Conflict → "store" | Refresh fingerprint only | `synced` |
-| Conflict → "file" | Overwrite store from file, refresh fingerprint | `synced` |
+| Conflict → "file" | Overwrite store from file (keep `release_filename`), refresh fingerprint | `synced` |
 | File deleted on disk | Record retained (no cleanup) | unchanged |
 | Store error (any op) | Log + fall back to direct file read/write | n/a (acts as today) |
 

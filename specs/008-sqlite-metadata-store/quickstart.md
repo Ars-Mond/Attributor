@@ -53,10 +53,11 @@ data model: [data-model.md](./data-model.md).
    differs).
 2. Reopen it in the app.
 3. **Expect**: `open_metadata` returns `conflict`; a dialog asks **store vs file**.
-   - Choose **file** → file metadata loads, store overwritten, `synced=1`.
+   - Choose **file** → file metadata loads, store overwritten (but `releaseFilename` retained), `synced=1`.
    - Choose **store** → store metadata kept, fingerprint refreshed, `synced=1`.
 4. Touch a file (change mtime only, content identical) and reopen.
-5. **Expect**: still treated as a mismatch (all three must match) → conflict branch, per clarify Q2.
+5. **Expect**: NO prompt — the hash matches, so it is treated as unchanged; the stored mtime is
+   silently refreshed and the store metadata loads (analyze-review refinement).
 
 ## Scenario G — Store-newer wins silently (US3 AC-2)
 
