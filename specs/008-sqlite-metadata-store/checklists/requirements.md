@@ -31,11 +31,13 @@
 
 ## Notes
 
-- "SQLite" and "xxHash" appear in the feature title/input and one assumption because the
-  maintainer specified them as hard constraints; they are framed as the store technology and a
-  fast-hash family rather than as design decisions. The functional requirements themselves stay
-  technology-agnostic ("application-level store", "fast full-file hash").
-- The read-flow conflict-resolution rule (FR-010/FR-011, "store is newer" definition) and the
-  batch apply-to-all behavior (FR-020) were chosen as reasonable defaults; they are good
-  candidates to confirm in `/speckit-clarify`.
-- Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.
+- "SQLite", "xxHash", and (after clarification) "rusqlite + bundled" appear in the title/input,
+  Clarifications, and Assumptions because the maintainer specified them as hard constraints. The
+  functional requirements themselves stay technology-agnostic ("application-level store",
+  "full-file hash"); the concrete engine is recorded as a documented exception to Constitution
+  Principle I (Pure Rust Backend), to be justified in the plan's Complexity Tracking.
+- Clarified in Session 2026-06-29: edit-persistence target (store, immediate), change-detection
+  rule (all three identifiers must match; full hash always computed), storage engine (rusqlite
+  bundled), and record cleanup (manual, deferred). The read-flow "store is newer" rule
+  (FR-010/FR-011) and batch apply-to-all (FR-020) remain as specified defaults.
+- Items marked incomplete require spec updates before `/speckit-plan`.

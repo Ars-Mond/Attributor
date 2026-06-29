@@ -8,6 +8,15 @@
 
 **Input**: User description: "SQLite as intermediate metadata storage. docs/SQLite.puml describes the read-flow. For photo identity store two identifiers: primary key = photo path, fingerprint = size + mtime + fast full-file hash (xxHash). Add a file status meaning 'saved in the app database but not yet written into the photo file'. Add a Cancel button between the Ollama button and the Save button that reverts the values to match the file."
 
+## Clarifications
+
+### Session 2026-06-29
+
+- Q: Where do manual field edits (and autosave) go before an explicit Save to file? → A: Immediately to the store — any value typed into a field is saved to the database at once (app-only); the photo file is untouched until Save.
+- Q: How is an unchanged file detected on open, given full-file hashing cost? → A: Always compute the full-file xxHash; a record matches the file only when size, modification time, AND full-file hash all match simultaneously (no short-circuit).
+- Q: Which storage engine, given the Pure-Rust constitution vs SQLite? → A: SQLite via the `rusqlite` crate with the `bundled` feature, accepted as a documented exception to Constitution Principle I (to be justified in the plan).
+- Q: What happens to store records for deleted/missing files? → A: No automatic cleanup; records are kept. A manual "clean up database" action may be added later (out of scope now).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Edits and attribution are kept by the app without rewriting the photo (Priority: P1)
@@ -107,11 +116,12 @@ the store fingerprint is updated.
 
 ### Edge Cases
 
-- **File content identical but mtime changed** (e.g., touched or copied): the full-file
-  content hash still matches, so the photo is treated as unchanged and no conflict is
-  raised; the store fingerprint is refreshed.
+- **File content identical but mtime changed** (e.g., touched or copied): because a match
+  requires size, mtime, AND hash to all agree, a changed mtime counts as a mismatch and enters
+  the read-flow's mismatch branch (FR-010/FR-011) even though the content hash still matches.
 - **Photo file deleted** while a store record exists: the store record is retained but the
-  photo is unavailable to open; the store is not silently purged.
+  photo is unavailable to open; the store is not silently purged (no automatic cleanup — see
+  Assumptions).
 - **Photo moved or renamed** (path changes, content identical): a new record is keyed by the
   new path; recognizing it as the same content via fingerprint to re-link the old record is
   out of scope for this feature (see Assumptions).
@@ -147,10 +157,13 @@ the store fingerprint is updated.
 - **FR-006**: On opening a photo, the system MUST look up a store record by path.
 - **FR-007**: When no record exists, the system MUST read metadata from the file and create a
   store record with the file's current fingerprint.
-- **FR-008**: When a record exists, the system MUST compute the file's current fingerprint and
-  compare it with the stored fingerprint.
-- **FR-009**: When the fingerprints match, the system MUST load metadata from the store and
-  MUST NOT parse the file's embedded metadata.
+- **FR-008**: When a record exists, the system MUST compute the file's current fingerprint —
+  always including a full-file xxHash — and compare all three identifiers (size, modification
+  time, and full-file hash) against the stored fingerprint.
+- **FR-009**: The file is considered unchanged only when size, modification time, AND full-file
+  hash all match simultaneously; in that case the system MUST load metadata from the store and
+  MUST NOT parse the file's embedded metadata. If any of the three differs, the read-flow's
+  mismatch branch (FR-010/FR-011) applies.
 - **FR-010**: When the fingerprints differ but the store holds app-only changes (store treated
   as newer), the system MUST load metadata from the store.
 - **FR-011**: When the fingerprints differ and the store does not hold app-only changes
@@ -162,8 +175,9 @@ the store fingerprint is updated.
 
 **Attribution & status**
 
-- **FR-013**: Running Ollama attribution (single or batch) MUST persist its results to the
-  store and MUST NOT modify the photo file.
+- **FR-013**: Editing a metadata field by hand or running Ollama attribution (single or batch)
+  MUST persist the change to the store immediately (app-only) and MUST NOT modify the photo
+  file.
 - **FR-014**: The system MUST present a distinct file status indicating "metadata saved in the
   app but not yet written into the photo file", shown when the record has app-only changes.
 - **FR-015**: The new status MUST coexist with the existing file statuses (no file / viewing /
@@ -203,7 +217,8 @@ the store fingerprint is updated.
 ### Measurable Outcomes
 
 - **SC-001**: Re-opening a photo whose stored metadata matches its unchanged file displays the
-  metadata in under 200 ms and without re-parsing the file's embedded metadata.
+  metadata in under 200 ms; the file is hashed for the change check, but its embedded metadata
+  is not re-parsed.
 - **SC-002**: After running attribution on any number of photos and then closing and reopening
   the app without saving to file, 100% of the produced metadata is still present.
 - **SC-003**: Running attribution writes zero bytes to the photo files until the user explicitly
@@ -226,8 +241,14 @@ the store fingerprint is updated.
   read-flow diagram — including the rare case where the file was also changed externally.
 - **Metadata field set**: the stored fields mirror exactly what the app already writes to files;
   the three attribution flags remain UI-only and are persisted neither to files nor to the store.
-- **Fast hash**: the full-file content hash is a non-cryptographic fast hash (xxHash family),
-  used only for change detection, not for security.
+- **Fast hash**: the full-file content hash is a non-cryptographic fast hash (xxHash), computed
+  over the whole file on every open and used only for change detection, not for security.
+- **Storage engine (constitution exception)**: the store is SQLite accessed via the `rusqlite`
+  crate with the `bundled` feature (SQLite C code compiled into the application). This is an
+  explicit, documented exception to Constitution Principle I (Pure Rust Backend) and MUST be
+  justified in the plan's Complexity Tracking.
+- **No automatic record cleanup**: store records for deleted or missing files are kept; a manual
+  "clean up database" action may be added in a later feature and is out of scope here.
 - **Cancel scope**: the Cancel ("revert to file") control applies to single-photo editing; batch
   editing keeps its existing controls, and batch conflicts are handled by the apply-to-all
   resolution (FR-020).
