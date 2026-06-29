@@ -86,6 +86,7 @@ export interface Messages {
     'metadata.fileStatus.none': string;
     'metadata.fileStatus.open': string;
     'metadata.fileStatus.edit': string;
+    'metadata.fileStatus.app': string;
     'metadata.fileStatus.batch': string;
     'metadata.batch.loading': string;
     'metadata.batch.mixedValues': string;
@@ -145,6 +146,8 @@ export interface Messages {
     'metadata.dialog.clearKeywords.body': string;
     'metadata.dialog.clearKeywords.batch.body': PluralForms;
     'metadata.button.saveChanges': string;
+    'metadata.button.revert': string;
+    'metadata.button.revert.title': string;
     'metadata.button.autosave': string;
     'metadata.button.saveBatch': PluralForms;
     'metadata.button.saveBatch.progress': string;

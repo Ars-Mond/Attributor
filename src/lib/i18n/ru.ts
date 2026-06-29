@@ -55,6 +55,7 @@ export const ru: Messages = {
     'metadata.fileStatus.none': 'нет',
     'metadata.fileStatus.open': 'просмотр',
     'metadata.fileStatus.edit': 'правка',
+    'metadata.fileStatus.app': 'в приложении',
     'metadata.fileStatus.batch': 'Пакет',
     'metadata.batch.loading': 'Загрузка...',
     'metadata.batch.mixedValues': '(разные значения)',
@@ -118,6 +119,8 @@ export const ru: Messages = {
         many: 'Удалить все ключевые слова из {n} выбранных файлов?'
     },
     'metadata.button.saveChanges': 'Сохранить',
+    'metadata.button.revert': 'Отмена',
+    'metadata.button.revert.title': 'Вернуть как в файле — отменить изменения, сохранённые только в приложении',
     'metadata.button.autosave': 'Автосохранение',
     'metadata.button.saveBatch': {one: 'Сохранить {n} файл', few: 'Сохранить {n} файла', many: 'Сохранить {n} файлов'},
     'metadata.button.saveBatch.progress': 'Сохранение {n}/{total}...',

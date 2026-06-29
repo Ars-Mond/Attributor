@@ -4,6 +4,7 @@ pub mod folder;
 mod keywords;
 mod ollama;
 mod photo;
+mod store;
 mod types;
 
 // Re-exports required by integration tests (tests/metadata_test.rs)
@@ -78,10 +79,24 @@ fn read_metadata(path: String) -> Result<ReadResult, String> {
 }
 
 #[tauri::command]
-fn save_metadata(metadata: SaveRequest) -> Result<String, String> {
+fn save_metadata(
+    metadata: SaveRequest,
+    state: tauri::State<'_, store::DbState>,
+) -> Result<String, String> {
     // Single-file save delegates to the same per-file path used by every batch item,
     // so the result is identical whether saved alone or as part of a batch.
-    batch::save_one(metadata)
+    let old_path = metadata.filepath.clone();
+    let stored = store::StoredMetadata {
+        title: metadata.title.clone(),
+        description: metadata.description.clone(),
+        keywords: metadata.keywords.clone(),
+        categories: metadata.categories.clone(),
+        release_filename: metadata.release_filename.clone(),
+    };
+    let final_path = batch::save_one(metadata)?;
+    // After the file write, refresh the store record and mark it synced (FR-016).
+    state.sync_after_save(&old_path, &final_path, &stored);
+    Ok(final_path)
 }
 
 /// On-demand single-photo generation: produce the requested size(s) and return both cache paths.
@@ -209,11 +224,29 @@ pub fn run() {
         .plugin(tauri_plugin_prevent_default::Builder::new()
             .with_flags(Flags::all().difference(Flags::RELOAD))
             .build())
+        .setup(|app| {
+            // Open the intermediate metadata store in the app-data dir; degrades to direct file
+            // access on any error so editing always works (FR-021).
+            match app.path().app_data_dir() {
+                Ok(dir) => {
+                    std::fs::create_dir_all(&dir).ok();
+                    app.manage(store::DbState::open(&dir.join("metadata.db")));
+                }
+                Err(e) => {
+                    log::error!("app_data_dir unavailable: {e}; metadata store disabled");
+                    app.manage(store::DbState::disabled());
+                }
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             read_metadata,
             save_metadata,
             save_metadata_batch,
             cancel_batch,
+            store::open_metadata,
+            store::store_metadata,
+            store::revert_to_file,
             cache_thumbnail,
             thumbnail_dir_exists,
             open_folder,

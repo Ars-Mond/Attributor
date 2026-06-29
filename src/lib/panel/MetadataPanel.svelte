@@ -10,7 +10,8 @@
     import {attributePhoto, attributeBatch, cancelOllama} from "$lib/ollama/ollama";
     import {ollama} from "$lib/ollama/availability.svelte";
     import {progress} from "$lib/progress.svelte";
-    import type {Metadata, ReadResult} from "$lib/types";
+    import {openMetadata, storeMetadata, revertToFile} from "$lib/store/metadata";
+    import type {Metadata, ReadResult, SyncState, StoredMetadata} from "$lib/types";
     import type {BatchProgress, ItemStatus} from "$lib/events";
     import {SvelteMap} from "svelte/reactivity";
     import {panelState} from "./filesPanelStore.svelte";
@@ -45,6 +46,9 @@
     let illustration = $state(false);
     // Stock-keyword presets popup (moved out of the inline spoiler into an on-demand dialog).
     let showStockKeywords = $state(false);
+    // Sync state of the open record vs the file (feature 008): 'appOnly' → metadata is in the app
+    // store but not yet written to the file; 'synced' → file and store agree; null → no file open.
+    let syncState = $state<SyncState | null>(null);
     const autoSave = $derived(settings.subscribe('editor.autosave')());
     let saveAttempted = $state(false);
     let saveError = $state<string | null>(null);
@@ -198,10 +202,38 @@
         return () => clearTimeout(timer);
     });
 
+    // ── Store persistence (feature 008) ────────────────────────────────────
+    // Persist the working fields to the app store as app-only whenever they change (the store is the
+    // working layer). Skipped when file-autosave is on — then doSave writes the file and syncs the
+    // store, making a separate app-only write redundant.
+    $effect(() => {
+        title; description; keywords; categories; releaseFilename;
+        if (isBatch || !filepath || snapshot === null || autoSave) return;
+        if (!isDirtyComputed) return;
+        const path = filepath;
+        const fields: StoredMetadata = {title, description, keywords: [...keywords], categories, releaseFilename};
+        const delay = settings.get<number>('editor.autosave_delay');
+        const timer = setTimeout(async () => {
+            try {
+                const s = await storeMetadata(path, fields);
+                if (filepath !== path || snapshot === null) return;
+                syncState = s;
+                // Rebaseline the metadata fields so the status flips edit → app (keep filename dirty).
+                snapshot = {...snapshot, title: fields.title, description: fields.description, keywords: [...fields.keywords], categories: fields.categories, releaseFilename: fields.releaseFilename};
+            } catch (e) {
+                console.warn('storeMetadata failed:', e);
+            }
+        }, delay);
+        return () => clearTimeout(timer);
+    });
+
     // ── File status ────────────────────────────────────────────────────────
 
     const fileStatus = $derived(
-        snapshot === null ? 'none' : isDirtyComputed ? 'edit' : 'open'
+        snapshot === null ? 'none'
+        : isDirtyComputed ? 'edit'
+        : syncState === 'appOnly' ? 'app'
+        : 'open'
     );
 
     const displayPath = $derived(filepath);
@@ -491,7 +523,7 @@
 
     // ── Exported interface ─────────────────────────────────────────────────
 
-    /** Load a file: reset fields, read existing XMP, then take snapshot. */
+    /** Load a file: reset fields, resolve metadata store-first (feature 008), then take snapshot. */
     export async function loadFile(path: string): Promise<void> {
         filepath = path;
         filename = extractStem(path);
@@ -508,16 +540,24 @@
         saveError = null;
         attributeError = null;
         snapshot = null;
+        syncState = null;
 
         try {
-            const meta = await invoke<ReadResult>('read_metadata', {path});
+            const res = await openMetadata(path);
+            // On a conflict (synced record whose file changed externally) US1 defaults to the file
+            // version; the store-vs-file prompt arrives with US3.
+            const meta = res.kind === 'resolved' ? res.metadata : res.file;
+            syncState = res.kind === 'resolved' ? res.syncState : 'synced';
+            if (res.kind === 'conflict') {
+                console.warn(`metadata conflict for ${path}; defaulting to file version`);
+            }
             title = meta.title;
             description = meta.description;
             keywords = meta.keywords;
             categories = meta.categories;
             releaseFilename = meta.releaseFilename;
         } catch (e) {
-            console.warn('read_metadata failed:', e);
+            console.warn('openMetadata failed:', e);
         }
 
         snapshot = captureSnapshot();
@@ -537,6 +577,7 @@
         matureContent = false;
         illustration = false;
         snapshot = null;
+        syncState = null;
         saveAttempted = false;
     }
 
@@ -586,6 +627,8 @@
         const prevFilepath = filepath;
         filepath = newPath;
         filename = extractStem(newPath);
+        // The backend wrote the file and synced the store — reflect that in the status (feature 008).
+        syncState = 'synced';
         snapshot = captureSnapshot();
 
         if (newPath !== prevFilepath) {
@@ -604,6 +647,31 @@
             await doSave();
         } catch (e) {
             saveError = e instanceof Error ? e.message : String(e);
+        }
+    }
+
+    // Cancel / revert-to-file (feature 008): discard app-only changes and restore the form + store
+    // from the photo file (the store keeps its releaseFilename). Whether the record can be reverted.
+    const canRevert = $derived(!isBatch && !!filepath && (syncState === 'appOnly' || isDirtyComputed));
+
+    async function handleRevert() {
+        if (!canRevert) return;
+        const path = filepath;
+        try {
+            const meta = await revertToFile(path);
+            if (filepath !== path) return;
+            title = meta.title;
+            description = meta.description;
+            keywords = meta.keywords;
+            categories = meta.categories;
+            releaseFilename = meta.releaseFilename;
+            syncState = 'synced';
+            saveError = null;
+            attributeError = null;
+            saveAttempted = false;
+            snapshot = captureSnapshot();
+        } catch (e) {
+            console.warn('revertToFile failed:', e);
         }
     }
 
@@ -1394,6 +1462,12 @@
                         title={ollama.available ? t('ollama.attribute.tooltip') : t('ollama.unavailable.tooltip')}
                     >{t('ollama.attribute')}</button>
                     <button
+                        class="btn-ghost"
+                        onclick={handleRevert}
+                        disabled={!canRevert}
+                        title={t('metadata.button.revert.title')}
+                    >{t('metadata.button.revert')}</button>
+                    <button
                         class="btn-primary save-btn"
                         onclick={handleSave}
                         disabled={!filepath}
@@ -1472,6 +1546,7 @@
         &--none { background: $text-muted; }
         &--open { background: #4ade80; box-shadow: 0 0 5px rgba(74, 222, 128, 0.4); }
         &--edit { background: #fbbf24; box-shadow: 0 0 5px rgba(251, 191, 36, 0.4); }
+        &--app { background: #a78bfa; box-shadow: 0 0 5px rgba(167, 139, 250, 0.4); }
         &--batch { background: #60a5fa; box-shadow: 0 0 5px rgba(96, 165, 250, 0.4); }
     }
 
@@ -1485,6 +1560,7 @@
         &--none { color: $text-muted; }
         &--open { color: #4ade80; }
         &--edit { color: #fbbf24; }
+        &--app { color: #a78bfa; }
         &--batch { color: #60a5fa; }
     }
 

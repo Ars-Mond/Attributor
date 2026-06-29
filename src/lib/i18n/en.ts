@@ -55,6 +55,7 @@ export const en: Messages = {
     'metadata.fileStatus.none': 'none',
     'metadata.fileStatus.open': 'open',
     'metadata.fileStatus.edit': 'edit',
+    'metadata.fileStatus.app': 'in app',
     'metadata.fileStatus.batch': 'Batch',
     'metadata.batch.loading': 'Loading...',
     'metadata.batch.mixedValues': '(mixed values)',
@@ -117,6 +118,8 @@ export const en: Messages = {
         other: 'Remove all keywords from {n} selected files?'
     },
     'metadata.button.saveChanges': 'Save Changes',
+    'metadata.button.revert': 'Cancel',
+    'metadata.button.revert.title': 'Revert to the file — discard changes saved only in the app',
     'metadata.button.autosave': 'Auto-save',
     'metadata.button.saveBatch': {one: 'Save {n} File', other: 'Save {n} Files'},
     'metadata.button.saveBatch.progress': 'Saving {n}/{total}...',
