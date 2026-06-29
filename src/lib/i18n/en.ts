@@ -117,9 +117,11 @@ export const en: Messages = {
         one: 'Remove all keywords from {n} selected file?',
         other: 'Remove all keywords from {n} selected files?'
     },
+    'metadata.dialog.revert.title': 'Reset to file?',
+    'metadata.dialog.revert.body': 'Discard the changes saved only in the app and restore this photo\'s metadata from the file? This cannot be undone.',
     'metadata.button.saveChanges': 'Save Changes',
-    'metadata.button.revert': 'Cancel',
-    'metadata.button.revert.title': 'Revert to the file — discard changes saved only in the app',
+    'metadata.button.revert': 'Reset',
+    'metadata.button.revert.title': 'Reset to the file — discard changes saved only in the app',
     'metadata.button.autosave': 'Auto-save',
     'metadata.button.saveBatch': {one: 'Save {n} File', other: 'Save {n} Files'},
     'metadata.button.saveBatch.progress': 'Saving {n}/{total}...',

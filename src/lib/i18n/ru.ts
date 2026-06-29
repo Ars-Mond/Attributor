@@ -118,9 +118,11 @@ export const ru: Messages = {
         few: 'Удалить все ключевые слова из {n} выбранных файлов?',
         many: 'Удалить все ключевые слова из {n} выбранных файлов?'
     },
+    'metadata.dialog.revert.title': 'Сбросить к файлу?',
+    'metadata.dialog.revert.body': 'Отменить изменения, сохранённые только в приложении, и восстановить метаданные этого фото из файла? Это действие нельзя отменить.',
     'metadata.button.saveChanges': 'Сохранить',
-    'metadata.button.revert': 'Отмена',
-    'metadata.button.revert.title': 'Вернуть как в файле — отменить изменения, сохранённые только в приложении',
+    'metadata.button.revert': 'Сброс',
+    'metadata.button.revert.title': 'Сбросить к файлу — отменить изменения, сохранённые только в приложении',
     'metadata.button.autosave': 'Автосохранение',
     'metadata.button.saveBatch': {one: 'Сохранить {n} файл', few: 'Сохранить {n} файла', many: 'Сохранить {n} файлов'},
     'metadata.button.saveBatch.progress': 'Сохранение {n}/{total}...',

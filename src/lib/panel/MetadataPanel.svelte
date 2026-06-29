@@ -54,6 +54,7 @@
     let saveError = $state<string | null>(null);
     let attributeError = $state<string | null>(null);
     let showClearConfirm = $state(false);
+    let showRevertConfirm = $state(false);
 
     // ── UI preferences (persisted) ─────────────────────────────────────────
 
@@ -1378,6 +1379,27 @@
         />
     {/if}
 
+    {#if showRevertConfirm}
+        <ConfirmDialog
+            title={t('metadata.dialog.revert.title')}
+            body={t('metadata.dialog.revert.body')}
+            icon="warning"
+            buttons={[
+                {label: t('common.cancel'), onClick: () => { showRevertConfirm = false; }},
+                {
+                    label: t('metadata.button.revert'),
+                    onClick: () => { showRevertConfirm = false; handleRevert(); },
+                    color: 'var(--required-color)',
+                    border: 'var(--required-color)',
+                    hoverBg: 'var(--required-alpha-08)',
+                    hoverBorder: 'var(--required-color)',
+                    hoverColor: 'var(--required-color)',
+                },
+            ]}
+            onClose={() => { showRevertConfirm = false; }}
+        />
+    {/if}
+
     <!-- ── Keyword suggestions dropdown ── -->
     <KeywordSuggestions
         bind:this={suggestionsComp}
@@ -1463,7 +1485,7 @@
                     >{t('ollama.attribute')}</button>
                     <button
                         class="btn-ghost"
-                        onclick={handleRevert}
+                        onclick={() => { showRevertConfirm = true; }}
                         disabled={!canRevert}
                         title={t('metadata.button.revert.title')}
                     >{t('metadata.button.revert')}</button>

@@ -145,6 +145,8 @@ export interface Messages {
     'metadata.dialog.clearKeywords.title': string;
     'metadata.dialog.clearKeywords.body': string;
     'metadata.dialog.clearKeywords.batch.body': PluralForms;
+    'metadata.dialog.revert.title': string;
+    'metadata.dialog.revert.body': string;
     'metadata.button.saveChanges': string;
     'metadata.button.revert': string;
     'metadata.button.revert.title': string;
