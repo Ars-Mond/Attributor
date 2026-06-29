@@ -25,8 +25,11 @@ pub enum SyncState {
 
 /// Outcome of resolving a photo's metadata on open (read-flow). `Resolved` loads directly;
 /// `Conflict` carries both versions for the frontend to prompt on (US3).
+///
+/// `rename_all_fields` is required so struct-variant fields (e.g. `sync_state`) are camelCased to
+/// `syncState` — the enum-level `rename_all` only renames the variant *names*, not their fields.
 #[derive(Serialize, Clone, Debug)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum MetadataResolution {
     Resolved {
         metadata: StoredMetadata,
@@ -36,4 +39,21 @@ pub enum MetadataResolution {
         store: StoredMetadata,
         file: StoredMetadata,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolution_serializes_camelcase_fields() {
+        let r = MetadataResolution::Resolved {
+            metadata: StoredMetadata::default(),
+            sync_state: SyncState::AppOnly,
+        };
+        let json = serde_json::to_string(&r).unwrap();
+        assert!(json.contains("\"kind\":\"resolved\""), "{json}");
+        assert!(json.contains("\"syncState\":\"appOnly\""), "{json}");
+        assert!(!json.contains("sync_state"), "{json}");
+    }
 }
