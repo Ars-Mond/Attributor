@@ -120,16 +120,19 @@ pub async fn attribute_photo(
     attribute::attribute_one(&path, &config, &cancel).await
 }
 
-/// Batch attribution: sequentially attribute and ALWAYS save each photo; stream per-file progress.
+/// Batch attribution: sequentially attribute each photo and store the result as app-only (feature 008
+/// — files are not modified); stream per-file progress.
 #[tauri::command]
 pub async fn attribute_batch(
     paths: Vec<String>,
     config: AttributionConfig,
     on_progress: tauri::ipc::Channel<BatchProgress>,
     state: tauri::State<'_, OllamaState>,
+    db: tauri::State<'_, crate::store::DbState>,
 ) -> Result<Vec<ItemStatus>, String> {
     let cancel = swap_cancel(state.inner());
-    Ok(attribute::attribute_batch(&paths, &config, &cancel, |msg| {
+    let db = db.share();
+    Ok(attribute::attribute_batch(&paths, &config, &cancel, &db, |msg| {
         if let Err(e) = on_progress.send(msg) {
             log::warn!("attribute batch progress send failed: {e}");
         }

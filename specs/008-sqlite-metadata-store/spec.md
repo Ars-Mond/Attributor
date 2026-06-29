@@ -20,7 +20,8 @@
 ### Session 2026-06-29 (analyze review)
 
 - Q: On an mtime-only change with identical content (full-file hash matches), prompt or accept silently? → A: The full-file hash is authoritative — a hash match means the content is unchanged; silently refresh the stored mtime and load from the store, no prompt. Only a hash difference counts as a change. (Refines the earlier "all three must match" answer.)
-- Q: `releaseFilename` has no file-side equivalent — clear it when resolving a conflict to "file" or on Cancel, or keep it? → A: Keep the store's `releaseFilename`; the file side never overwrites it.
+- Q: `releaseFilename` has no file-side equivalent — clear it when resolving a conflict to "file" or on Cancel, or keep it? → A: Keep the store's `releaseFilename`; the file side never overwrites it. *(Refined during implementation — see the store-only-fields rule below: EVERY DB update keeps the store-only fields, EXCEPT the Reset button which clears them.)*
+- Q: How are the store-only fields (release filename + the editorial/mature/illustration flags) treated across DB updates? → A: EVERY database update PRESERVES them (single/batch save, batch attribution, conflict resolved to "file"). The ONE exception is the **Reset** button (`revert_to_file`), which CLEARS them (Reset means "match the file", and the file has none).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -178,8 +179,8 @@ the store fingerprint is updated.
   the file metadata.
 - **FR-012**: When the user chooses the store, the system MUST refresh the stored fingerprint
   and load metadata from the store; when the user chooses the file, the system MUST read
-  metadata from the file and update the store record to match, EXCEPT it MUST retain the store's
-  `releaseFilename` (which has no file-side equivalent).
+  metadata from the file and update the store record to match, EXCEPT it MUST preserve the
+  store-only fields (release filename and the attribution flags), which have no file-side equivalent.
 
 **Attribution & status**
 
@@ -197,9 +198,10 @@ the store fingerprint is updated.
   the store record (refresh its fingerprint and mark it in sync with the file).
 - **FR-017**: A Cancel control MUST be presented between the Ollama (attribute) button and the
   Save button in single-photo editing.
-- **FR-018**: The Cancel action MUST restore the working fields from the photo file's current
-  metadata and update the store record to mirror the file (discarding app-only changes), EXCEPT
-  the store's `releaseFilename` MUST be retained (it has no file-side equivalent).
+- **FR-018**: The Reset action (the Cancel control) MUST restore the working fields from the photo
+  file's current metadata and update the store record to mirror the file (discarding app-only
+  changes), CLEARING the store-only fields (release filename and the attribution flags) — Reset
+  matches the file, which has none. (Reset is the only operation that clears them.)
 - **FR-019**: The Cancel control MUST be unavailable when there is nothing to revert (the record
   is already in sync with the file and there are no in-memory edits).
 
@@ -250,8 +252,9 @@ the store fingerprint is updated.
   read-flow diagram — including the rare case where the file was also changed externally.
 - **Metadata field set**: the store holds the file-backed fields (title, description, keywords,
   categories) plus store-only fields with no file equivalent — release filename and the three
-  attribution flags (editorial, mature content, illustration). The store-only fields are retained
-  when resolving from the file and on Cancel/revert; the file pipeline never reads or writes them.
+  attribution flags (editorial, mature content, illustration). Every DB update preserves the
+  store-only fields (conflict resolved to "file", batch save, batch attribution); only the Reset
+  button clears them. The file pipeline never reads or writes them.
 - **Fast hash**: the full-file content hash is a non-cryptographic fast hash (xxHash), computed
   over the whole file on every open and used only for change detection, not for security.
 - **Storage engine (constitution exception)**: the store is SQLite accessed via the `rusqlite`

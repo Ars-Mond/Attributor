@@ -1,14 +1,14 @@
 //! Attribution: run a vision inference and map the strict JSON onto the editor's metadata.
-//! Single mode returns the parsed result (frontend applies it); batch mode merges into each file's
-//! existing metadata and saves it, sequentially (Ollama serializes inference), streaming progress.
+//! Single mode returns the parsed result (frontend applies it); batch mode stores each result in the
+//! metadata store as app-only (feature 008 — the file is not modified), sequentially (Ollama
+//! serializes inference), streaming progress.
 
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use crate::events::{BatchProgress, ItemStatus};
-use crate::types::SaveRequest;
+use crate::store::{DbState, StoredMetadata};
 
 use super::client;
 use super::types::{AttributionConfig, AttributionResult};
@@ -96,52 +96,42 @@ pub async fn attribute_one(
     Ok(result)
 }
 
-/// Attribute one file and persist it: read existing metadata, overwrite text/categories, append+dedupe
-/// keywords, then save via the shared per-file writer. Returns the final path.
-async fn attribute_and_save(
+/// Attribute one file and store the result in the metadata store as app-only (feature 008 — the file
+/// is NOT modified). Keyword merge + release_filename preservation happen inside `store_attribution`.
+/// Returns the (unchanged) path.
+async fn attribute_and_store(
     path: &str,
     cfg: &AttributionConfig,
     cancel: &Arc<AtomicBool>,
+    db: &DbState,
 ) -> Result<String, String> {
     let result = attribute_one(path, cfg, cancel).await?;
-    let path = path.to_string();
-    tokio::task::spawn_blocking(move || {
-        let existing = crate::photo::read_metadata(path.clone()).unwrap_or_default();
-        let mut keywords = existing.keywords;
-        for kw in result.keywords {
-            let k = kw.trim().to_lowercase();
-            if !k.is_empty() && !keywords.iter().any(|e| e.eq_ignore_ascii_case(&k)) {
-                keywords.push(k);
-            }
-        }
-        let stem = Path::new(&path)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_string();
-        crate::batch::save_one(SaveRequest {
-            filepath: path,
-            filename: stem,
-            title: result.title,
-            description: result.description,
-            keywords,
-            categories: result.categories.join(", "),
-            release_filename: String::new(),
-            editorial: result.editorial,
-            mature_content: result.mature_content,
-            illustration: result.illustration,
-        })
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    let model = StoredMetadata {
+        title: result.title,
+        description: result.description,
+        keywords: result.keywords,
+        categories: result.categories.join(", "),
+        release_filename: String::new(),
+        editorial: result.editorial,
+        mature_content: result.mature_content,
+        illustration: result.illustration,
+    };
+    // Run the SQLite write off the async runtime (no mutex/SQLite work on a tokio worker thread).
+    let dbh = db.share();
+    let p = path.to_string();
+    tokio::task::spawn_blocking(move || dbh.store_attribution(&p, &model))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(path.to_string())
 }
 
-/// Sequentially attribute and save every path, streaming one `BatchProgress` per file. A failed item is
-/// recorded and the loop continues; cancellation stops before the next item (already-saved files remain).
+/// Sequentially attribute every path and store each result (app-only), streaming one `BatchProgress`
+/// per file. A failed item is recorded and the loop continues; cancellation stops before the next item.
 pub async fn attribute_batch(
     paths: &[String],
     cfg: &AttributionConfig,
     cancel: &Arc<AtomicBool>,
+    db: &DbState,
     progress: impl Fn(BatchProgress),
 ) -> Vec<ItemStatus> {
     let mut out = Vec::with_capacity(paths.len());
@@ -149,7 +139,7 @@ pub async fn attribute_batch(
         let status = if cancel.load(Ordering::Relaxed) {
             ItemStatus::Cancelled
         } else {
-            match attribute_and_save(path, cfg, cancel).await {
+            match attribute_and_store(path, cfg, cancel, db).await {
                 Ok(p) => ItemStatus::Ok { path: p },
                 // Cancelled mid-inference (the generate future was dropped) — record it as cancelled.
                 Err(_) if cancel.load(Ordering::Relaxed) => ItemStatus::Cancelled,

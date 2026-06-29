@@ -54,6 +54,12 @@ impl DbState {
         self.conn.clone()
     }
 
+    /// A handle sharing the same underlying connection — for moving into a blocking/parallel task
+    /// (batch save, batch attribution) where a `tauri::State` reference cannot be captured.
+    pub fn share(&self) -> DbState {
+        DbState { conn: self.conn.clone() }
+    }
+
     /// After a file write, refresh the store record for `new_path` to mirror the saved metadata and
     /// mark it synced; move the row from `old_path` on rename. Best-effort (logs on error).
     pub fn sync_after_save(&self, old_path: &str, new_path: &str, meta: &StoredMetadata) {
@@ -63,6 +69,28 @@ impl DbState {
         };
         if let Err(e) = sync_after_save(&conn, old_path, new_path, meta) {
             log::warn!("store sync_after_save failed for {new_path}: {e}");
+        }
+    }
+
+    /// Batch save sync (preserves the store-only fields from the existing record). Best-effort.
+    pub fn sync_after_save_batch(&self, old_path: &str, new_path: &str, file_meta: &StoredMetadata) {
+        let Some(conn) = self.handle() else {
+            log::warn!("store batch sync skipped (store unavailable): {new_path}");
+            return;
+        };
+        if let Err(e) = sync_after_save_keep_store_only(&conn, old_path, new_path, file_meta) {
+            log::warn!("store batch sync failed for {new_path}: {e}");
+        }
+    }
+
+    /// Store a batch-attribution result as app-only (file untouched). Best-effort.
+    pub fn store_attribution(&self, path: &str, model: &StoredMetadata) {
+        let Some(conn) = self.handle() else {
+            log::warn!("store attribution skipped (store unavailable): {path}");
+            return;
+        };
+        if let Err(e) = attribute_app_only(&conn, path, model) {
+            log::warn!("store attribution failed for {path}: {e}");
         }
     }
 }
@@ -249,25 +277,19 @@ fn persist_app_only(conn: &Mutex<Connection>, path: &str, meta: &StoredMetadata)
     Ok(SyncState::AppOnly)
 }
 
-/// Cancel / revert-to-file: overwrite the record from the file but retain the stored release_filename.
+/// Reset / revert-to-file: make the record match the file. The Reset button is the ONE operation
+/// that CLEARS the store-only fields (release_filename + flags) — they revert to the file (which has
+/// none). Every other DB update preserves them (see `keep_store_only`).
 fn revert(conn: &Mutex<Connection>, path: &str) -> Result<StoredMetadata, String> {
-    let mut meta = read_file_metadata(path)?;
-    {
-        let c = conn.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(rec) = read_record(&c, path)? {
-            // Retain the store-only fields (no file equivalent).
-            meta.release_filename = rec.meta.release_filename;
-            meta.editorial = rec.meta.editorial;
-            meta.mature_content = rec.meta.mature_content;
-            meta.illustration = rec.meta.illustration;
-        }
-    }
+    let meta = read_file_metadata(path)?;
     let fp = fingerprint::compute(Path::new(path))?;
     let c = conn.lock().unwrap_or_else(|e| e.into_inner());
     upsert_record(&c, path, &meta, &fp, true)?;
     Ok(meta)
 }
 
+/// Single-file save sync: refresh the record from the saved metadata (which carries the form's real
+/// store-only fields) and mark it synced; move the row on rename.
 fn sync_after_save(conn: &Mutex<Connection>, old_path: &str, new_path: &str, meta: &StoredMetadata) -> Result<(), String> {
     let fp = fingerprint::compute(Path::new(new_path))?;
     let c = conn.lock().unwrap_or_else(|e| e.into_inner());
@@ -275,6 +297,75 @@ fn sync_after_save(conn: &Mutex<Connection>, old_path: &str, new_path: &str, met
         let _ = c.execute("DELETE FROM photo_metadata WHERE path=?1", [old_path]);
     }
     upsert_record(&c, new_path, meta, &fp, true)
+}
+
+/// Overwrite `meta`'s store-only fields (release_filename + attribution flags) with the existing
+/// record's values. This is the preservation policy for every DB update except the Reset button.
+fn keep_store_only(c: &Connection, path: &str, meta: &mut StoredMetadata) -> Result<(), String> {
+    if let Some(rec) = read_record(c, path)? {
+        meta.release_filename = rec.meta.release_filename;
+        meta.editorial = rec.meta.editorial;
+        meta.mature_content = rec.meta.mature_content;
+        meta.illustration = rec.meta.illustration;
+    }
+    Ok(())
+}
+
+/// Batch save sync: file-backed fields come from the batch item; store-only fields are preserved from
+/// the existing record (batch editing does not touch them).
+fn sync_after_save_keep_store_only(conn: &Mutex<Connection>, old_path: &str, new_path: &str, file_meta: &StoredMetadata) -> Result<(), String> {
+    let fp = fingerprint::compute(Path::new(new_path))?;
+    let c = conn.lock().unwrap_or_else(|e| e.into_inner());
+    let mut meta = file_meta.clone();
+    keep_store_only(&c, old_path, &mut meta)?;
+    if old_path != new_path {
+        let _ = c.execute("DELETE FROM photo_metadata WHERE path=?1", [old_path]);
+    }
+    upsert_record(&c, new_path, &meta, &fp, true)
+}
+
+/// Batch attribution: store the model's result as app-only. Flags come from the model; release_filename
+/// is preserved, and keywords are merged with the existing record (keep existing, append new).
+fn attribute_app_only(conn: &Mutex<Connection>, path: &str, model: &StoredMetadata) -> Result<SyncState, String> {
+    let mut meta = model.clone();
+    {
+        let c = conn.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(rec) = read_record(&c, path)? {
+            meta.release_filename = rec.meta.release_filename; // preserved (model doesn't produce it)
+            // Merge keywords: keep the existing ones, append the model's new ones (case-insensitive dedupe).
+            let mut keywords = rec.meta.keywords;
+            for kw in &model.keywords {
+                let k = kw.trim();
+                if !k.is_empty() && !keywords.iter().any(|e| e.eq_ignore_ascii_case(k)) {
+                    keywords.push(k.to_string());
+                }
+            }
+            meta.keywords = keywords;
+        }
+    }
+    persist_app_only(conn, path, &meta)
+}
+
+/// Finalize a conflict (FR-012): keep the store version (refresh the fingerprint) or take the file
+/// version (preserving the store-only fields, which have no file equivalent).
+fn apply_source(conn: &Mutex<Connection>, path: &str, from_file: bool) -> Result<MetadataResolution, String> {
+    let fp = fingerprint::compute(Path::new(path))?;
+    if from_file {
+        let mut meta = read_file_metadata(path)?;
+        let c = conn.lock().unwrap_or_else(|e| e.into_inner());
+        keep_store_only(&c, path, &mut meta)?;
+        upsert_record(&c, path, &meta, &fp, true)?;
+        Ok(MetadataResolution::Resolved { metadata: meta, sync_state: SyncState::Synced })
+    } else {
+        let c = conn.lock().unwrap_or_else(|e| e.into_inner());
+        let metadata = read_record(&c, path)?.map(|r| r.meta).unwrap_or_default();
+        c.execute(
+            "UPDATE photo_metadata SET size=?1, mtime=?2, hash=?3, synced=1, updated_at=?4 WHERE path=?5",
+            params![fp.size as i64, fp.mtime, fp.hash as i64, now_secs(), path],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(MetadataResolution::Resolved { metadata, sync_state: SyncState::Synced })
+    }
 }
 
 // ── Commands ─────────────────────────────────────────────────────────────────
@@ -318,8 +409,9 @@ pub async fn store_metadata(
     }
 }
 
-/// Cancel / revert-to-file: restore the record (and the returned fields) from the file, retaining
-/// the stored release_filename. Falls back to a plain file read when the store is unavailable.
+/// Reset / revert-to-file: restore the record (and the returned fields) from the file, CLEARING the
+/// store-only fields (release_filename + flags). Falls back to a plain file read when the store is
+/// unavailable.
 #[tauri::command]
 pub async fn revert_to_file(
     path: String,
@@ -332,6 +424,28 @@ pub async fn revert_to_file(
         None => tokio::task::spawn_blocking(move || read_file_metadata(&path))
             .await
             .map_err(|e| e.to_string())?,
+    }
+}
+
+/// Finalize a conflict from `open_metadata` (FR-012). `source` is "store" (keep the store version) or
+/// "file" (take the file version, preserving the store-only fields).
+#[tauri::command]
+pub async fn apply_metadata_source(
+    path: String,
+    source: String,
+    state: tauri::State<'_, DbState>,
+) -> Result<MetadataResolution, String> {
+    let from_file = source != "store";
+    match state.handle() {
+        Some(conn) => tokio::task::spawn_blocking(move || apply_source(&conn, &path, from_file))
+            .await
+            .map_err(|e| e.to_string())?,
+        None => {
+            let meta = tokio::task::spawn_blocking(move || read_file_metadata(&path))
+                .await
+                .map_err(|e| e.to_string())??;
+            Ok(MetadataResolution::Resolved { metadata: meta, sync_state: SyncState::Synced })
+        }
     }
 }
 
@@ -422,6 +536,120 @@ mod tests {
         let rec = read_record(&c, &new_path).unwrap().expect("new row exists");
         assert!(rec.synced);
         drop(c);
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn batch_sync_preserves_store_only_fields() {
+        let conn = mem();
+        {
+            let c = conn.lock().unwrap();
+            upsert_record(&c, "old", &sample(), &Fingerprint { size: 0, mtime: 0, hash: 0 }, false).unwrap();
+        }
+        let path = std::env::temp_dir().join(format!("attributor_batchsync_{}.bin", std::process::id()));
+        std::fs::write(&path, b"data").unwrap();
+        let new_path = path.to_string_lossy().to_string();
+        // The batch "file" metadata carries no store-only fields (defaults).
+        let file_meta = StoredMetadata { title: "new title".into(), ..Default::default() };
+
+        sync_after_save_keep_store_only(&conn, "old", &new_path, &file_meta).unwrap();
+
+        let c = conn.lock().unwrap();
+        let rec = read_record(&c, &new_path).unwrap().expect("new row exists");
+        assert!(rec.synced);
+        assert_eq!(rec.meta.title, "new title");
+        // Store-only fields preserved from the seeded record (sample()).
+        assert_eq!(rec.meta.release_filename, "r.pdf");
+        assert!(rec.meta.editorial && rec.meta.illustration);
+        drop(c);
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn apply_source_store_keeps_metadata_refreshes_fingerprint() {
+        let conn = mem();
+        let path = std::env::temp_dir().join(format!("attributor_applystore_{}.bin", std::process::id()));
+        std::fs::write(&path, b"data").unwrap();
+        let p = path.to_string_lossy().to_string();
+        {
+            let c = conn.lock().unwrap();
+            upsert_record(&c, &p, &sample(), &Fingerprint { size: 0, mtime: 0, hash: 0 }, false).unwrap();
+        }
+
+        let res = apply_source(&conn, &p, false).unwrap(); // keep store
+        match res {
+            MetadataResolution::Resolved { metadata, sync_state } => {
+                assert_eq!(sync_state, SyncState::Synced);
+                assert_eq!(metadata.title, "T");
+                assert!(metadata.editorial);
+            }
+            _ => panic!("expected resolved"),
+        }
+        let c = conn.lock().unwrap();
+        let rec = read_record(&c, &p).unwrap().unwrap();
+        assert!(rec.synced);
+        assert_ne!(rec.fp, Fingerprint { size: 0, mtime: 0, hash: 0 }); // fingerprint refreshed
+        drop(c);
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn disabled_store_write_methods_are_noops() {
+        // When the store is unavailable, the best-effort write methods must not panic (FR-021).
+        let db = DbState::disabled();
+        db.sync_after_save("a", "b", &sample());
+        db.sync_after_save_batch("a", "b", &sample());
+        db.store_attribution("a", &sample());
+    }
+
+    #[test]
+    fn resolve_open_unchanged_refreshes_mtime_silently() {
+        // A synced record whose stored hash matches the file but with a stale mtime: hash is
+        // authoritative → Unchanged (no conflict), and the mtime is silently refreshed.
+        let conn = mem();
+        let path = std::env::temp_dir().join(format!("attributor_resolve_unchanged_{}.bin", std::process::id()));
+        std::fs::write(&path, b"content").unwrap();
+        let p = path.to_string_lossy().to_string();
+        let fp = fingerprint::compute(&path).unwrap();
+        {
+            let c = conn.lock().unwrap();
+            let stale = Fingerprint { size: fp.size, mtime: fp.mtime - 1_000_000, hash: fp.hash };
+            upsert_record(&c, &p, &sample(), &stale, true).unwrap();
+        }
+
+        let res = resolve_open(&conn, &p).unwrap();
+        match res {
+            MetadataResolution::Resolved { sync_state, .. } => assert_eq!(sync_state, SyncState::Synced),
+            _ => panic!("matching hash must resolve (unchanged), never conflict"),
+        }
+        let c = conn.lock().unwrap();
+        assert_eq!(read_record(&c, &p).unwrap().unwrap().fp.mtime, fp.mtime); // silently refreshed
+        drop(c);
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn resolve_open_app_only_store_wins_on_hash_change() {
+        // An app-only record whose stored hash differs from the file → store wins, no conflict.
+        let conn = mem();
+        let path = std::env::temp_dir().join(format!("attributor_resolve_storewins_{}.bin", std::process::id()));
+        std::fs::write(&path, b"content").unwrap();
+        let p = path.to_string_lossy().to_string();
+        let fp = fingerprint::compute(&path).unwrap();
+        {
+            let c = conn.lock().unwrap();
+            let different = Fingerprint { size: fp.size, mtime: fp.mtime, hash: fp.hash ^ 0xFFFF };
+            upsert_record(&c, &p, &sample(), &different, false).unwrap(); // app-only
+        }
+
+        let res = resolve_open(&conn, &p).unwrap();
+        match res {
+            MetadataResolution::Resolved { metadata, sync_state } => {
+                assert_eq!(sync_state, SyncState::AppOnly);
+                assert_eq!(metadata.title, "T"); // the store version, not the file
+            }
+            _ => panic!("app-only + hash change must be store-wins, not conflict"),
+        }
         std::fs::remove_file(&path).ok();
     }
 }

@@ -250,6 +250,7 @@ pub fn run() {
             store::open_metadata,
             store::store_metadata,
             store::revert_to_file,
+            store::apply_metadata_source,
             cache_thumbnail,
             thumbnail_dir_exists,
             open_folder,

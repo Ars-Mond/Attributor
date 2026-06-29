@@ -147,6 +147,11 @@ export interface Messages {
     'metadata.dialog.clearKeywords.batch.body': PluralForms;
     'metadata.dialog.revert.title': string;
     'metadata.dialog.revert.body': string;
+    'metadata.dialog.conflict.title': string;
+    'metadata.dialog.conflict.body': string;
+    'metadata.dialog.conflict.batch.body': PluralForms;
+    'metadata.button.keepApp': string;
+    'metadata.button.useFile': string;
     'metadata.button.saveChanges': string;
     'metadata.button.revert': string;
     'metadata.button.revert.title': string;

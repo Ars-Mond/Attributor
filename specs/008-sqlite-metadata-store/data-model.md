@@ -27,8 +27,10 @@ The app's stored copy of one photo's metadata + its fingerprint + sync state. Ke
   (editorial / mature content / illustration) (FR-004).
 - **Store-only fields** (`release_filename`, attribution flags): the file pipeline neither reads
   nor writes them (`read_metadata` → defaults, `save_one` ignores them). The store is their source
-  of truth and the file side **never overwrites them**: resolving a conflict to "file" and
-  Cancel/`revert_to_file` both **retain** the stored values. Older databases are migrated with
+  of truth. **Preservation rule (maintainer decision):** EVERY database update **preserves** them
+  (single/batch save, batch attribution, conflict resolved to "file") — the file side never
+  overwrites them. The ONE exception is the **Reset** button (`revert_to_file`), which **clears**
+  them (Reset means "match the file", and the file has none). Older databases are migrated with
   `ALTER TABLE ADD COLUMN` for the flag columns.
 - **Indexes**: PRIMARY KEY on `path` suffices for all lookups. (No `hash` index — content-based
   lookup / move-rename re-link is out of scope.)
@@ -76,7 +78,7 @@ apply_metadata_source(path, source):
       UPDATE fingerprint = compute(path)                 # keep store, adopt new fingerprint
       → Resolved(rec.meta, synced)
   if source == "file":
-      meta = read file (keep store's release_filename); UPDATE meta + fingerprint, synced=1
+      meta = read file (preserve store-only fields); UPDATE meta + fingerprint, synced=1
       → Resolved(meta, synced)
 ```
 
@@ -85,13 +87,13 @@ apply_metadata_source(path, source):
 | Trigger | Effect on store | Resulting state |
 |---------|-----------------|-----------------|
 | Open, no record | INSERT from file, fingerprint=now | `synced` |
-| Field edit / single attribution (debounced) | UPSERT fields, `synced=0`, file untouched | `appOnly` |
-| Batch attribution (per item) | UPSERT fields, `synced=0`, file untouched | `appOnly` |
-| **Save** (file write) | After file write: refresh fingerprint, `synced=1`; on rename move row to new path | `synced` |
-| Batch **Save** (per item) | Same as Save, per file | `synced` |
-| **Cancel** (`revert_to_file`) | Overwrite store from file (keep `release_filename`), refresh fingerprint, `synced=1` | `synced` |
+| Field edit / single attribution (debounced) | UPSERT form fields (incl. store-only), `synced=0`, file untouched | `appOnly` |
+| Batch attribution (per item) | UPSERT model fields + flags, **preserve** `release_filename`, merge keywords, `synced=0`, file untouched | `appOnly` |
+| **Save** (single, file write) | After file write: UPSERT form fields (incl. store-only), refresh fingerprint, `synced=1`; move row on rename | `synced` |
+| Batch **Save** (per item) | After file write: UPSERT batch fields, **preserve** store-only fields, refresh fingerprint, `synced=1`; move row on rename | `synced` |
+| **Reset** (`revert_to_file`) | Overwrite store from file, **CLEAR** store-only fields, refresh fingerprint, `synced=1` | `synced` |
 | Conflict → "store" | Refresh fingerprint only | `synced` |
-| Conflict → "file" | Overwrite store from file (keep `release_filename`), refresh fingerprint | `synced` |
+| Conflict → "file" | Overwrite store from file, **preserve** store-only fields, refresh fingerprint | `synced` |
 | File deleted on disk | Record retained (no cleanup) | unchanged |
 | Store error (any op) | Log + fall back to direct file read/write | n/a (acts as today) |
 
