@@ -1,10 +1,18 @@
-name: Build and Release
+name: Build and Pre-release
 
+# Pre-release builds. Fires on pre-release tags (a SemVer tag with a suffix, e.g. v1.0.0-rc.1,
+# v1.0.0-beta.2), and can be triggered manually for a chosen tag. Stable tags (v1.0.0) are handled by
+# build.yml. The produced GitHub Release is marked as a pre-release.
 on:
   push:
     tags:
-      # Stable releases only (e.g. v1.0.0). Pre-release tags (v1.0.0-rc.1) are handled by prerelease.yml.
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v*-*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Pre-release tag to create (e.g. v1.0.0-rc.1)'
+        required: true
+        type: string
 
 jobs:
   build:
@@ -70,16 +78,16 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
-      - name: Build and release
+      - name: Build and pre-release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Attributor ${{ github.ref_name }}'
-          releaseBody: 'See the assets to download this version and install.'
+          tagName: ${{ inputs.tag || github.ref_name }}
+          releaseName: 'Attributor ${{ inputs.tag || github.ref_name }} (pre-release)'
+          releaseBody: 'Pre-release build — for testing. See the assets to download and install.'
           releaseDraft: false
-          prerelease: false
+          prerelease: true
           uploadPlainBinary: true
           assetNamePattern: 'Attributor-[version]-[platform]-[arch][setup][ext]'
           args: ${{ matrix.args }}
