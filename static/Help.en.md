@@ -32,18 +32,50 @@ All metadata fields are in the **Control** panel.
 | **Title** | Short descriptive title of the image (stored as `dc:title`). |
 | **Description** | Detailed description for search engines and buyers (`dc:description`). |
 | **Keywords** | Tags that describe the image content (`dc:subject`). |
-| **Categories** | Optional content categories (`photoshop:Category`). |
+| **Categories** | Content categories (`photoshop:Category`). |
 | **Release Filename** | Name of the model/property release document, if applicable. |
+| **Editorial / Mature content / Illustration** | Attribution flags (checkboxes). |
+
+Categories, Release Filename and the three flags are in the collapsible **Optional** section under the keywords.
 
 The **word / character counter** next to Title and Description helps you stay within agency limits.
 
-### Saving
+**Attribution flags** describe the image for stock agencies and are filled in automatically by AI attribution (you can also toggle them yourself):
 
-Click **Save Changes** or enable **Auto-save** to write changes to the image file automatically after 1 second of inactivity. The status indicator in the panel header shows:
+- **Editorial** — real events/places, visible logos, brands, or recognizable people (vs. clean commercial content).
+- **Mature content** — nudity, sexual themes, or violence.
+- **Illustration** — digitally created or heavily edited artwork (vs. a straight photograph).
 
-- 🟢 **open** — file loaded, no changes
-- 🟡 **edit** — unsaved changes
+Release Filename and the three flags have no place inside the image file — they are kept only in Attributor's metadata database (see **Saving & the Metadata Store**).
+
+### Saving & the Metadata Store
+
+Attributor keeps a local **metadata database** as a working copy of every photo's metadata. It protects your edits (and AI attribution) and lets you reopen a photo instantly without re-reading the file.
+
+- **Editing** a field or running **AI attribution** is saved to the database immediately, **without changing the image file**. The status shows 🟣 **in app**.
+- **Save Changes** writes the metadata into the actual image file; the status becomes 🟢 **open**.
+- **Reset** (the button between *Attribute* and *Save Changes*) discards the changes kept only in the app and restores this photo's metadata from the file. A confirmation is shown first.
+- **Auto-save** writes changes into the image file automatically after 1 second of inactivity.
+
+The status indicator in the panel header shows:
+
+- 🟢 **open** — the file and the app database agree (written to the file)
+- 🟡 **edit** — unsaved edits in the form
+- 🟣 **in app** — saved in the app, not yet written to the image file
 - 🔵 **batch** — multiple files selected
+
+If a photo's file is changed by another program, Attributor detects it when you open the photo by comparing a fast content fingerprint (size + modification time + content hash).
+
+---
+
+## AI Auto-Attribution (Ollama)
+
+Attributor can fill metadata automatically using a local **Ollama** vision model — no cloud upload required.
+
+- Click **Attribute via Ollama** in the Control panel footer to analyze the open photo and fill Title, Description, Keywords, Categories and the attribution flags (Editorial / Mature content / Illustration).
+- In **Batch mode**, the Attribute button processes every selected photo in turn. A blocking progress bar with a **Cancel** button is shown while the model runs.
+- The button is available only when Ollama is installed and a model is selected. Set this up in **Settings → Ollama** (base URL, active model, response format) and **Settings → Ollama Models** (per-model prompt and parameters).
+- Results are saved to the app database (status 🟣 **in app**). Review them, then click **Save Changes** to write them into the files.
 
 ---
 
@@ -54,7 +86,7 @@ Click **Save Changes** or enable **Auto-save** to write changes to the image fil
 - Type a keyword in the input field and press **Enter**.
 - Type multiple keywords separated by **`, `** (comma-space) to add them all at once.
 - Select from the **autocomplete dropdown** that appears as you type (fuzzy search over 1 000+ stock terms).
-- Click any **Stock Keywords** preset to add predefined tags by category.
+- Click the **Stock Keywords** icon button (next to the keyword input) to open a popup of predefined tags grouped by category; click any tag to add it.
 
 ### Managing Keywords
 
@@ -165,6 +197,22 @@ Right-click any text input or textarea to open the context menu:
 |------|----------|--------|
 | **Copy** | `Ctrl+C` | Copy the selected text to clipboard |
 | **Paste** | `Ctrl+V` | Paste clipboard text at the cursor position |
+
+---
+
+## Settings
+
+Open **File → Settings** (or press `Ctrl+,`).
+
+| Section | What you can change |
+|---------|---------------------|
+| **General** | Interface language; read nested folders. |
+| **Editor** | Auto-save on/off and its delay. |
+| **Appearance** | Theme — **System / Light / Dark** — and the interface font size. |
+| **Caching** | Photo and thumbnail caching options. |
+| **Ollama** | AI connection: base URL, active model, response format. |
+| **Ollama Models** | Per-model attribution profiles (prompt and parameters). |
+| **Shortcuts** | View and rebind keyboard shortcuts, including the file-navigation arrows. |
 
 ---
 

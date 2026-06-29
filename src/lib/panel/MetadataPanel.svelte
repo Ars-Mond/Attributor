@@ -10,7 +10,9 @@
     import {attributePhoto, attributeBatch, cancelOllama} from "$lib/ollama/ollama";
     import {ollama} from "$lib/ollama/availability.svelte";
     import {progress} from "$lib/progress.svelte";
-    import type {Metadata, ReadResult} from "$lib/types";
+    import {openMetadata, storeMetadata, revertToFile, applyMetadataSource} from "$lib/store/metadata";
+    import {warn, error} from "@tauri-apps/plugin-log";
+    import type {Metadata, SyncState, StoredMetadata} from "$lib/types";
     import type {BatchProgress, ItemStatus} from "$lib/events";
     import {SvelteMap} from "svelte/reactivity";
     import {panelState} from "./filesPanelStore.svelte";
@@ -45,11 +47,19 @@
     let illustration = $state(false);
     // Stock-keyword presets popup (moved out of the inline spoiler into an on-demand dialog).
     let showStockKeywords = $state(false);
+    // Sync state of the open record vs the file (feature 008): 'appOnly' → metadata is in the app
+    // store but not yet written to the file; 'synced' → file and store agree; null → no file open.
+    let syncState = $state<SyncState | null>(null);
+    // Conflict resolution (feature 008, US3): a single-photo path awaiting a store-vs-file choice, and
+    // the list of batch paths whose files changed externally (resolved together, apply-to-all).
+    let conflictPath = $state<string | null>(null);
+    let batchConflicts = $state<string[]>([]);
     const autoSave = $derived(settings.subscribe('editor.autosave')());
     let saveAttempted = $state(false);
     let saveError = $state<string | null>(null);
     let attributeError = $state<string | null>(null);
     let showClearConfirm = $state(false);
+    let showRevertConfirm = $state(false);
 
     // ── UI preferences (persisted) ─────────────────────────────────────────
 
@@ -91,6 +101,9 @@
             matureContent = r.matureContent;
             illustration = r.illustration;
             for (const kw of r.keywords) addKeyword(kw);
+            // Persist the attribution result to the store immediately (don't wait for the debounce),
+            // so expensive attribution survives an app close within the debounce window (SC-002).
+            await flushStore();
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             // A user-initiated cancel surfaces as "cancelled" from the backend — not a real error.
@@ -120,7 +133,7 @@
             await attributeBatch(paths, () => {done++; handle.update({value: done});});
             loadBatchData(batchPaths);
         } catch (e) {
-            console.error('batch attribution failed:', e);
+            error(`batch attribution failed: ${e}`);
         } finally {
             handle.done();
             // Keep the watcher-rescan guard armed briefly past our own writes (see handleBatchSave).
@@ -162,12 +175,15 @@
         keywords: string[];
         categories: string;
         releaseFilename: string;
+        editorial: boolean;
+        matureContent: boolean;
+        illustration: boolean;
     }
 
     let snapshot = $state<Snapshot | null>(null);
 
     function captureSnapshot(): Snapshot {
-        return {filename, title, description, keywords: [...keywords], categories, releaseFilename};
+        return {filename, title, description, keywords: [...keywords], categories, releaseFilename, editorial, matureContent, illustration};
     }
 
     const isDirtyComputed = $derived.by(() => {
@@ -180,7 +196,10 @@
             keywords.length !== snap.keywords.length ||
             keywords.some((k, i) => k !== snap.keywords[i]) ||
             categories !== snap.categories ||
-            releaseFilename !== snap.releaseFilename
+            releaseFilename !== snap.releaseFilename ||
+            editorial !== snap.editorial ||
+            matureContent !== snap.matureContent ||
+            illustration !== snap.illustration
         );
     });
 
@@ -188,20 +207,72 @@
         isDirty = isDirtyComputed;
     });
 
+    // Store-backed dirtiness: the fields the store actually persists (everything except `filename`,
+    // which is a file-rename realized only on save). Drives the app-only persistence so that editing
+    // only the filename never flips a synced record to app-only.
+    const metadataDirty = $derived.by(() => {
+        const snap = snapshot;
+        if (snap === null) return false;
+        return (
+            title !== snap.title ||
+            description !== snap.description ||
+            keywords.length !== snap.keywords.length ||
+            keywords.some((k, i) => k !== snap.keywords[i]) ||
+            categories !== snap.categories ||
+            releaseFilename !== snap.releaseFilename ||
+            editorial !== snap.editorial ||
+            matureContent !== snap.matureContent ||
+            illustration !== snap.illustration
+        );
+    });
+
+    // Persist the working store-backed fields app-only and rebaseline. Used by the debounced effect
+    // and for an immediate flush after single attribution. No-op when nothing store-backed changed.
+    async function flushStore() {
+        if (isBatch || !filepath || snapshot === null || !metadataDirty) return;
+        const path = filepath;
+        const fields: StoredMetadata = {title, description, keywords: [...keywords], categories, releaseFilename, editorial, matureContent, illustration};
+        try {
+            const s = await storeMetadata(path, fields);
+            if (filepath !== path || snapshot === null) return;
+            syncState = s;
+            // Rebaseline the store-backed fields so the status flips edit → app (keep filename dirty).
+            snapshot = {...snapshot, title: fields.title, description: fields.description, keywords: [...fields.keywords], categories: fields.categories, releaseFilename: fields.releaseFilename, editorial: fields.editorial, matureContent: fields.matureContent, illustration: fields.illustration};
+        } catch (e) {
+            warn(`storeMetadata failed: ${e}`);
+        }
+    }
+
     // ── Auto-save ──────────────────────────────────────────────────────────
 
     $effect(() => {
-        filename; title; description; keywords; categories; releaseFilename;
+        filename; title; description; keywords; categories; releaseFilename; editorial; matureContent; illustration;
         if (!autoSave || !isDirtyComputed || hasErrors) return;
         const delay = settings.get<number>('editor.autosave_delay');
         const timer = setTimeout(() => { doSave().catch(() => {}); }, delay);
         return () => clearTimeout(timer);
     });
 
+    // ── Store persistence (feature 008) ────────────────────────────────────
+    // The store is the working layer — persist store-backed edits app-only (debounced). Skipped only
+    // when file-autosave will actually write the file (i.e. autosave on AND the form is valid); when
+    // autosave is on but invalid, doSave bails, so the store must still capture the working edits.
+    $effect(() => {
+        title; description; keywords; categories; releaseFilename; editorial; matureContent; illustration;
+        if (isBatch || !filepath || snapshot === null || (autoSave && !hasErrors)) return;
+        if (!metadataDirty) return;
+        const delay = settings.get<number>('editor.autosave_delay');
+        const timer = setTimeout(() => { flushStore(); }, delay);
+        return () => clearTimeout(timer);
+    });
+
     // ── File status ────────────────────────────────────────────────────────
 
     const fileStatus = $derived(
-        snapshot === null ? 'none' : isDirtyComputed ? 'edit' : 'open'
+        snapshot === null ? 'none'
+        : isDirtyComputed ? 'edit'
+        : syncState === 'appOnly' ? 'app'
+        : 'open'
     );
 
     const displayPath = $derived(filepath);
@@ -249,7 +320,7 @@
     const isSaving = $derived(savingTotal > 0);
 
     // Per-file metadata captured when the batch loaded — lets save resolve items without re-reading.
-    let batchFileMeta = $state<Map<string, ReadResult>>(new Map());
+    let batchFileMeta = $state<Map<string, StoredMetadata>>(new Map());
     // Per-file outcomes streamed from the backend during a batch save (keyed by item index).
     let batchResults = new SvelteMap<number, ItemStatus>();
     let batchCancelling = $state(false);
@@ -276,13 +347,24 @@
         const myId = ++batchLoadId;
         batchLoading = true;
 
-        const results = await Promise.all(
-            paths.map(p => invoke<ReadResult>('read_metadata', {path: p}).catch(() => null))
+        // Store-first resolution per file (US3). A conflict provisionally shows the store version and
+        // is collected for a single apply-to-all prompt.
+        const resolutions = await Promise.all(
+            paths.map(p => openMetadata(p).catch(() => null))
         );
 
         if (myId !== batchLoadId) return; // superseded
 
-        const valid = results.filter((r): r is ReadResult => r !== null);
+        const conflicts: string[] = [];
+        const results: (StoredMetadata | null)[] = resolutions.map((res, i) => {
+            if (!res) return null;
+            if (res.kind === 'resolved') return res.metadata;
+            conflicts.push(paths[i]);
+            return res.store;
+        });
+        batchConflicts = conflicts;
+
+        const valid = results.filter((r): r is StoredMetadata => r !== null);
 
         if (valid.length === 0) {
             batchLoading = false;
@@ -318,7 +400,7 @@
 
         // Map keyword → basenames of files that contain it, and cache each file's metadata.
         const fileMap = new Map<string, string[]>();
-        const metaMap = new Map<string, ReadResult>();
+        const metaMap = new Map<string, StoredMetadata>();
         for (let i = 0; i < paths.length; i++) {
             const r = results[i];
             if (!r) continue;
@@ -341,8 +423,10 @@
         if (paths.length <= 1) {
             batchLoadId++; // cancel any in-flight load
             batchLoading = false;
+            batchConflicts = [];
             return;
         }
+        conflictPath = null;
         loadBatchData(paths);
     });
 
@@ -449,6 +533,11 @@
                 keywords: computeNewKeywords(cur?.keywords ?? []),
                 categories: applyCategories ? batchCategories : (cur?.categories ?? ''),
                 releaseFilename: cur?.releaseFilename ?? '',
+                // Attribution flags are single-mode only; batch save does not edit them (US3 will carry
+                // them through the store). Backend SaveRequest defaults these, so false is a no-op here.
+                editorial: false,
+                matureContent: false,
+                illustration: false,
             };
         });
 
@@ -463,7 +552,7 @@
         try {
             await invoke<ItemStatus[]>('save_metadata_batch', {items, onProgress: channel});
         } catch (e) {
-            console.error('batch save failed:', e);
+            error(`batch save failed: ${e}`);
         }
 
         handle.done();
@@ -485,13 +574,13 @@
         try {
             await invoke('cancel_batch');
         } catch (e) {
-            console.error('cancel_batch failed:', e);
+            error(`cancel_batch failed: ${e}`);
         }
     }
 
     // ── Exported interface ─────────────────────────────────────────────────
 
-    /** Load a file: reset fields, read existing XMP, then take snapshot. */
+    /** Load a file: reset fields, resolve metadata store-first (feature 008), then take snapshot. */
     export async function loadFile(path: string): Promise<void> {
         filepath = path;
         filename = extractStem(path);
@@ -508,16 +597,32 @@
         saveError = null;
         attributeError = null;
         snapshot = null;
+        syncState = null;
+        conflictPath = null;
 
         try {
-            const meta = await invoke<ReadResult>('read_metadata', {path});
+            const res = await openMetadata(path);
+            let meta: StoredMetadata;
+            if (res.kind === 'resolved') {
+                meta = res.metadata;
+                syncState = res.syncState;
+            } else {
+                // Conflict (file changed outside the app): show the store version provisionally and
+                // prompt the user to choose store vs file (resolved by handleConflict).
+                meta = res.store;
+                syncState = 'synced';
+                conflictPath = path;
+            }
             title = meta.title;
             description = meta.description;
             keywords = meta.keywords;
             categories = meta.categories;
             releaseFilename = meta.releaseFilename;
+            editorial = meta.editorial;
+            matureContent = meta.matureContent;
+            illustration = meta.illustration;
         } catch (e) {
-            console.warn('read_metadata failed:', e);
+            warn(`openMetadata failed: ${e}`);
         }
 
         snapshot = captureSnapshot();
@@ -537,6 +642,9 @@
         matureContent = false;
         illustration = false;
         snapshot = null;
+        syncState = null;
+        conflictPath = null;
+        batchConflicts = [];
         saveAttempted = false;
     }
 
@@ -549,6 +657,9 @@
         keywords = [...snapshot.keywords];
         categories = snapshot.categories;
         releaseFilename = snapshot.releaseFilename;
+        editorial = snapshot.editorial;
+        matureContent = snapshot.matureContent;
+        illustration = snapshot.illustration;
         saveAttempted = false;
     }
 
@@ -579,6 +690,9 @@
             keywords,
             categories,
             releaseFilename,
+            editorial,
+            matureContent,
+            illustration,
         };
 
         const newPath = await invoke<string>('save_metadata', {metadata});
@@ -586,6 +700,8 @@
         const prevFilepath = filepath;
         filepath = newPath;
         filename = extractStem(newPath);
+        // The backend wrote the file and synced the store — reflect that in the status (feature 008).
+        syncState = 'synced';
         snapshot = captureSnapshot();
 
         if (newPath !== prevFilepath) {
@@ -605,6 +721,70 @@
         } catch (e) {
             saveError = e instanceof Error ? e.message : String(e);
         }
+    }
+
+    // Cancel / revert-to-file (feature 008): discard app-only changes and restore the form + store
+    // from the photo file (the store keeps its releaseFilename). Whether the record can be reverted.
+    const canRevert = $derived(!isBatch && !!filepath && (syncState === 'appOnly' || isDirtyComputed));
+
+    async function handleRevert() {
+        if (!canRevert) return;
+        const path = filepath;
+        try {
+            const meta = await revertToFile(path);
+            if (filepath !== path) return;
+            title = meta.title;
+            description = meta.description;
+            keywords = meta.keywords;
+            categories = meta.categories;
+            releaseFilename = meta.releaseFilename;
+            editorial = meta.editorial;
+            matureContent = meta.matureContent;
+            illustration = meta.illustration;
+            syncState = 'synced';
+            saveError = null;
+            attributeError = null;
+            saveAttempted = false;
+            snapshot = captureSnapshot();
+        } catch (e) {
+            warn(`revertToFile failed: ${e}`);
+        }
+    }
+
+    // Conflict resolution (feature 008, US3). Idempotent: clears the pending state first so a
+    // backdrop-dismiss (which defaults to "keep store") cannot double-resolve.
+    async function handleConflict(source: 'store' | 'file') {
+        const path = conflictPath;
+        conflictPath = null;
+        if (!path) return;
+        try {
+            const res = await applyMetadataSource(path, source);
+            if (filepath !== path || res.kind !== 'resolved') return;
+            const m = res.metadata;
+            title = m.title;
+            description = m.description;
+            keywords = m.keywords;
+            categories = m.categories;
+            releaseFilename = m.releaseFilename;
+            editorial = m.editorial;
+            matureContent = m.matureContent;
+            illustration = m.illustration;
+            syncState = res.syncState;
+            snapshot = captureSnapshot();
+        } catch (e) {
+            warn(`applyMetadataSource failed: ${e}`);
+        }
+    }
+
+    // Batch conflict resolution: apply one choice to every conflicted file, then reload the batch.
+    async function handleBatchConflict(source: 'store' | 'file') {
+        const paths = batchConflicts;
+        batchConflicts = [];
+        if (paths.length === 0) return;
+        await Promise.all(
+            paths.map(p => applyMetadataSource(p, source).catch((e: unknown) => warn(`applyMetadataSource failed: ${e}`)))
+        );
+        loadBatchData(batchPaths);
     }
 
     // ── Footer error (resolved text + dismiss action, shared close/copy controls) ──
@@ -1310,6 +1490,63 @@
         />
     {/if}
 
+    {#if showRevertConfirm}
+        <ConfirmDialog
+            title={t('metadata.dialog.revert.title')}
+            body={t('metadata.dialog.revert.body')}
+            icon="warning"
+            buttons={[
+                {label: t('common.cancel'), onClick: () => { showRevertConfirm = false; }},
+                {
+                    label: t('metadata.button.revert'),
+                    onClick: () => { showRevertConfirm = false; handleRevert(); },
+                    color: 'var(--required-color)',
+                    border: 'var(--required-color)',
+                    hoverBg: 'var(--required-alpha-08)',
+                    hoverBorder: 'var(--required-color)',
+                    hoverColor: 'var(--required-color)',
+                },
+            ]}
+            onClose={() => { showRevertConfirm = false; }}
+        />
+    {/if}
+
+    {#if conflictPath}
+        <ConfirmDialog
+            title={t('metadata.dialog.conflict.title')}
+            body={t('metadata.dialog.conflict.body')}
+            icon="warning"
+            buttons={[
+                {label: t('metadata.button.useFile'), onClick: () => handleConflict('file')},
+                {
+                    label: t('metadata.button.keepApp'),
+                    onClick: () => handleConflict('store'),
+                    bg: 'var(--accent)', color: '#fff', border: 'var(--accent)',
+                    hoverBg: 'var(--accent-hover)', hoverBorder: 'var(--accent-hover)',
+                },
+            ]}
+            onClose={() => handleConflict('store')}
+        />
+    {/if}
+
+    {#if batchConflicts.length > 0}
+        <ConfirmDialog
+            title={t('metadata.dialog.conflict.title')}
+            body={tn('metadata.dialog.conflict.batch.body', batchConflicts.length)}
+            icon="warning"
+            buttons={[
+                {label: t('metadata.button.useFile'), onClick: () => handleBatchConflict('file')},
+                {
+                    label: t('metadata.button.keepApp'),
+                    onClick: () => handleBatchConflict('store'),
+                    bg: 'var(--accent)', color: '#fff', border: 'var(--accent)',
+                    hoverBg: 'var(--accent-hover)', hoverBorder: 'var(--accent-hover)',
+                },
+            ]}
+            onClose={() => handleBatchConflict('store')}
+        />
+    {/if}
+
     <!-- ── Keyword suggestions dropdown ── -->
     <KeywordSuggestions
         bind:this={suggestionsComp}
@@ -1394,6 +1631,12 @@
                         title={ollama.available ? t('ollama.attribute.tooltip') : t('ollama.unavailable.tooltip')}
                     >{t('ollama.attribute')}</button>
                     <button
+                        class="btn-ghost"
+                        onclick={() => { showRevertConfirm = true; }}
+                        disabled={!canRevert}
+                        title={t('metadata.button.revert.title')}
+                    >{t('metadata.button.revert')}</button>
+                    <button
                         class="btn-primary save-btn"
                         onclick={handleSave}
                         disabled={!filepath}
@@ -1472,6 +1715,7 @@
         &--none { background: $text-muted; }
         &--open { background: #4ade80; box-shadow: 0 0 5px rgba(74, 222, 128, 0.4); }
         &--edit { background: #fbbf24; box-shadow: 0 0 5px rgba(251, 191, 36, 0.4); }
+        &--app { background: #a78bfa; box-shadow: 0 0 5px rgba(167, 139, 250, 0.4); }
         &--batch { background: #60a5fa; box-shadow: 0 0 5px rgba(96, 165, 250, 0.4); }
     }
 
@@ -1485,6 +1729,7 @@
         &--none { color: $text-muted; }
         &--open { color: #4ade80; }
         &--edit { color: #fbbf24; }
+        &--app { color: #a78bfa; }
         &--batch { color: #60a5fa; }
     }
 

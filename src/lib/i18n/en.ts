@@ -55,6 +55,7 @@ export const en: Messages = {
     'metadata.fileStatus.none': 'none',
     'metadata.fileStatus.open': 'open',
     'metadata.fileStatus.edit': 'edit',
+    'metadata.fileStatus.app': 'in app',
     'metadata.fileStatus.batch': 'Batch',
     'metadata.batch.loading': 'Loading...',
     'metadata.batch.mixedValues': '(mixed values)',
@@ -116,7 +117,19 @@ export const en: Messages = {
         one: 'Remove all keywords from {n} selected file?',
         other: 'Remove all keywords from {n} selected files?'
     },
+    'metadata.dialog.revert.title': 'Reset to file?',
+    'metadata.dialog.revert.body': 'Discard the changes saved only in the app and restore this photo\'s metadata from the file? This cannot be undone.',
+    'metadata.dialog.conflict.title': 'File changed outside the app',
+    'metadata.dialog.conflict.body': 'This photo\'s file was changed by another program. Keep the version saved in the app, or load the version from the file?',
+    'metadata.dialog.conflict.batch.body': {
+        one: '{n} selected file was changed outside the app. Keep the app versions, or load from the files?',
+        other: '{n} selected files were changed outside the app. Keep the app versions, or load from the files?'
+    },
+    'metadata.button.keepApp': 'Keep app version',
+    'metadata.button.useFile': 'Use file version',
     'metadata.button.saveChanges': 'Save Changes',
+    'metadata.button.revert': 'Reset',
+    'metadata.button.revert.title': 'Reset to the file — discard changes saved only in the app',
     'metadata.button.autosave': 'Auto-save',
     'metadata.button.saveBatch': {one: 'Save {n} File', other: 'Save {n} Files'},
     'metadata.button.saveBatch.progress': 'Saving {n}/{total}...',

@@ -143,9 +143,28 @@ pub async fn save_metadata_batch(
     items: Vec<SaveRequest>,
     on_progress: tauri::ipc::Channel<BatchProgress>,
     state: tauri::State<'_, BatchState>,
+    db: tauri::State<'_, crate::store::DbState>,
 ) -> Result<Vec<ItemStatus>, String> {
     let cancel = swap_cancel(state.inner());
-    tokio::task::spawn_blocking(move || {
+    // Capture each item's identity (path + file-backed fields) before `save_batch` consumes `items`,
+    // so the store can be synced afterwards. Store-only fields are preserved by the sync (feature 008).
+    let presaved: Vec<(String, crate::store::StoredMetadata)> = items
+        .iter()
+        .map(|i| {
+            (
+                i.filepath.clone(),
+                crate::store::StoredMetadata {
+                    title: i.title.clone(),
+                    description: i.description.clone(),
+                    keywords: i.keywords.clone(),
+                    categories: i.categories.clone(),
+                    ..Default::default()
+                },
+            )
+        })
+        .collect();
+
+    let results = tokio::task::spawn_blocking(move || {
         save_batch(items, &cancel, move |msg| {
             if let Err(e) = on_progress.send(msg) {
                 warn!("batch progress send failed: {e}");
@@ -153,7 +172,28 @@ pub async fn save_metadata_batch(
         })
     })
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+
+    // Sync the store for each successfully-saved item (refresh fingerprint, mark synced, move on
+    // rename), off the async runtime. Best-effort — file writes already succeeded.
+    let ok_items: Vec<(String, String, crate::store::StoredMetadata)> = results
+        .iter()
+        .enumerate()
+        .filter_map(|(i, s)| match s {
+            ItemStatus::Ok { path } => Some((presaved[i].0.clone(), path.clone(), presaved[i].1.clone())),
+            _ => None,
+        })
+        .collect();
+    let db = db.share();
+    tokio::task::spawn_blocking(move || {
+        for (old, new, meta) in ok_items {
+            db.sync_after_save_batch(&old, &new, &meta);
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(results)
 }
 
 /// Request cancellation of the in-flight batch. Not-yet-started items resolve to

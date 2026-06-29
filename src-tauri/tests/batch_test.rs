@@ -50,6 +50,9 @@ fn req(path: &Path, title: &str, keywords: &[&str]) -> SaveRequest {
         keywords: keywords.iter().map(|s| s.to_string()).collect(),
         categories: String::new(),
         release_filename: String::new(),
+        editorial: false,
+        mature_content: false,
+        illustration: false,
     }
 }
 

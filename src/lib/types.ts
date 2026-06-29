@@ -15,6 +15,9 @@ export interface Metadata {
     keywords: string[];
     categories: string;
     releaseFilename: string;
+    editorial: boolean;
+    matureContent: boolean;
+    illustration: boolean;
 }
 
 /** Configurable button for dialog/popup footers. Color fields accept any CSS value. */
@@ -42,3 +45,24 @@ export interface ReadResult {
     categories: string;
     releaseFilename: string;
 }
+
+// ── Intermediate metadata store (feature 008) ──
+
+export type SyncState = 'synced' | 'appOnly';
+
+/** The editable fields the store holds (mirrors what the editor edits). */
+export interface StoredMetadata {
+    title: string;
+    description: string;
+    keywords: string[];
+    categories: string;
+    releaseFilename: string;
+    editorial: boolean;
+    matureContent: boolean;
+    illustration: boolean;
+}
+
+/** Result of resolving a photo's metadata on open: load directly, or a conflict to prompt on. */
+export type MetadataResolution =
+    | {kind: 'resolved'; metadata: StoredMetadata; syncState: SyncState}
+    | {kind: 'conflict'; store: StoredMetadata; file: StoredMetadata};
