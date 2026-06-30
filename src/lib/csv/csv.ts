@@ -60,8 +60,91 @@ export function isNoneType(t: AppValueType): boolean {
     return t === 'none';
 }
 
-// Seed for the registered `csv.presets` key: empty. The user creates presets explicitly.
-export const DEFAULT_CSV_PRESETS: CsvPreset[] = [];
+// Compact builder for a default field (all default fields use the yes/no bool format).
+function col(csvColumn: string, valueType: AppValueType, defaultValue = ''): CsvField {
+    return {csvColumn, valueType, defaultValue, boolFormat: 'yesNo'};
+}
+
+// Presets seeded on first run / restored on reset — ready-to-use layouts for the major stocks.
+// An existing user's saved presets always win over these defaults (only fresh installs get them).
+export const DEFAULT_CSV_PRESETS: CsvPreset[] = [
+    {
+        id: 'default-shutterstock',
+        name: 'Shutterstock',
+        identifier: 'shutterstock',
+        delimiter: 'comma',
+        fields: [
+            col('Filename', 'fileName'),
+            col('Description', 'description'),
+            col('Keywords', 'keywords'),
+            col('Categories', 'category'),
+            col('Illustration', 'illustration'),
+            col('Mature Content', 'matureContent'),
+            col('Editorial', 'editorial'),
+        ],
+    },
+    {
+        id: 'default-istock',
+        name: 'iStock',
+        identifier: 'i_stock',
+        delimiter: 'comma',
+        fields: [
+            col('file name', 'fileName'),
+            col('description', 'description'),
+            col('country', 'none'),
+            col('title', 'title'),
+            col('keywords', 'keywords'),
+            col('poster timecode', 'none'),
+            col('date created', 'none'),
+            col('shot speed', 'none'),
+        ],
+    },
+    {
+        id: 'default-adobe-stock',
+        name: 'Adobe Stock',
+        identifier: 'adobe_stock',
+        delimiter: 'comma',
+        fields: [
+            col('Filename', 'fileName'),
+            col('Title', 'title'),
+            col('Keywords', 'keywords'),
+            col('Category', 'category'),
+            col('Releases', 'releaseFilename'),
+        ],
+    },
+    {
+        id: 'default-envato',
+        name: 'Envato',
+        identifier: 'envato',
+        delimiter: 'comma',
+        fields: [
+            col('Filename', 'fileName'),
+            col('Title', 'title'),
+            col('Description', 'description'),
+            col('Keywords', 'keywords'),
+            col('Category', 'category'),
+            col('Price: Single Use License ($USD)', 'none', '$0.00'),
+            col('Price: Multi-use License ($USD)*', 'none', '$0.00'),
+            col('Recognisable people?', 'none', 'No'),
+            col('Recognisable buildings?', 'none', 'No'),
+            col('Releases', 'releaseFilename'),
+            col('Is Motion Graphics?', 'none'),
+            col('AudioJungle Track (IDs)', 'none'),
+            col('Color', 'none'),
+            col('Pace', 'none'),
+            col('Movement', 'none'),
+            col('Composition', 'none'),
+            col('Setting', 'none'),
+            col('No. of People', 'none'),
+            col('Gender', 'none'),
+            col('Age', 'none'),
+            col('Ethnicity', 'none'),
+            col('Alpha Channel', 'none'),
+            col('Looped', 'none'),
+            col('Source Audio', 'none'),
+        ],
+    },
+];
 
 function uid(): string {
     return 'c' + Math.random().toString(36).slice(2, 10);

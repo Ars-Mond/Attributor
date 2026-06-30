@@ -117,7 +117,7 @@ The photo's **file name** (for `fileName`) comes from the photo path, not from `
 
 ## Defaults
 
-`DEFAULT_CSV_PRESETS` (seed for the registered `csv.presets` key) = `[]` (empty). The user creates presets explicitly; export with no presets shows the "nothing to export" warning (FR-029). A non-destructive starter template MAY be offered by the "Create" action but is not seeded by default.
+`DEFAULT_CSV_PRESETS` (seed for the registered `csv.presets` key) ships ready-to-use presets for the major stocks (Shutterstock, iStock, Adobe Stock, Envato). An existing user's saved presets always win over these defaults on load — only fresh installs (or a section reset) receive them. The user can still edit or delete them; export with no presets shows the "nothing to export" warning (FR-029).
 
 ## Relationships & lifecycle
 
