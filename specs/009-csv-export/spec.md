@@ -8,6 +8,15 @@
 
 **Input**: User description: "Add CSV export. A menu item triggers a destination-folder picker; the app exports the selected photos, or — when nothing is selected — every photo in the current folder excluding sub-folders. The folder (not a single file) is chosen because one CSV is written per configured photo-stock. Settings gains a CSV category (like the Ollama models category) where each photo-stock is configured: a display name, a unique stock identifier (used as the file name), and an ordered, editable list of fields. Each field carries a CSV column identifier and an app value type (none, file name, title, description, keywords, category, editorial, mature content, illustration); a default string value exists only for `none` fields, and a bool-format choice (yes/no vs true/false) exists only for the bool types. CSV data is read from the database, not from the files."
 
+## Clarifications
+
+### Session 2026-06-30
+
+- Q: How should multi-value fields (keywords, category) be written into a single CSV cell? → A: Joined with a comma inside a quoted cell — the in-cell separator stays a comma regardless of the preset's column delimiter.
+- Q: What should happen to in-scope photos that have no database record? → A: Exclude them from every CSV and report the skipped count in the export outcome; the export stays purely database-sourced.
+- Q: What CSV column delimiter is used and where is it configured? → A: UTF-8 and RFC 4180 quoting are global; each preset additionally selects its own column delimiter — comma, semicolon, or tab — defaulting to comma.
+- Q: Which presets are exported when the user runs an export? → A: Every configured preset (one CSV per preset).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Configure stock CSV presets (Priority: P1)
@@ -44,6 +53,8 @@ A user who has configured one or more stock presets selects "Export to CSV" from
 4. **Given** a preset has an "editorial" column set to yes/no format, **When** a photo whose editorial flag is true is exported, **Then** that cell contains "yes" (and "no" when false).
 5. **Given** a cell value contains the delimiter, a quote, or a line break, **When** the file is written, **Then** the value is escaped so the CSV remains well-formed.
 6. **Given** no presets are configured, **When** the user selects Export to CSV, **Then** the app informs the user there is nothing to export and writes no files.
+7. **Given** a preset's column delimiter is set to semicolon, **When** that preset is exported, **Then** its CSV uses `;` between columns while UTF-8 encoding and quoting stay consistent.
+8. **Given** a folder of 10 photos where 2 have no database record, **When** the user exports, **Then** each CSV contains 8 data rows and the outcome message reports 2 skipped photos.
 
 ---
 
@@ -66,13 +77,13 @@ When the user has selected one or more photos, exporting covers only that select
 
 - **No presets configured**: Export reports that nothing can be exported and writes no files.
 - **Empty scope**: The selection is empty and the current folder has no photos → export reports there is nothing to export.
-- **Photo without a database record**: A photo in scope has no saved metadata in the database. Default handling: the photo is skipped and the user is told how many were skipped (see Assumptions; candidate for clarification).
+- **Photo without a database record**: A photo in scope has no saved metadata in the database → it is excluded from every CSV and counted in the export outcome (it is not exported with blank values nor read from the file).
 - **Missing/empty field value**: A photo has no value for a column's type (e.g., no keywords) → the cell is empty.
 - **Duplicate stock identifier**: Creating/renaming a preset to an identifier already in use is rejected at configuration time.
 - **Invalid stock identifier**: An identifier containing characters illegal in a file name is rejected with an explanation.
 - **Destination already contains same-named files**: Existing `<identifier>.csv` files are overwritten (see Assumptions).
 - **Special characters in cell values**: Delimiters, quotes, and newlines inside a value are escaped so the file stays valid.
-- **Multi-value fields (keywords, category)**: Serialized into a single cell using a separator (see Assumptions).
+- **Multi-value fields (keywords, category)**: Joined into a single cell with a comma; the cell is quoted when the value would otherwise break the CSV.
 - **Preset with an empty field list**: Export produces a file with a header-only/empty structure; the user is warned that the preset has no columns.
 
 ## Requirements *(mandatory)*
@@ -95,10 +106,11 @@ When the user has selected one or more photos, exporting covers only that select
 - **FR-009**: Each cell MUST be derived from its column's app value type, read from the metadata database — never re-read from the photo file.
 - **FR-010**: A column of type "none" MUST emit the column's configured default string value in every data row.
 - **FR-011**: A column of a bool type (editorial, mature content, illustration) MUST be rendered per the column's bool-format choice — "yes"/"no" or "true"/"false".
-- **FR-012**: A column whose app value is multi-valued (keywords, category) MUST be serialized into a single cell using a configured/agreed separator.
+- **FR-012**: A column whose app value is multi-valued (keywords, category) MUST be serialized into a single cell by joining the values with a comma; the cell MUST be quoted when needed so the in-cell comma is not read as a column delimiter.
 - **FR-013**: A column of type "file name" MUST emit the photo's file name.
 - **FR-014**: Cell values containing the delimiter, quote character, or a line break MUST be escaped so the resulting file is a well-formed CSV.
 - **FR-015**: Missing or empty values MUST produce an empty cell.
+- **FR-033**: Each preset's CSV MUST be written using that preset's configured column delimiter; UTF-8 encoding and RFC 4180 quoting apply to every file regardless of the chosen delimiter.
 
 #### Settings: preset management
 
@@ -114,6 +126,7 @@ When the user has selected one or more photos, exporting covers only that select
 - **FR-025**: A bool-format choice (yes/no vs true/false) MUST be available **only** for the bool types (editorial, mature content, illustration) and MUST be hidden for all other types.
 - **FR-026**: Users MUST be able to reorder a preset's fields, by arrow controls and/or drag-and-drop.
 - **FR-027**: Presets and their field lists MUST persist across application sessions.
+- **FR-034**: Each preset MUST let the user choose its CSV column delimiter — comma, semicolon, or tab — defaulting to comma.
 
 #### Data & feedback
 
@@ -122,10 +135,11 @@ When the user has selected one or more photos, exporting covers only that select
 - **FR-030**: If the export scope is empty, the export MUST inform the user there is nothing to export.
 - **FR-031**: The export MUST report its outcome to the user (e.g., how many files were written, how many photos exported, and how many — if any — were skipped for lacking a database record).
 - **FR-032**: Errors during export (e.g., the destination folder is not writable) MUST be surfaced to the user and logged, without crashing the application.
+- **FR-035**: In-scope photos without a database record MUST be excluded from every CSV (not exported with blank or file-derived values), and their count MUST be reported in the export outcome.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Stock CSV Preset**: One photo-stock's export configuration. Attributes: display name, stock identifier (unique, file-name-safe), ordered list of CSV Fields. Persisted across sessions.
+- **Stock CSV Preset**: One photo-stock's export configuration. Attributes: display name, stock identifier (unique, file-name-safe), column delimiter (comma/semicolon/tab, default comma), ordered list of CSV Fields. Persisted across sessions.
 - **CSV Field**: One column in a preset. Attributes: CSV column identifier (header text), app value type, and — conditionally — a default string value (only for type "none") and a bool-format choice (only for bool types). Carries an order position within its preset.
 - **App Value Type**: The fixed set of sources a column can draw from: none, file name, title, description, keywords, category, editorial, mature content, illustration.
 - **Export Job**: A single export run. Attributes: scope (selected photos vs. current folder), destination folder, and the set of presets to emit. Produces one CSV file per preset.
@@ -146,10 +160,10 @@ When the user has selected one or more photos, exporting covers only that select
 
 ## Assumptions
 
-- **CSV format**: UTF-8 encoding, comma (`,`) delimiter, double-quote quoting/escaping per RFC 4180, with a header row. A single global format applies to all presets (no per-preset delimiter/encoding configuration in this version).
-- **Multi-value serialization**: Keywords (and category, when multi-valued) are joined into one cell using a single separator; the working default is a comma inside a quoted cell. The exact separator is a candidate for clarification.
-- **Preset selection at export time**: An export emits a CSV for **every** configured preset; there is no per-run selection of a subset. (Candidate for clarification.)
-- **Photos without a database record**: Skipped from the export and counted in the outcome message rather than exported with blank values or read from the file. (Candidate for clarification.)
+- **CSV format**: UTF-8 encoding and RFC 4180 double-quote quoting/escaping are global, and a header row is always written. The column delimiter is chosen per preset (comma, semicolon, or tab), defaulting to comma.
+- **Multi-value serialization**: Keywords and category are joined into one cell with a comma, with the cell quoted when needed. The in-cell comma separator stays the same regardless of the preset's column delimiter.
+- **Preset selection at export time**: An export emits a CSV for **every** configured preset; there is no per-run selection of a subset.
+- **Photos without a database record**: Excluded from every CSV and counted in the outcome message — not exported with blank values nor read from the file.
 - **Overwrite behavior**: Existing files named `<identifier>.csv` in the destination folder are overwritten.
 - **File-name value**: The "file name" type emits the photo's file name including its extension (the submitted asset name).
 - **Category source**: "category" maps to the app's stored category data (the comma-joined `categories` value from the metadata store).

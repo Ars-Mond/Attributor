@@ -32,4 +32,4 @@
 ## Notes
 
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.
-- Three decisions were resolved with documented informed guesses in **Assumptions** and flagged as candidates for `/speckit-clarify`: (1) multi-value cell separator, (2) export emits every preset vs. a chosen subset, (3) handling of photos without a database record.
+- Open decisions were resolved in the `/speckit-clarify` session of 2026-06-30 (see **Clarifications**): in-cell comma separator for multi-value fields, per-preset column delimiter (comma/semicolon/tab, default comma), export emits every configured preset, and photos without a database record are skipped and reported.
