@@ -3,7 +3,9 @@ import {LOCALES, ENDONYMS} from '$lib/i18n/types';
 import ShortcutsPage from '$lib/shortcuts/ShortcutsPage.svelte';
 import OllamaSettingsPage from './OllamaSettingsPage.svelte';
 import OllamaModelsPage from './OllamaModelsPage.svelte';
+import CsvPresetsPage from './CsvPresetsPage.svelte';
 import type {ModelProfile} from '$lib/ollama/ollama';
+import {DEFAULT_CSV_PRESETS} from '$lib/csv/csv';
 import {THEME_OPTIONS, DEFAULT_THEME} from '$lib/themes';
 
 // Default enforced JSON schema for Ollama structured output (FR-006). Debug-only field; the three flags
@@ -250,6 +252,20 @@ settings.register('ollama-models', {
     type: 'custom',
     default: DEFAULT_MODEL_PROFILES,
     label: 'settings.section.ollamaModels'
+});
+
+// CSV export: custom section page owns its UI; the preset array persists via the store.
+settings.registerSection({
+    id: 'csv',
+    label: 'settings.section.csv',
+    order: 6,
+    component: CsvPresetsPage
+});
+settings.register('csv', {
+    key: 'csv.presets',
+    type: 'custom',
+    default: DEFAULT_CSV_PRESETS,
+    label: 'settings.section.csv'
 });
 
 settings.registerSection({

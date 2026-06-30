@@ -1,4 +1,5 @@
 pub mod batch;
+mod csv;
 pub mod events;
 pub mod folder;
 mod keywords;
@@ -251,6 +252,8 @@ pub fn run() {
             store::store_metadata,
             store::revert_to_file,
             store::apply_metadata_source,
+            csv::pick_export_dir,
+            csv::export_csv,
             cache_thumbnail,
             thumbnail_dir_exists,
             open_folder,

@@ -93,6 +93,14 @@ impl DbState {
             log::warn!("store attribution failed for {path}: {e}");
         }
     }
+
+    /// Pure read for CSV export (FR-009): return the stored metadata for `path` without any mutation
+    /// (no fingerprint/mtime refresh). `None` if the store is unavailable or the path has no record.
+    pub fn fetch(&self, path: &str) -> Option<StoredMetadata> {
+        let conn = self.handle()?;
+        let c = conn.lock().unwrap_or_else(|e| e.into_inner());
+        read_record(&c, path).ok().flatten().map(|r| r.meta)
+    }
 }
 
 // ── Internals ────────────────────────────────────────────────────────────────
@@ -651,5 +659,34 @@ mod tests {
             _ => panic!("app-only + hash change must be store-wins, not conflict"),
         }
         std::fs::remove_file(&path).ok();
+    }
+
+    fn mem_db() -> DbState {
+        let c = Connection::open_in_memory().unwrap();
+        schema::init(&c).unwrap();
+        DbState { conn: Some(Arc::new(Mutex::new(c))) }
+    }
+
+    #[test]
+    fn fetch_returns_record_without_mutation() {
+        let db = mem_db();
+        let conn = db.conn.clone().unwrap();
+        let fp = Fingerprint { size: 7, mtime: 8, hash: 9 };
+        {
+            let c = conn.lock().unwrap();
+            upsert_record(&c, "p", &sample(), &fp, true).unwrap();
+        }
+        let got = db.fetch("p").expect("record exists");
+        assert_eq!(got.title, "T");
+        assert_eq!(got.keywords, vec!["a".to_string(), "b".to_string()]);
+        assert!(db.fetch("missing").is_none());
+        // Pure read: the fingerprint must be unchanged after fetch.
+        let c = conn.lock().unwrap();
+        assert_eq!(read_record(&c, "p").unwrap().unwrap().fp, fp);
+    }
+
+    #[test]
+    fn fetch_on_disabled_store_is_none() {
+        assert!(DbState::disabled().fetch("p").is_none());
     }
 }
