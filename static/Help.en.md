@@ -129,7 +129,7 @@ Export the metadata stored in the app to CSV spreadsheets — one file per photo
 
 ### Configure stock presets
 
-Open **File → Settings → CSV Export** and create a preset for each stock:
+Attributor ships ready-made presets for **Shutterstock**, **iStock**, **Adobe Stock**, and **Envato**. Open **File → Settings → CSV Export** to use them as-is, edit them, or create your own. Each preset has:
 
 - **Name** — the label shown in settings.
 - **Stock identifier** — used as the CSV file name (`<identifier>.csv`); must be unique and valid as a file name.
