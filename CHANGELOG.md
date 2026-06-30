@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.0] - 2026-07-01
+
+### Added
+- **CSV export** — export the app's stored metadata to CSV spreadsheets, one file per photo-stock, into a folder you choose (**File → Export to CSV**). Each photo-stock is configured as a preset in **Settings → CSV Export**: a display name, a unique file-name identifier (used as the CSV file name), a per-preset column delimiter (comma / semicolon / tab), and an ordered, add/remove/reorder field list. Each field maps a CSV column to an app value — none (with a constant default value), file name, title, description, keywords, category, release filename, or the editorial / mature-content / illustration flags (with a yes/no vs true/false format). The export scope is the current selection, or every photo in the current folder (excluding sub-folders) when nothing is selected; values come only from the metadata store, and photos without a stored record are skipped and reported.
+- Ready-to-use default CSV presets for **Shutterstock**, **iStock**, **Adobe Stock**, and **Envato**.
+
 ## [1.0.0] - 2026-06-30
 
 First stable release.
