@@ -34,6 +34,7 @@ A user opens Settings, finds a dedicated CSV category, and creates a preset for 
 3. **Given** a preset is being edited, **When** the user sets a field's value type to "editorial" (a bool type), **Then** a bool-format option (yes/no vs true/false) appears for that field and a default-value input does not.
 4. **Given** a preset has several fields, **When** the user moves a field up/down (arrows) or drags it to a new position, **Then** the field order updates and is preserved on save.
 5. **Given** a preset already uses stock identifier "shutterstock", **When** the user tries to create or rename another preset to the same identifier, **Then** the app rejects it and explains the identifier must be unique.
+6. **Given** a preset has no fields, **When** the user tries to save it, **Then** the dialog rejects the save and explains at least one field is required.
 
 ---
 
@@ -84,7 +85,7 @@ When the user has selected one or more photos, exporting covers only that select
 - **Destination already contains same-named files**: Existing `<identifier>.csv` files are overwritten (see Assumptions).
 - **Special characters in cell values**: Delimiters, quotes, and newlines inside a value are escaped so the file stays valid.
 - **Multi-value fields (keywords, category)**: Joined into a single cell with a comma; the cell is quoted when the value would otherwise break the CSV.
-- **Preset with an empty field list**: Export produces a file with a header-only/empty structure; the user is warned that the preset has no columns.
+- **Preset with no fields**: A preset must have at least one field; the Settings dialog rejects saving a preset with an empty field list (FR-036), so export never encounters an empty preset.
 
 ## Requirements *(mandatory)*
 
@@ -127,6 +128,7 @@ When the user has selected one or more photos, exporting covers only that select
 - **FR-026**: Users MUST be able to reorder a preset's fields, by arrow controls and/or drag-and-drop.
 - **FR-027**: Presets and their field lists MUST persist across application sessions.
 - **FR-034**: Each preset MUST let the user choose its CSV column delimiter — comma, semicolon, or tab — defaulting to comma.
+- **FR-036**: A preset MUST have at least one field; saving a preset with an empty field list MUST be rejected at configuration time with an explanation.
 
 #### Data & feedback
 

@@ -12,11 +12,12 @@ One photo-stock's export configuration. Persisted as an element of the `csv.pres
 | `name` | string | Display name shown in Settings (FR-018). May be empty-checked as required. |
 | `identifier` | string | Stock identifier — used as the CSV file name `<identifier>.csv` and as the uniqueness key (FR-018/FR-019/FR-020). |
 | `delimiter` | `Delimiter` | Column delimiter for this preset's file (FR-034). Default `comma`. |
-| `fields` | `CsvField[]` | Ordered list of columns (FR-021). Order = column order in the output (FR-007). May be empty (warned). |
+| `fields` | `CsvField[]` | Ordered list of columns (FR-021). Order = column order in the output (FR-007). MUST contain at least one field — saving an empty list is rejected in the dialog (FR-036). |
 
 **Validation rules**:
 - `name` required (non-empty after trim).
 - `identifier` required; unique across all presets (case-insensitive compare recommended) (FR-019); file-name-safe per R9 (FR-020).
+- `fields` MUST be non-empty; the dialog blocks saving a preset with zero fields (FR-036).
 - Reordering changes only the order of `fields`; add/remove changes membership (FR-021/FR-026).
 
 **Persistence shape** (example element of `csv.presets`):
@@ -82,7 +83,7 @@ Returned by `export_csv`; drives the result `ConfirmDialog` (FR-031).
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `filesWritten` | number | Count of CSV files written (one per preset with ≥1 field). |
+| `filesWritten` | number | Count of CSV files written (one per preset; every preset has ≥1 field per FR-036). |
 | `photosExported` | number | In-scope photos that had a store record and produced a data row. |
 | `skipped` | number | In-scope photos with no store record (FR-035). |
 
@@ -106,7 +107,7 @@ Read-only source for cell values. Frontend type `src/lib/types.ts`; Rust `store/
 | `title` | string | title |
 | `description` | string | description |
 | `keywords` | string[] (`Vec<String>`) | keywords (joined with `,`) |
-| `categories` | string | category (as-is) |
+| `categories` | string | category — normalized: split on commas, trim each, drop empties, re-join with `,` |
 | `editorial` | bool | editorial |
 | `matureContent` | bool | matureContent |
 | `illustration` | bool | illustration |

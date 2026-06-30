@@ -55,7 +55,7 @@ All unknowns from the Technical Context resolved below. Codebase facts were gath
 
 **Rationale**: Principle VIII — heavy work in Rust, no IPC in loops, batch once. The SQLite connection is a single `Arc<Mutex<Connection>>`, so DB reads serialize regardless; a sequential loop is the cleanest correct option (the poison-tolerant `lock().unwrap_or_else(|e| e.into_inner())` idiom is used project-wide). Fetch each path once, reuse the record across all presets. `rayon` is unnecessary here (DB-bound); reserve it only if pure string formatting ever dominates.
 
-**Performance**: A few thousand single-row SELECTs plus buffered file writes complete well under the 5 s / 1,000-photos × 3-presets target (SC-008); the blocking task keeps the UI thread free.
+**Performance**: A few thousand single-row SELECTs plus buffered file writes complete well under the 5 s / 1,000-photos × 3-presets target (SC-008); the blocking task keeps the UI thread free. No dedicated performance-measurement task is added — SC-008 is satisfied at the design level (analyze decision, 2026-07-01).
 
 ## R7. Export scope resolution (selection vs. current folder)
 
@@ -88,11 +88,11 @@ All unknowns from the Technical Context resolved below. Codebase facts were gath
 | title | `StoredMetadata.title` | as-is |
 | description | `StoredMetadata.description` | as-is |
 | keywords | `StoredMetadata.keywords: Vec<String>` | joined with `,` (in-cell comma, quoted by the writer when needed) |
-| category | `StoredMetadata.categories: String` | as-is (already a string in the store) |
+| category | `StoredMetadata.categories: String` | normalized: split on commas, trim each, drop empties, re-join with `,` |
 | editorial | `StoredMetadata.editorial: bool` | per field `boolFormat`: `yes`/`no` or `true`/`false` |
 | matureContent | `StoredMetadata.mature_content: bool` | per field `boolFormat` |
 | illustration | `StoredMetadata.illustration: bool` | per field `boolFormat` |
 
-Missing/empty values → empty cell (FR-015). The in-cell keyword separator is always `,` regardless of the preset's column delimiter (clarified 2026-06-30).
+Missing/empty values → empty cell (FR-015). The in-cell keyword separator is always `,` regardless of the preset's column delimiter (clarified 2026-06-30). The stored `categories` string is normalized to a comma separator on export (split on commas, trim each, drop empties, re-join with `,`) so multi-value category cells match the keyword convention (FR-012).
 
 **Rationale**: Mirrors the exact store field set and the clarified serialization rules; the file name comes from the path (the only non-store value), satisfying "from the database" for all metadata while still emitting the asset file name.

@@ -63,9 +63,9 @@ interface ExportSummary {
 
 **Behavior** (one IPC round-trip, all work in `spawn_blocking` after `db.share()`):
 1. For each `path` in `paths` (in order), `db.fetch(path)` once → `Some(record)` or `None`. Paths with `None` are counted as `skipped` and excluded from every file (FR-035).
-2. For each `preset` with ≥1 field:
+2. For each `preset` (every preset has ≥1 field per FR-036; defensively skip any that somehow has none):
    - Build the header row from `field.csvColumn` in order (FR-007).
-   - For each photo with a record, build a data row by mapping each field's `valueType` to a cell (see data-model.md R10): `none`→`defaultValue`; `fileName`→basename of `path`; text fields→store strings; `keywords`→`Vec` joined with `,`; `category`→`categories` as-is; bool fields→`boolFormat` (`yes`/`no` or `true`/`false`). Empty/missing → empty cell (FR-015).
+   - For each photo with a record, build a data row by mapping each field's `valueType` to a cell (see data-model.md R10): `none`→`defaultValue`; `fileName`→basename of `path`; text fields→store strings; `keywords`→`Vec` joined with `,`; `category`→`categories` normalized (split on commas, trim, re-join with `,`); bool fields→`boolFormat` (`yes`/`no` or `true`/`false`). Empty/missing → empty cell (FR-015).
    - Write `<sanitized identifier>.csv` into `dir` via `std::fs`, UTF-8, using the preset's `delimiter` and RFC 4180 quoting (a field is quoted iff it contains the delimiter, `"`, `\r`, or `\n`) (FR-014/FR-033/FR-034). Overwrite if it already exists.
    - Increment `filesWritten`.
 3. `photosExported` = number of in-scope photos that had a record. Return `ExportSummary`.
