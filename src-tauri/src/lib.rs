@@ -1,562 +1,152 @@
-use bytes::{Bytes, BytesMut};
-use img_parts::jpeg::{markers, Jpeg, JpegSegment};
-use img_parts::png::{Png, PngChunk};
-use img_parts::riff::RiffContent;
-use img_parts::webp::{WebP, CHUNK_XMP};
-use img_parts::DynImage;
-use log::{debug, error, info, warn};
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
-use nucleo_matcher::{Config, Matcher, Utf32Str};
-use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
-use quick_xml::Reader;
-use quick_xml::Writer;
-use serde::{Deserialize, Serialize};
-use std::io::Cursor;
-use std::sync::{Mutex, OnceLock};
+pub mod batch;
+pub mod events;
+pub mod folder;
+mod keywords;
+mod ollama;
+mod photo;
+mod store;
+mod types;
 
-// ── Keyword dictionary ─────────────────────────────────────────────────────
+// Re-exports required by integration tests (tests/metadata_test.rs)
+pub use types::{ReadResult, SaveRequest};
 
-const KEYWORDS_RAW: &str = include_str!("../resources/keywords.txt");
+pub mod photo_metadata {
+    pub use super::photo::{
+        ensure, ensure_thumbnails, read_metadata, thumbnail_dir_exists, write_metadata, Metadata,
+        Photo, Thumbnails,
+    };
+}
 
-static KEYWORDS: OnceLock<Vec<&'static str>> = OnceLock::new();
+use batch::{cancel_batch, save_metadata_batch, BatchState};
+use folder::{FileNode, FolderState, GenConfig, PhotoFolder};
+use log::info;
+use std::path::Path;
+use tauri::Manager;
+use tauri_plugin_log::TimezoneStrategy;
+use tauri_plugin_prevent_default::Flags;
 
-fn all_keywords() -> &'static Vec<&'static str> {
-    KEYWORDS.get_or_init(|| {
-        KEYWORDS_RAW
-            .lines()
-            .map(str::trim)
-            .filter(|l| !l.is_empty())
-            .collect()
+// Log line layout: `[date][time][LEVEL][target] message` — level (fixed 5-wide) before target.
+const LOG_TS_FORMAT: &[time::format_description::FormatItem<'_>] =
+    time::macros::format_description!("[[[year]-[month]-[day]][[[hour]:[minute]:[second]]");
+
+/// Current UTC timestamp formatted as `[YYYY-MM-DD][HH:MM:SS]` for a log line.
+fn log_timestamp() -> String {
+    TimezoneStrategy::UseUtc.get_now().format(&LOG_TS_FORMAT).unwrap_or_default()
+}
+
+/// ANSI SGR foreground color per level — applied to the colored stdout target only (the file stays plain).
+fn level_ansi(level: log::Level) -> &'static str {
+    match level {
+        log::Level::Error => "1;31", // bold red
+        log::Level::Warn => "33",    // yellow
+        log::Level::Info => "32",    // green
+        log::Level::Debug => "36",   // cyan
+        log::Level::Trace => "90",   // bright black
+    }
+}
+
+// ── Tauri command mirrors ─────────────────────────────────────────────────
+
+#[tauri::command]
+fn search_keywords(query: String, limit: Option<usize>) -> Vec<String> {
+    keywords::search_keywords_impl(query, limit)
+}
+
+/// Best-effort OS UI language as a BCP-47 tag (e.g. "ru-RU"). Used once on first launch to pick a
+/// default interface language. Returns "en" when the OS locale is unavailable; never errors for the
+/// merely-absent case and never panics across the IPC boundary.
+#[tauri::command]
+fn detect_os_locale() -> Result<String, String> {
+    match sys_locale::get_locale() {
+        Some(tag) => Ok(tag),
+        None => {
+            log::warn!("detect_os_locale: OS locale unavailable, defaulting to en");
+            Ok("en".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+fn read_metadata(path: String) -> Result<ReadResult, String> {
+    let meta = photo::read_metadata(path)?;
+    Ok(ReadResult {
+        title: meta.title,
+        description: meta.description,
+        keywords: meta.keywords,
+        categories: meta.category,
+        release_filename: String::new(),
     })
 }
 
-/// Search the keyword dictionary and return up to `limit` results (default 100).
-///
-/// Sorting priority:
-///   0 — exact match           ("road")
-///   1 — prefix match          ("roads", "road bicycle")   → shorter first
-///   2 — word-boundary match   ("dirt road", "gravel road") → shorter first
-///   3 — other substring       ("crossroads", "railroad")   → shorter first
-///   4 — fuzzy match only      (nucleo score, desc)
 #[tauri::command]
-fn search_keywords(query: String, limit: Option<usize>) -> Vec<String> {
-    let q = query.trim().to_lowercase();
-    if q.is_empty() {
-        return Vec::new();
-    }
-
-    let limit = limit.unwrap_or(100);
-    let word_boundary = format!(" {q}");
-
-    // Tiers 0-3: substring-based matches
-    let mut substring_hits: Vec<(u8, usize, &str)> = all_keywords()
-        .iter()
-        .filter_map(|kw| {
-            let lower = kw.to_lowercase();
-            if !lower.contains(&q) {
-                return None;
-            }
-            let tier: u8 = if lower == q {
-                0
-            } else if lower.starts_with(&q) {
-                1
-            } else if lower.contains(&word_boundary) {
-                2
-            } else {
-                3
-            };
-            Some((tier, kw.len(), *kw))
-        })
-        .collect();
-
-    substring_hits.sort_unstable_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
-
-    // Collect the set of already-matched keywords so fuzzy doesn't duplicate them
-    let substring_set: std::collections::HashSet<&str> =
-        substring_hits.iter().map(|(_, _, kw)| *kw).collect();
-
-    // Tier 4: fuzzy matches for keywords NOT already in substring results
-    let mut matcher = Matcher::new(Config::DEFAULT);
-    let pattern = Pattern::parse(&q, CaseMatching::Ignore, Normalization::Smart);
-
-    let mut fuzzy_hits: Vec<(u32, &str)> = all_keywords()
-        .iter()
-        .filter(|kw| !substring_set.contains(*kw))
-        .filter_map(|kw| {
-            let mut buf = Vec::new();
-            let score = pattern.score(Utf32Str::new(kw, &mut buf), &mut matcher)?;
-            Some((score, *kw))
-        })
-        .collect();
-
-    // Higher score = better match → sort descending
-    fuzzy_hits.sort_unstable_by(|a, b| b.0.cmp(&a.0));
-
-    let mut out: Vec<String> = Vec::with_capacity(limit.min(substring_hits.len() + fuzzy_hits.len()));
-    for (_, _, kw) in substring_hits.into_iter().take(limit) {
-        out.push(kw.to_string());
-    }
-    let remaining = limit.saturating_sub(out.len());
-    for (_, kw) in fuzzy_hits.into_iter().take(remaining) {
-        out.push(kw.to_string());
-    }
-    out
-}
-
-// ── Request / response types ───────────────────────────────────────────────
-
-/// Payload sent from the frontend when saving.
-/// `filepath` is the current full path; `filename` is the desired stem
-/// (no extension, no directory). If the stem changed, the file is renamed.
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SaveRequest {
-    pub filepath: String,
-    pub filename: String,
-    pub title: String,
-    pub description: String,
-    pub keywords: Vec<String>,
-    pub categories: String,
-    pub release_filename: String,
-}
-
-/// XMP fields returned when reading an image.
-#[derive(Serialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ReadResult {
-    pub title: String,
-    pub description: String,
-    pub keywords: Vec<String>,
-    pub categories: String,
-    pub release_filename: String,
-}
-
-// ── XMP building ──────────────────────────────────────────────────────────
-
-fn build_xmp(req: &SaveRequest) -> Result<Bytes, quick_xml::Error> {
-    let mut w = Writer::new_with_indent(Cursor::new(Vec::<u8>::new()), b' ', 2);
-
-    let mut xmpmeta = BytesStart::new("x:xmpmeta");
-    xmpmeta.push_attribute(("xmlns:x", "adobe:ns:meta/"));
-    w.write_event(Event::Start(xmpmeta))?;
-
-    let mut rdf = BytesStart::new("rdf:RDF");
-    rdf.push_attribute(("xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"));
-    w.write_event(Event::Start(rdf))?;
-
-    let mut desc = BytesStart::new("rdf:Description");
-    desc.push_attribute(("rdf:about", ""));
-    desc.push_attribute(("xmlns:dc", "http://purl.org/dc/elements/1.1/"));
-    desc.push_attribute(("xmlns:photoshop", "http://ns.adobe.com/photoshop/1.0/"));
-    w.write_event(Event::Start(desc))?;
-
-    if !req.title.is_empty() {
-        w.write_event(Event::Start(BytesStart::new("dc:title")))?;
-        w.write_event(Event::Start(BytesStart::new("rdf:Alt")))?;
-        let mut li = BytesStart::new("rdf:li");
-        li.push_attribute(("xml:lang", "x-default"));
-        w.write_event(Event::Start(li))?;
-        w.write_event(Event::Text(BytesText::new(&req.title)))?;
-        w.write_event(Event::End(BytesEnd::new("rdf:li")))?;
-        w.write_event(Event::End(BytesEnd::new("rdf:Alt")))?;
-        w.write_event(Event::End(BytesEnd::new("dc:title")))?;
-    }
-
-    if !req.description.is_empty() {
-        w.write_event(Event::Start(BytesStart::new("dc:description")))?;
-        w.write_event(Event::Start(BytesStart::new("rdf:Alt")))?;
-        let mut li = BytesStart::new("rdf:li");
-        li.push_attribute(("xml:lang", "x-default"));
-        w.write_event(Event::Start(li))?;
-        w.write_event(Event::Text(BytesText::new(&req.description)))?;
-        w.write_event(Event::End(BytesEnd::new("rdf:li")))?;
-        w.write_event(Event::End(BytesEnd::new("rdf:Alt")))?;
-        w.write_event(Event::End(BytesEnd::new("dc:description")))?;
-    }
-
-    if !req.keywords.is_empty() {
-        w.write_event(Event::Start(BytesStart::new("dc:subject")))?;
-        w.write_event(Event::Start(BytesStart::new("rdf:Bag")))?;
-        for kw in &req.keywords {
-            w.write_event(Event::Start(BytesStart::new("rdf:li")))?;
-            w.write_event(Event::Text(BytesText::new(kw)))?;
-            w.write_event(Event::End(BytesEnd::new("rdf:li")))?;
-        }
-        w.write_event(Event::End(BytesEnd::new("rdf:Bag")))?;
-        w.write_event(Event::End(BytesEnd::new("dc:subject")))?;
-    }
-
-    if !req.categories.is_empty() {
-        w.write_event(Event::Start(BytesStart::new("photoshop:Category")))?;
-        w.write_event(Event::Text(BytesText::new(&req.categories)))?;
-        w.write_event(Event::End(BytesEnd::new("photoshop:Category")))?;
-    }
-
-    w.write_event(Event::End(BytesEnd::new("rdf:Description")))?;
-    w.write_event(Event::End(BytesEnd::new("rdf:RDF")))?;
-    w.write_event(Event::End(BytesEnd::new("x:xmpmeta")))?;
-
-    let xml_body = w.into_inner().into_inner();
-
-    let mut packet = Vec::new();
-    packet.extend_from_slice(b"<?xpacket begin='\xef\xbb\xbf' id='W5M0MpCehiHzreSzNTczkc9d'?>\n");
-    packet.extend_from_slice(&xml_body);
-    packet.extend_from_slice(b"\n<?xpacket end='w'?>");
-    Ok(Bytes::from(packet))
-}
-
-// ── XMP parsing ───────────────────────────────────────────────────────────
-
-/// Extract XMP fields from a raw XMP packet (UTF-8 XML bytes).
-fn parse_xmp(xmp_bytes: &[u8]) -> ReadResult {
-    #[derive(Clone, Copy, PartialEq)]
-    enum Ctx {
-        None,
-        Title,
-        Desc,
-        Subject,
-        Category,
-    }
-
-    let mut reader = Reader::from_reader(xmp_bytes);
-    reader.config_mut().trim_text(true);
-
-    let mut result = ReadResult::default();
-    let mut ctx = Ctx::None;
-    let mut text_buf = String::new();
-    let mut buf = Vec::new();
-
-    loop {
-        buf.clear();
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) => match e.local_name().as_ref() {
-                b"title" => ctx = Ctx::Title,
-                b"description" => ctx = Ctx::Desc,
-                b"subject" => ctx = Ctx::Subject,
-                b"Category" => { ctx = Ctx::Category; text_buf.clear(); }
-                b"li" if ctx != Ctx::None => text_buf.clear(),
-                _ => {}
-            },
-            Ok(Event::End(ref e)) => match e.local_name().as_ref() {
-                b"li" if ctx != Ctx::None => {
-                    let text = text_buf.trim().to_string();
-                    if !text.is_empty() {
-                        match ctx {
-                            Ctx::Title if result.title.is_empty() => result.title = text,
-                            Ctx::Desc if result.description.is_empty() => result.description = text,
-                            Ctx::Subject => {
-                                if !result.keywords.contains(&text) {
-                                    result.keywords.push(text);
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    text_buf.clear();
-                }
-                b"Category" => {
-                    let text = text_buf.trim().to_string();
-                    if !text.is_empty() {
-                        result.categories = text;
-                    }
-                    text_buf.clear();
-                    ctx = Ctx::None;
-                }
-                b"title" | b"description" | b"subject" => ctx = Ctx::None,
-                _ => {}
-            },
-            Ok(Event::Text(e)) => {
-                if ctx != Ctx::None {
-                    if let Ok(cow) = e.xml_content() {
-                        text_buf.push_str(&cow);
-                    }
-                }
-            }
-            Ok(Event::GeneralRef(e)) => {
-                if ctx != Ctx::None {
-                    let name = e.into_inner();
-                    let ch = match name.as_ref() {
-                        b"amp"  => "&",
-                        b"lt"   => "<",
-                        b"gt"   => ">",
-                        b"apos" => "'",
-                        b"quot" => "\"",
-                        _ => "",
-                    };
-                    text_buf.push_str(ch);
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                warn!("parse_xmp: XML parse error: {e}");
-                break;
-            }
-            _ => {}
-        }
-    }
-
-    result
-}
-
-// ── Per-format XMP read/write ──────────────────────────────────────────────
-
-const JPEG_XMP_HEADER: &[u8] = b"http://ns.adobe.com/xap/1.0/\0";
-
-fn get_jpeg_xmp(jpeg: &Jpeg) -> Option<Bytes> {
-    jpeg.segments()
-        .iter()
-        .find(|seg| seg.marker() == markers::APP1 && seg.contents().starts_with(JPEG_XMP_HEADER))
-        .map(|seg| seg.contents().slice(JPEG_XMP_HEADER.len()..))
-}
-
-fn set_jpeg_xmp(jpeg: &mut Jpeg, xmp: Bytes) {
-    jpeg.segments_mut().retain(|seg| {
-        !(seg.marker() == markers::APP1 && seg.contents().starts_with(JPEG_XMP_HEADER))
-    });
-    let mut contents = BytesMut::with_capacity(JPEG_XMP_HEADER.len() + xmp.len());
-    contents.extend_from_slice(JPEG_XMP_HEADER);
-    contents.extend_from_slice(&xmp);
-    let segment = JpegSegment::new_with_contents(markers::APP1, contents.freeze());
-    jpeg.segments_mut().insert(0, segment);
-}
-
-const PNG_ITXT: [u8; 4] = [b'i', b'T', b'X', b't'];
-const PNG_XMP_KEYWORD: &[u8] = b"XML:com.adobe.xmp";
-// iTXt header size: keyword + \0 + flags(2) + lang\0 + trans\0 = keyword_len + 5
-const PNG_XMP_HEADER_LEN: usize = PNG_XMP_KEYWORD.len() + 5;
-
-fn get_png_xmp(png: &Png) -> Option<Bytes> {
-    png.chunk_by_type(PNG_ITXT)
-        .filter(|chunk| chunk.contents().starts_with(PNG_XMP_KEYWORD))
-        .map(|chunk| chunk.contents().slice(PNG_XMP_HEADER_LEN..))
-}
-
-fn set_png_xmp(png: &mut Png, xmp: Bytes) {
-    // Remove only the XMP iTXt chunk; other iTXt chunks (copyright, comments, etc.) are preserved.
-    png.chunks_mut().retain(|chunk| {
-        !(chunk.kind() == PNG_ITXT && chunk.contents().starts_with(PNG_XMP_KEYWORD))
-    });
-    let mut contents = BytesMut::with_capacity(PNG_XMP_HEADER_LEN + xmp.len());
-    contents.extend_from_slice(PNG_XMP_KEYWORD);
-    contents.extend_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x00]);
-    contents.extend_from_slice(&xmp);
-    let chunk = PngChunk::new(PNG_ITXT, contents.freeze());
-    let pos = png.chunks().len().saturating_sub(1);
-    png.chunks_mut().insert(pos, chunk);
-}
-
-fn get_webp_xmp(webp: &WebP) -> Option<Bytes> {
-    webp.chunk_by_id(CHUNK_XMP)
-        .and_then(|chunk| chunk.content().data().cloned())
-}
-
-fn set_webp_xmp(webp: &mut WebP, xmp: Bytes) {
-    webp.remove_chunks_by_id(CHUNK_XMP);
-    let chunk = img_parts::riff::RiffChunk::new(CHUNK_XMP, RiffContent::Data(xmp));
-    webp.chunks_mut().push(chunk);
-}
-
-// ── Commands ──────────────────────────────────────────────────────────────
-
-/// Read XMP metadata fields from an image file.
-/// Returns default (empty) values if the file has no XMP.
-#[tauri::command]
-fn read_metadata(path: String) -> Result<ReadResult, String> {
-    let p = std::path::Path::new(&path);
-    info!("read_metadata: {}", p.display());
-
-    let raw = std::fs::read(p).map_err(|e| e.to_string())?;
-    let image = DynImage::from_bytes(Bytes::from(raw))
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Unsupported format: {}", p.display()))?;
-
-    let xmp = match &image {
-        DynImage::Jpeg(jpeg) => get_jpeg_xmp(jpeg),
-        DynImage::Png(png) => get_png_xmp(png),
-        DynImage::WebP(webp) => get_webp_xmp(webp),
+fn save_metadata(
+    metadata: SaveRequest,
+    state: tauri::State<'_, store::DbState>,
+) -> Result<String, String> {
+    // Single-file save delegates to the same per-file path used by every batch item,
+    // so the result is identical whether saved alone or as part of a batch.
+    let old_path = metadata.filepath.clone();
+    let stored = store::StoredMetadata {
+        title: metadata.title.clone(),
+        description: metadata.description.clone(),
+        keywords: metadata.keywords.clone(),
+        categories: metadata.categories.clone(),
+        release_filename: metadata.release_filename.clone(),
+        editorial: metadata.editorial,
+        mature_content: metadata.mature_content,
+        illustration: metadata.illustration,
     };
-
-    let result = xmp.as_deref().map(parse_xmp).unwrap_or_default();
-    debug!("read_metadata: title={:?} keywords_count={}", result.title, result.keywords.len());
-    debug!("read_metadata: keywords={}", result.keywords.join(", "));
-    Ok(result)
+    let final_path = batch::save_one(metadata)?;
+    // After the file write, refresh the store record and mark it synced (FR-016).
+    state.sync_after_save(&old_path, &final_path, &stored);
+    Ok(final_path)
 }
 
-/// Write XMP metadata into the image file.
-/// If `filename` (stem) differs from the current stem, the file is renamed.
-/// Returns the final file path (new path if renamed, original path otherwise).
+/// On-demand single-photo generation: produce the requested size(s) and return both cache paths.
+/// Used by the viewer (high) and lazy list previews (low); CPU work runs off the UI thread.
+/// An explicit viewer-open uses this regardless of the folder scope (FR-017).
 #[tauri::command]
-fn save_metadata(metadata: SaveRequest) -> Result<String, String> {
-    let orig_path = std::path::Path::new(&metadata.filepath);
-    info!("save_metadata: {}", orig_path.display());
-
-    // ── Read and mutate image ──
-    let raw = std::fs::read(orig_path).map_err(|e| e.to_string())?;
-    let mut image = DynImage::from_bytes(Bytes::from(raw))
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| {
-            let msg = format!("Unsupported format: {}", orig_path.display());
-            error!("{msg}");
-            msg
-        })?;
-
-    let xmp = build_xmp(&metadata).map_err(|e| e.to_string())?;
-    debug!("XMP packet size: {} bytes", xmp.len());
-
-    match &mut image {
-        DynImage::Jpeg(jpeg) => set_jpeg_xmp(jpeg, xmp),
-        DynImage::Png(png) => set_png_xmp(png, xmp),
-        DynImage::WebP(webp) => set_webp_xmp(webp, xmp),
-    }
-
-    // ── Determine target path (rename if stem changed) ──
-    let orig_stem = orig_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
-
-    // Strip any extension the user may have accidentally typed
-    let new_stem = {
-        let s = metadata.filename.trim();
-        std::path::Path::new(s)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or(s)
-            .to_string()
-    };
-
-    let final_path = if !new_stem.is_empty() && new_stem != orig_stem {
-        let ext = orig_path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        let new_name = if ext.is_empty() {
-            new_stem.clone()
-        } else {
-            format!("{}.{}", new_stem, ext)
-        };
-        orig_path.parent().unwrap_or(orig_path).join(&new_name)
-    } else {
-        orig_path.to_path_buf()
-    };
-
-    // ── Write image ──
-    let mut buf = Cursor::new(Vec::new());
-    image.encoder().write_to(&mut buf).map_err(|e| e.to_string())?;
-    let image_bytes = buf.into_inner();
-
-    if final_path != orig_path {
-        // create_new(true) → O_CREAT|O_EXCL: atomic check-and-create, eliminates TOCTOU.
-        use std::io::Write as _;
-        std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&final_path)
-            .and_then(|mut f| f.write_all(&image_bytes))
-            .map_err(|e| {
-                let msg = if e.kind() == std::io::ErrorKind::AlreadyExists {
-                    format!(
-                        "File already exists: {}",
-                        final_path.file_name().unwrap_or_default().to_string_lossy()
-                    )
-                } else {
-                    e.to_string()
-                };
-                error!("Failed to write {}: {msg}", final_path.display());
-                msg
-            })?;
-        if let Err(e) = std::fs::remove_file(orig_path) {
-            error!("Failed to delete original {}: {e}", orig_path.display());
-        }
-        info!("renamed: {} → {}", orig_path.display(), final_path.display());
-    } else {
-        std::fs::write(&final_path, &image_bytes).map_err(|e| {
-            let msg = e.to_string();
-            error!("Failed to write {}: {msg}", final_path.display());
-            msg
-        })?;
-    }
-
-    info!("save_metadata: done → {}", final_path.display());
-    Ok(final_path.to_string_lossy().to_string())
-}
-
-// ── File watcher state ────────────────────────────────────────────────────
-
-pub struct WatcherState(pub Mutex<Option<RecommendedWatcher>>);
-
-// ── File tree ─────────────────────────────────────────────────────────────
-
-#[derive(Serialize, Clone)]
-pub struct FileNode {
-    pub name: String,
-    pub path: String,
-    pub is_dir: bool,
-    pub children: Vec<FileNode>,
-}
-
-/// Re-scan a folder path that was previously opened (no dialog).
-/// Called by the frontend after a `folder-changed` event.
-#[tauri::command]
-async fn scan_folder(path: String) -> Result<FileNode, String> {
-    let p = std::path::PathBuf::from(path);
-    tokio::task::spawn_blocking(move || scan_dir(&p))
+async fn cache_thumbnail(path: String, low: bool, high: bool) -> Result<photo::Thumbnails, String> {
+    tokio::task::spawn_blocking(move || photo::ensure(std::path::Path::new(&path), low, high))
         .await
         .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
 }
 
-/// Start watching a folder for changes and emit `folder-changed` events.
-fn start_watching(app: &tauri::AppHandle, path: &std::path::Path) {
-    use tauri::Manager;
-    let app_clone = app.clone();
-    let watch_path = path.to_string_lossy().to_string();
-
-    match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-        if res.is_ok() {
-            use tauri::Emitter;
-            app_clone.emit("folder-changed", &watch_path).ok();
-        }
-    }) {
-        Ok(mut watcher) => {
-            if let Err(e) = watcher.watch(path, RecursiveMode::Recursive) {
-                error!("Failed to watch folder: {e}");
-            } else {
-                info!("Watching: {}", path.display());
-                let state = app.state::<WatcherState>();
-                // Replacing the previous watcher implicitly drops it, which stops watching the old folder.
-                *state.0.lock().unwrap_or_else(|e| e.into_inner()) = Some(watcher);
-            }
-        }
-        Err(e) => error!("Failed to create watcher: {e}"),
-    }
-}
-
-/// Open a folder by path without a dialog (used to restore last folder on startup).
+/// Whether the `_thumbnail` cache folder still exists for an opened folder. The UI calls this when
+/// switching to a thumbnail view so a cache deleted on disk can be detected and regenerated.
 #[tauri::command]
-async fn open_folder_path(app: tauri::AppHandle, path: String) -> Result<FileNode, String> {
-    let path = std::path::PathBuf::from(&path);
-    if !path.is_dir() {
-        return Err(format!("Not a directory: {}", path.display()));
-    }
-    info!("open_folder_path: {}", path.display());
-    let scan_path = path.clone();
-    let node = tokio::task::spawn_blocking(move || scan_dir(&scan_path))
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| {
-            let msg = e.to_string();
-            error!("scan_dir failed: {msg}");
-            msg
-        })?;
-    start_watching(&app, &path);
-    Ok(node)
+fn thumbnail_dir_exists(path: String, recursive: bool) -> bool {
+    photo::thumbnail_dir_exists(Path::new(&path), recursive)
 }
 
 #[tauri::command]
-async fn open_folder(app: tauri::AppHandle) -> Result<Option<FileNode>, String> {
+async fn scan_folder(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, FolderState>,
+    path: String,
+    gen: GenConfig,
+) -> Result<FileNode, String> {
+    PhotoFolder::rescan(&app, state.inner(), Path::new(&path), gen).await
+}
+
+#[tauri::command]
+async fn open_folder_path(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, FolderState>,
+    path: String,
+    gen: GenConfig,
+) -> Result<FileNode, String> {
+    PhotoFolder::open(&app, state.inner(), Path::new(&path), gen).await
+}
+
+#[tauri::command]
+async fn open_folder(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, FolderState>,
+    gen: GenConfig,
+) -> Result<Option<FileNode>, String> {
     use tauri_plugin_dialog::DialogExt;
 
-    // Non-blocking: pick_folder fires the callback from a native dialog thread.
-    // blocking_pick_folder() would stall the main thread → "Not Responding" on Windows.
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.dialog().file().pick_folder(move |result| {
         let _ = tx.send(result);
@@ -565,79 +155,10 @@ async fn open_folder(app: tauri::AppHandle) -> Result<Option<FileNode>, String> 
         info!("open_folder: cancelled");
         return Ok(None);
     };
-
     let path = folder.into_path().map_err(|e| e.to_string())?;
     info!("open_folder: {}", path.display());
-    let scan_path = path.clone();
-    let node = tokio::task::spawn_blocking(move || scan_dir(&scan_path))
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| {
-            let msg = e.to_string();
-            error!("scan_dir failed: {msg}");
-            msg
-        })?;
-    start_watching(&app, &path);
+    let node = PhotoFolder::open(&app, state.inner(), &path, gen).await?;
     Ok(Some(node))
-}
-
-fn scan_dir(path: &std::path::Path) -> std::io::Result<FileNode> {
-    let name = path
-        .file_name()
-        .unwrap_or(path.as_os_str())
-        .to_string_lossy()
-        .to_string();
-
-    let mut children = Vec::new();
-
-    // Cache is_dir from metadata to avoid repeated syscalls per entry.
-    let is_dir = path.metadata().map(|m| m.is_dir()).unwrap_or(false);
-
-    if is_dir {
-        let mut entries: Vec<_> = std::fs::read_dir(path)?
-            .filter_map(|e| match e {
-                Ok(entry) => Some(entry),
-                Err(err) => {
-                    warn!("scan_dir: skipping entry in {}: {err}", path.display());
-                    None
-                }
-            })
-            .collect();
-
-        entries.sort_by(|a, b| {
-            let a_dir = a.file_type().map(|t| t.is_dir()).unwrap_or(false);
-            let b_dir = b.file_type().map(|t| t.is_dir()).unwrap_or(false);
-            b_dir.cmp(&a_dir).then_with(|| a.file_name().cmp(&b.file_name()))
-        });
-
-        for entry in entries {
-            let child = entry.path();
-            let child_is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
-            if child_is_dir || is_supported_image(&child) {
-                match scan_dir(&child) {
-                    Ok(node) => children.push(node),
-                    Err(err) => warn!("scan_dir: skipping {}: {err}", child.display()),
-                }
-            }
-        }
-    }
-
-    Ok(FileNode {
-        name,
-        path: path.to_string_lossy().to_string(),
-        is_dir,
-        children,
-    })
-}
-
-fn is_supported_image(path: &std::path::Path) -> bool {
-    matches!(
-        path.extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.to_ascii_lowercase())
-            .as_deref(),
-        Some("jpg" | "jpeg" | "png" | "webp")
-    )
 }
 
 // ── App entry ─────────────────────────────────────────────────────────────
@@ -645,26 +166,106 @@ fn is_supported_image(path: &std::path::Path) -> bool {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .manage(WatcherState(Mutex::new(None)))
+        // Registered first: a second launch focuses the existing window instead of
+        // opening another instance.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
+        .manage(FolderState::default())
+        .manage(BatchState::default())
+        .manage(ollama::OllamaState::default())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(if cfg!(debug_assertions) {
-                    log::LevelFilter::Debug
+                    log::LevelFilter::Trace
                 } else {
                     log::LevelFilter::Info
                 })
-                .target(tauri_plugin_log::Target::new(
-                    tauri_plugin_log::TargetKind::LogDir {
+                // Per-target formatting: neutralize the shared format, then format each target itself —
+                // stdout gets ANSI colors, the log file stays plain (no escape codes).
+                .clear_format()
+                .clear_targets()
+                .target(
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout).format(
+                        |out, message, record| {
+                            let level = record.level();
+                            out.finish(format_args!(
+                                "{}[\x1b[{}m{:<5}\x1b[0m][{}] {}",
+                                log_timestamp(),
+                                level_ansi(level),
+                                level,
+                                record.target(),
+                                message
+                            ));
+                        },
+                    ),
+                )
+                .target(
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
                         file_name: Some("attributor".into()),
-                    },
-                ))
+                    })
+                    .format(|out, message, record| {
+                        out.finish(format_args!(
+                            "{}[{:<5}][{}] {}",
+                            log_timestamp(),
+                            record.level(),
+                            record.target(),
+                            message
+                        ));
+                    }),
+                )
                 .build(),
         )
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![read_metadata, save_metadata, open_folder, open_folder_path, scan_folder, search_keywords])
+        .plugin(tauri_plugin_prevent_default::Builder::new()
+            .with_flags(Flags::all().difference(Flags::RELOAD))
+            .build())
+        .setup(|app| {
+            // Open the intermediate metadata store in the app-data dir; degrades to direct file
+            // access on any error so editing always works (FR-021).
+            match app.path().app_data_dir() {
+                Ok(dir) => {
+                    std::fs::create_dir_all(&dir).ok();
+                    app.manage(store::DbState::open(&dir.join("metadata.db")));
+                }
+                Err(e) => {
+                    log::error!("app_data_dir unavailable: {e}; metadata store disabled");
+                    app.manage(store::DbState::disabled());
+                }
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            read_metadata,
+            save_metadata,
+            save_metadata_batch,
+            cancel_batch,
+            store::open_metadata,
+            store::store_metadata,
+            store::revert_to_file,
+            store::apply_metadata_source,
+            cache_thumbnail,
+            thumbnail_dir_exists,
+            open_folder,
+            open_folder_path,
+            scan_folder,
+            search_keywords,
+            detect_os_locale,
+            ollama::ollama_status,
+            ollama::ollama_list_models,
+            ollama::ollama_pull_model,
+            ollama::install_ollama,
+            ollama::ollama_cancel,
+            ollama::attribute_photo,
+            ollama::attribute_batch,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

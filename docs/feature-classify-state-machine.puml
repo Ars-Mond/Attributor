@@ -1,0 +1,75 @@
+@startuml feature-classify-state-machine
+title Attributor — classify(path, cache) state machine\nSource State transitions + Reader-version gate
+
+' ── Look & feel ──────────────────────────────────────────────────────
+skinparam linetype ortho
+skinparam nodesep 45
+skinparam ranksep 60
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam ArrowColor #3A3A3A
+skinparam ArrowThickness 1.2
+skinparam state {
+  BorderColor #3A3A3A
+  FontColor #1A1A1A
+  AttributeFontColor #555555
+}
+
+' Terminal FileState colours (mirror events.rs MetadataStatusKind):
+'  Untracked #C8E6C9 · Fresh #BBDEFB · Conflict #FFCDD2 · Missing #FFE0B2 · Unreadable #ECEFF1
+
+state "scan(): fs::metadata" as SCAN #FFFFFF
+
+state "Missing\n{ last_known }" as MISSING #FFE0B2
+state "Untracked\n{ metadata }" as UNTRACKED #C8E6C9
+state "Unreadable\n{ reason }" as UNREAD #ECEFF1
+state "Fresh\n{ metadata }" as FRESH #BBDEFB
+state "Conflict\n{ from_file, from_cache, fields_diff }" as CONFLICT #FFCDD2
+
+state "Stage 1\n(size,mtime) == cache ?" as STAGE1 #FFF9C4
+state "Reader-version gate\nrow.reader_version < READER_VERSION ?\n(FR-015 — DEFERRED)" as RVGATE #E1BEE7
+state "Stage 2\nSHA-256 full file\nhash == cache.hash ?" as STAGE2 #FFF9C4
+state "read_metadata\nfile == cache.metadata ?" as METACMP #FFF9C4
+
+[*] --> SCAN : folder open
+
+' ── Top split: NotFound / no row / row present ───────────────────────
+SCAN --> MISSING : NotFound + row in DB
+SCAN --> UNTRACKED : no row in DB\n(read_metadata Ok → seed row)
+SCAN --> UNREAD : no row + read_metadata Err
+SCAN --> RVGATE : row in DB
+
+' ── Reader-version gate (FR-015) ─────────────────────────────────────
+RVGATE --> STAGE1 : no (reader_version current)
+RVGATE --> METACMP : yes — force Stage 2 re-read
+
+' ── Stage 1 (cheap, content-free) ────────────────────────────────────
+STAGE1 --> FRESH : yes — Stage-1 short-circuit\n(no file read, FR-012)
+STAGE1 --> STAGE2 : no
+
+' ── Stage 2 (hash) ───────────────────────────────────────────────────
+STAGE2 --> FRESH : hash == cache\nsilent refresh mtime (FR-013)
+STAGE2 --> METACMP : hash != cache\nread_metadata
+
+' ── Metadata comparison → Fresh / Conflict ───────────────────────────
+METACMP --> FRESH : equal — silent refresh\nhash/mtime (+ reader_version, FR-015)
+METACMP --> CONFLICT : differ && edited\n(user edit protected, FR-016)
+METACMP --> FRESH : differ && !edited\nfile wins, self-heal (FR-015)
+METACMP --> UNREAD : read_metadata Err
+
+' ── Conflict resolution (US3) ────────────────────────────────────────
+CONFLICT --> FRESH : resolve_conflict\nFile / Cache / Merge → upsert
+
+FRESH --> [*]
+UNTRACKED --> [*]
+MISSING --> [*]
+UNREAD --> [*]
+
+note bottom of CONFLICT
+  After every terminal transition the file on disk
+  is NOT modified (FR-014). Cache row is never deleted
+  on FS deletion (invariant I-8).
+end note
+
+@enduml

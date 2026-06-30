@@ -1,0 +1,192 @@
+---
+config:
+  layout: elk
+---
+flowchart TD
+
+    %% ── External node ───────────────────────────────────────────
+    n22["Attributor"]
+
+    %% ── Load data ───────────────────────────────────────────────
+    subgraph s3["Load Data"]
+        A["Open dialog"]
+        A1["Read folder"]
+        n23["Read file path (photos)"]
+        n24["Save to memory (Will be handled by FolderProcessor)"]
+    end
+
+    %% ── Read file ───────────────────────────────────────────────
+    subgraph s2r["Read File"]
+        A3r["Cache exists? (SQLite)"]
+        B1["File hash matches cache? (hash — sha256 of file + mtime)"]
+        B2["Read from cache"]
+        D1["Read metadata"]
+        D2["Write to cache"]
+        n21["Return value"]
+        n25["Data exists in cache?"]
+        n26["Read metadata"]
+        n27["Data matches?"]
+        n28["Update hash in cache"]
+        n29["Ask"]
+        n30["What was changed last?"]
+        n31["Update cache"]
+        n32["Choice for all already set?"]
+        n33["Execute by choice"]
+    end
+
+    %% ── Import CSV ──────────────────────────────────────────────
+    subgraph s1i["Import CSV"]
+        n7i["Read CSV"]
+        A2["Read file path"]
+        n18["File exists?"]
+        n16["File changed?"]
+        n17["Update file"]
+        n19["Write skipped file to temp buffer"]
+        n20["Data exists in cache?"]
+        n9i["Choice for all already set?"]
+        n2i["Ask for choice"]
+        n8i["Set choice for all"]
+        n10i["Execute by choice"]
+        n4i["Read metadata from both sources"]
+        n5i["Read metadata from CSV"]
+        n6i["Read metadata from cache"]
+        C3["Update cache"]
+        n11i["Next path exists?"]
+        n12i["Select next path"]
+        n13i["End"]
+    end
+
+    %% ── Export to CSV ───────────────────────────────────────────
+    subgraph s1e["Export to CSV"]
+        A3e["Read folder path"]
+        n1e["Read CSV template list"]
+        n2e["Read template"]
+        n3e["Fill metadata into CSV"]
+        n4e["Save CSV"]
+        n5e["Next template exists?"]
+        n6e["Select next template"]
+        n7e["Report export complete"]
+        n8e["Exit"]
+        n11e["Read all metadata"]
+    end
+
+    %% ── Export to Metadata ──────────────────────────────────────
+    subgraph s2e["Export to Metadata"]
+        n9e["Read folder path"]
+        n10e["Read all metadata for folder"]
+        n12e["Write metadata to photo"]
+        n13e["Save photo"]
+        n14e["Update hash in cache"]
+        n15e["Next photo exists?"]
+        n16e["Select next photo"]
+        n17e["Report export complete"]
+        n18e["End"]
+    end
+
+    %% ── Edges: Load Data (s3) ────────────────────────────────────
+    A   --> A1
+    A1  --> n23
+    n23 --> n24
+
+    %% ── Edges: Read File (s2r) ───────────────────────────────────
+    A3r -- Yes --> B1
+    A3r -- No  --> D1
+    B1  -- Yes --> B2
+    B1  -- No  --> n26
+    D1  --> D2
+    B2  --> n21
+    D2  --> n21
+    n26 --> n25
+    n25 -- Yes --> n32
+    n25 -- No  --> D2
+    n27 -- Yes --> n28
+    n28 --> B2
+    n27 -- No  --> n29
+    n29 -- By time      --> n30
+    n29 -- From metadata --> n31
+    n29 -- From cache    --> B2
+    n30 -- Metadata      --> n31
+    n30 -- Cache         --> B2
+    n31 --> n21
+    n32 -- Yes --> n33
+    n32 -- No  --> n27
+    n33 --> n31 & n30 & B2
+
+    %% ── Edges: Import CSV (s1i) ──────────────────────────────────
+    n7i  --> A2
+    A2   --> n18
+    n18  -- Yes --> n16
+    n18  -- No  --> n19
+    n16  -- Yes --> n17
+    n16  -- No  --> n20
+    n17  --> n20
+    n19  --> n11i
+    n20  -- Yes  --> n9i
+    n20  -- No   --> C3
+    n9i  -- No   --> n2i
+    n9i  -- Yes  --> n10i
+    n2i  -- Yes/No  --> n8i
+    n2i  -- Merge   --> n4i
+    n2i  -- From CSV --> n5i
+    n2i  -- From cache --> n6i
+    n8i  --> n2i
+    n10i --> n4i & n5i & n6i
+    n4i  --> C3
+    n5i  --> C3
+    n6i  --> C3
+    C3   --> n11i
+    n11i -- Yes --> n12i
+    n11i -- No  --> n13i
+    n12i --> A2
+
+    %% ── Edges: Export to CSV (s1e) ───────────────────────────────
+    A3e  --> n11e
+    n11e --> n1e
+    n1e  --> n2e
+    n2e  --> n3e
+    n3e  --> n4e
+    n4e  --> n5e
+    n5e  -- Yes --> n6e
+    n5e  -- No  --> n7e
+    n6e  --> n2e
+    n7e  --> n8e
+
+    %% ── Edges: Export to Metadata (s2e) ──────────────────────────
+    n9e  --> n10e
+    n10e --> n12e
+    n12e --> n13e
+    n13e --> n14e
+    n14e --> n15e
+    n15e -- Yes --> n16e
+    n15e -- No  --> n17e
+    n16e --> n12e
+    n17e --> n18e
+
+    %% ── Edges: Cross-subgraph ─────────────────────────────────────
+    n17  <-.->                    s2r
+    n23  <-.->                    s2r
+    n22  -. Import from CSV    .-> s1i
+    n22  -. Open folder        .-> s3
+    n22  -. Export to CSV      .-> s1e
+    n22  -. Export to metadata .-> s2e
+
+    %% ── Shapes ───────────────────────────────────────────────────
+    n22@{  shape: trap-b }
+    n23@{  shape: rect }
+    n26@{  shape: rect }
+    n33@{  shape: rect }
+    A3r@{  shape: hex }
+    B1@{   shape: hex }
+    n25@{  shape: hex }
+    n27@{  shape: hex }
+    n29@{  shape: hex }
+    n30@{  shape: hex }
+    n32@{  shape: hex }
+    n2i@{  shape: hex }
+    n9i@{  shape: hex }
+    n11i@{ shape: hex }
+    n16@{  shape: hex }
+    n18@{  shape: hex }
+    n20@{  shape: hex }
+    n5e@{  shape: hex }
+    n15e@{ shape: hex }

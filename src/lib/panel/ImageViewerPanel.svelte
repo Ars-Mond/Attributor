@@ -1,24 +1,33 @@
 <script lang="ts">
+    import {t} from '$lib/i18n';
+
     interface Props {
         imageSrc: string | null;
+        loading?: boolean;
         goneMessage: string | null;
         onDismissGone: () => void;
     }
 
-    let {imageSrc, goneMessage, onDismissGone}: Props = $props();
+    let {imageSrc, loading = false, goneMessage, onDismissGone}: Props = $props();
 </script>
 
 <div class="viewer">
     {#if imageSrc}
-        <img class="image" src={imageSrc} alt="Preview" />
-    {:else}
+        <img class="image" src={imageSrc} alt={t('imageViewer.image.alt')} />
+    {:else if !loading}
         <div class="placeholder">
             <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
                 <rect x="3" y="3" width="18" height="18" rx="2" />
                 <circle cx="8.5" cy="8.5" r="1.5" />
                 <path d="M21 15l-5-5L5 21" />
             </svg>
-            <p>No image open</p>
+            <p>{t('imageViewer.placeholder.noImage')}</p>
+        </div>
+    {/if}
+
+    {#if loading}
+        <div class="loading-overlay" aria-label={t('imageViewer.loading.ariaLabel')}>
+            <div class="spinner"></div>
         </div>
     {/if}
 
@@ -28,9 +37,9 @@
                 <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
             </svg>
             <span>
-                <strong>{goneMessage}</strong> was moved or deleted externally.
+                <strong>{goneMessage}</strong> {t('imageViewer.gone.message')}
             </span>
-            <button class="gone-close" onclick={onDismissGone} aria-label="Dismiss">×</button>
+            <button class="gone-close" onclick={onDismissGone} aria-label={t('common.dismiss')}>×</button>
         </div>
     {/if}
 </div>
@@ -61,6 +70,27 @@
 
         svg {opacity: 0.4;}
         p {font-size: $fs-regular;}
+    }
+
+    .loading-overlay {
+        position: absolute;
+        inset: 0;
+        @include flex(row, center, center);
+        background: var(--overlay-loading);
+        backdrop-filter: blur(2px);
+    }
+
+    .spinner {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 2.5px solid var(--spinner-track);
+        border-top-color: var(--spinner-color);
+        animation: spin 0.65s linear infinite;
+    }
+
+    @keyframes spin {
+        to {transform: rotate(360deg);}
     }
 
     .gone-toast {

@@ -1,0 +1,108 @@
+@startuml feature-deferred-metadata-cache
+title Attributor — Deferred-Write Metadata Cache\nSource
+
+' ── Global look & feel ───────────────────────────────────────────────
+skinparam linetype ortho
+skinparam nodesep 55
+skinparam ranksep 70
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam ArrowColor #3A3A3A
+skinparam ArrowThickness 1.2
+skinparam rectangle {
+  BorderColor #3A3A3A
+  FontColor #1A1A1A
+  roundCorner 12
+}
+skinparam database {
+  BorderColor #3A3A3A
+  FontColor #1A1A1A
+}
+skinparam queue {
+  BorderColor #3A3A3A
+  FontColor #1A1A1A
+}
+
+' Layer colours:
+'  Frontend #BBDEFB · IPC #FFE0B2 · Backend #C8E6C9 · Storage #E1BEE7 · Disk #FFF9C4
+
+' ── Frontend (US1/US2/US3/US5 consumers) ─────────────────────────────
+package "Frontend — SvelteKit / Svelte 5 runes" {
+  rectangle "FilesPanel.svelte\ngallery tiles +\nfile-watcher rescan" as FP #BBDEFB
+  rectangle "MetadataPanel.svelte\nedit form + debounced autosave\n(US5, FR-040/041/050)" as MP #BBDEFB
+  rectangle "folderLoader.svelte.ts\nread_folder + subscribe\nmetadata-status" as FL #BBDEFB
+  rectangle "metadataStore.svelte.ts\nper-path cache + tile state" as MS #BBDEFB
+  rectangle "ConflictQueue (US3/US4)\nDEFERRED — Phase 6/7" as CQ #BBDEFB
+}
+
+' ── Tauri IPC (contracts/tauri-commands.md) ──────────────────────────
+package "Tauri IPC — typed commands (FR-VI)" {
+  rectangle "read_folder\n→ gallery shell\n(US1, FR-010..014)" as C_READ #FFE0B2
+  rectangle "save_metadata_cached\n(US5, FR-040/042)" as C_SAVE #FFE0B2
+  rectangle "save_metadata_cached_batch\n1 txn (US5, FR-041)" as C_BATCH #FFE0B2
+  rectangle "get_cached_metadata\n(US5)" as C_GET #FFE0B2
+  rectangle "resolve_conflict\nFile/Cache/Merge\n(US3, DEFERRED)" as C_RES #FFE0B2
+  queue "event: metadata-status\nUntracked·Fresh·Conflict·\nMissing·Unreadable" as EV #FFE0B2
+}
+
+' ── Backend (Rust modules) ───────────────────────────────────────────
+package "Backend — Rust (Principle I/VIII)" {
+  rectangle "folder_processor\nscan_supported_images +\nrayon classify_and_emit (FR-060/061)" as FPROC #C8E6C9
+  rectangle "photo_processor::classify\nFileState machine\n(see state diagram)" as PP #C8E6C9
+  rectangle "hash\nstat() = Stage-1 (FR-012)\nfingerprint() = Stage-2 SHA-256" as HASH #C8E6C9
+  rectangle "metadata::read_metadata\nXMP/EXIF/IPTC via little_exif\n(bump READER_VERSION on change!)" as MD #C8E6C9
+  rectangle "lib::build_edit_entry\nedited=true (FR-016)\nkeep fingerprint (FR-042)" as BEE #C8E6C9
+  rectangle "AppState\ncache + pending_conflicts" as AS #C8E6C9
+}
+
+' ── Storage + disk ───────────────────────────────────────────────────
+database "CacheStore — SQLite (WAL, user_version=1)\nphoto_cache: size·mtime·hash·{title,desc,kw,cat}\nreader_version·edited·updated_at·exported_at\nschema_meta(k,v)" as DB #E1BEE7
+rectangle "Photo files on disk\nJPEG / PNG / WebP\nREAD-ONLY (FR-014 / FR-003)" as DISK #FFF9C4
+
+' ── US1/US2 open-folder + classify flow ──────────────────────────────
+FP --> C_READ : open folder
+C_READ --> FPROC : spawn_blocking
+FPROC --> PP : per photo (rayon)
+PP --> HASH : Stage-1 stat / Stage-2 hash
+PP --> MD : read on Stage-2 miss / Untracked
+HASH ..> DISK : stat / stream bytes
+MD ..> DISK : parse metadata
+PP <--> DB : get row / upsert seed
+PP --> EV : FileState → MetadataStatusKind
+EV --> FL : streamed per photo
+FL --> MS : dispatch by state
+MS --> FP : tile (Fresh/Missing/Unreadable)
+MS --> MP : selected metadata
+MS --> CQ : Conflict enqueue (US3)
+
+' ── US5 deferred-write edit flow ─────────────────────────────────────
+MP --> C_SAVE : autosave
+MP --> C_BATCH : multi-select
+MP --> C_GET : read current
+CQ --> C_RES : user resolves
+C_SAVE --> BEE
+C_BATCH --> BEE
+C_RES --> AS : pending_conflicts guard (FR-022)
+BEE --> DB : upsert (batch = 1 txn)
+C_GET --> DB
+C_RES --> DB
+AS --> DB
+
+' Hard invariant: edits never touch the file
+BEE -[#B00020,dashed]-> DISK : FR-014 — NO write
+
+legend right
+  | Colour | Layer |
+  |<#BBDEFB>   | Frontend (Svelte) |
+  |<#FFE0B2>   | Tauri IPC commands / events |
+  |<#C8E6C9>   | Backend Rust modules |
+  |<#E1BEE7>   | SQLite cache |
+  |<#FFF9C4>   | Photo files on disk |
+  ----
+  Solid = call/data flow · Dotted = filesystem read
+  Red dashed = forbidden (deferred-write, FR-014)
+  DEFERRED = scoped but not yet implemented (Phase 6/7)
+endlegend
+
+@enduml

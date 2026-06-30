@@ -1,12 +1,15 @@
 <script lang="ts">
     import {invoke} from "@tauri-apps/api/core";
     import {convertFileSrc} from "@tauri-apps/api/core";
-    import {listen} from "@tauri-apps/api/event";
-    import {onMount, onDestroy} from "svelte";
+    import {listenEvent, EVENT} from "$lib/events";
+    import {settings} from "$lib/settings";
+    import {t} from '$lib/i18n';
+    import {onMount, onDestroy, untrack} from "svelte";
     import FileTree from "$reusable/FileTree.svelte";
     import type {FileNode} from "$lib/types";
     import {panelState} from './filesPanelStore.svelte';
     import type {ViewMode, LayoutDir} from './filesPanelStore.svelte';
+    import {progress} from "$lib/progress.svelte";
 
     let {
         onFileSelect,
@@ -33,6 +36,51 @@
         return /\.(jpg|jpeg|png|webp)$/i.test(name);
     }
 
+    // ── Cache settings ─────────────────────────────────────────────────────
+
+    const cacheSmall = $derived(settings.subscribe<boolean>('cache.smallThumbnails')());
+
+    /** Eager-generation config sent to the backend, derived from the cache + folder settings.
+     *  Small (low) thumbnails are always generated up front; only the large (high) thumbnail is
+     *  deferred by lazy caching. `recursive` follows the general "Read nested folders" setting. */
+    function cacheGenConfig() {
+        const lazy = settings.get<boolean>('cache.lazy');
+        return {
+            low: settings.get<boolean>('cache.smallThumbnails'),
+            high: !lazy && settings.get<boolean>('cache.photo'),
+            recursive: settings.get<boolean>('general.nestedFolders'),
+        };
+    }
+
+    // When switching to a thumbnail view, verify the `_thumbnail` cache folder still exists (it may
+    // have been deleted on disk); if it is gone, drop the stale ready flags and rebuild the low
+    // thumbnails for the current scope. Only runs when small-thumbnail caching is enabled.
+    async function refreshThumbnailsIfMissing() {
+        const tree = panelState.fileTree;
+        if (!tree || !cacheSmall || panelState.viewMode === 'table') return;
+        try {
+            const recursive = settings.get<boolean>('general.nestedFolders');
+            const exists = await invoke<boolean>("thumbnail_dir_exists", {path: tree.path, recursive});
+            if (exists) return;
+            // Small thumbnails are eager, so a missing _thumbnail folder means it was deleted on
+            // disk: drop the stale ready flags and rebuild low for the current scope.
+            panelState.readyThumbs.clear();
+            panelState.fileTree = await invoke<FileNode>("scan_folder", {path: tree.path, gen: {low: true, high: false, recursive}});
+        } catch (e) {
+            console.error("thumbnail refresh failed:", e);
+        }
+    }
+
+    $effect(() => {
+        const mode = panelState.viewMode;
+        if (mode === 'content' || mode === 'icons') {
+            // untrack: re-run only on a viewMode change, not on the fileTree/cacheSmall reads inside
+            // refreshThumbnailsIfMissing — otherwise each rescan reassigns fileTree and re-runs this
+            // effect, firing redundant checks and self-feeding the recovery rescan.
+            untrack(() => refreshThumbnailsIfMissing());
+        }
+    });
+
     // Horizontal wheel scroll for content/icons modes
     $effect(() => {
         if (!contentEl || panelState.viewMode === 'table' || panelState.layoutDir !== 'horizontal') return;
@@ -49,6 +97,7 @@
     // ── Folder watching ──────────────────────────────────────────────────
 
     let unlisten: (() => void) | null = null;
+    let unlistenThumb: (() => void) | null = null;
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
     /** Collect all non-directory paths from the tree recursively. */
@@ -127,30 +176,27 @@
         }
     }
 
-    function handleKeyDown(e: KeyboardEvent) {
-        if (disabled) return;
-        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    /**
+     * Move the active file up/down in the list (optionally extending the selection). Wired to the
+     * configurable file-navigation shortcuts; the 'files' shortcut layer guarantees this isn't invoked
+     * while a field is focused, so no input-focus check is needed here.
+     */
+    export function navigate(direction: 'up' | 'down', extend: boolean) {
+        if (disabled || progress.blocking) return;
         if (!contentEl || !panelState.fileTree) return;
-
-        // Don't hijack keyboard when user is typing
-        const active = document.activeElement;
-        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
-
-        e.preventDefault();
 
         const items = [...contentEl.querySelectorAll<HTMLElement>('[data-path]')];
         if (items.length === 0) return;
 
         const currentIdx = items.findIndex(el => el.dataset.path === panelState.activePath);
-        const nextIdx = e.key === 'ArrowDown'
+        const nextIdx = direction === 'down'
             ? (currentIdx === -1 ? 0 : Math.min(currentIdx + 1, items.length - 1))
             : (currentIdx === -1 ? 0 : Math.max(currentIdx - 1, 0));
 
         if (nextIdx === currentIdx && currentIdx !== -1) return;
 
         const path = items[nextIdx].dataset.path!;
-
-        if (e.shiftKey) {
+        if (extend) {
             doRangeSelect(path);
         } else {
             doSingleSelect(path);
@@ -160,14 +206,22 @@
     }
 
     onMount(async () => {
-        window.addEventListener('keydown', handleKeyDown);
-        unlisten = await listen<string>("folder-changed", () => {
+        // readyThumbs records which paths have a ready cached thumbnail. It may retain paths after a
+        // setting is turned off; that is harmless because the display branches independently gate on
+        // the live cacheSmall value, so a cached thumbnail is never shown while caching is off (FR-009).
+        unlistenThumb = await listenEvent(EVENT.thumbnailReady, (p) => {
+            panelState.readyThumbs.add(p.path);
+        });
+        unlisten = await listenEvent(EVENT.folderChanged, () => {
+            // Skip the rescan while a batch metadata save runs — its writes are already known and
+            // would otherwise trigger a wasteful full rescan / thumbnail-pipeline restart (FR-008).
+            if (panelState.batchInProgress) return;
             // Debounce: rapid fs events collapse into one refresh
             if (refreshTimer) clearTimeout(refreshTimer);
             refreshTimer = setTimeout(async () => {
                 if (panelState.fileTree) {
                     try {
-                        const updated = await invoke<FileNode>("scan_folder", {path: panelState.fileTree.path});
+                        const updated = await invoke<FileNode>("scan_folder", {path: panelState.fileTree.path, gen: cacheGenConfig()});
                         panelState.fileTree = updated;
 
                         const allPaths = flatFilePaths(updated);
@@ -194,8 +248,8 @@
     });
 
     onDestroy(() => {
-        window.removeEventListener('keydown', handleKeyDown);
         unlisten?.();
+        unlistenThumb?.();
         if (refreshTimer) clearTimeout(refreshTimer);
     });
 
@@ -204,7 +258,7 @@
     async function openFolder() {
         onBusy?.(true);
         try {
-            const result = await invoke<FileNode | null>("open_folder");
+            const result = await invoke<FileNode | null>("open_folder", {gen: cacheGenConfig()});
             if (result) {
                 panelState.fileTree = result;
                 onFolderOpen?.(result.path);
@@ -222,7 +276,7 @@
     /** Open a folder by path without a dialog (used to restore last session). */
     export async function openFolderByPath(path: string): Promise<boolean> {
         try {
-            const result = await invoke<FileNode>("open_folder_path", {path});
+            const result = await invoke<FileNode>("open_folder_path", {path, gen: cacheGenConfig()});
             panelState.fileTree = result;
             return true;
         } catch {
@@ -241,7 +295,7 @@
 
 <aside class="panel panel--files">
     <div class="files-header">
-        <span class="files-title">Files</span>
+        <span class="files-title">{t('filesPanel.title')}</span>
         <div class="view-controls">
             <!-- View mode buttons -->
             <div class="btn-group">
@@ -249,7 +303,7 @@
                     class="view-btn"
                     class:active={panelState.viewMode === 'table'}
                     onclick={() => panelState.viewMode = 'table'}
-                    title="Table"
+                    title={t('filesPanel.viewMode.table')}
                 >
                     <!-- Table: three horizontal lines -->
                     <svg viewBox="0 0 14 14" fill="currentColor">
@@ -262,7 +316,7 @@
                     class="view-btn"
                     class:active={panelState.viewMode === 'content'}
                     onclick={() => panelState.viewMode = 'content'}
-                    title="Content"
+                    title={t('filesPanel.viewMode.content')}
                 >
                     <!-- Content: thumbnail + text row, twice -->
                     <svg viewBox="0 0 14 14" fill="currentColor">
@@ -278,7 +332,7 @@
                     class="view-btn"
                     class:active={panelState.viewMode === 'icons'}
                     onclick={() => panelState.viewMode = 'icons'}
-                    title="Icons"
+                    title={t('filesPanel.viewMode.icons')}
                 >
                     <!-- Icons: 2x2 grid -->
                     <svg viewBox="0 0 14 14" fill="currentColor">
@@ -297,7 +351,7 @@
                         class="view-btn"
                         class:active={panelState.layoutDir === 'vertical'}
                         onclick={() => panelState.layoutDir = 'vertical'}
-                        title="Vertical"
+                        title={t('filesPanel.layoutDir.vertical')}
                     >
                         <!-- Vertical: three horizontal bars (stack top-down) -->
                         <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
@@ -310,7 +364,7 @@
                         class="view-btn"
                         class:active={panelState.layoutDir === 'horizontal'}
                         onclick={() => panelState.layoutDir = 'horizontal'}
-                        title="Horizontal"
+                        title={t('filesPanel.layoutDir.horizontal')}
                     >
                         <!-- Horizontal: three vertical bars (stack left-right) -->
                         <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
@@ -343,7 +397,13 @@
                         title={node.name}
                         onclick={(e) => handleTreeSelect(node.path, e)}
                     >
-                        <img class="icon-thumb" src={convertFileSrc(node.path)} alt={node.name} />
+                        {#if cacheSmall && node.thumb_low && panelState.readyThumbs.has(node.path)}
+                            <img class="icon-thumb" src={convertFileSrc(node.thumb_low)} alt={node.name} />
+                        {:else if cacheSmall}
+                            <div class="icon-thumb icon-thumb--placeholder"></div>
+                        {:else}
+                            <img class="icon-thumb" src={convertFileSrc(node.path)} alt={node.name} loading="lazy" />
+                        {/if}
                         <span class="icon-overlay">{node.name}</span>
                     </button>
                 {/each}
@@ -358,6 +418,7 @@
                         viewMode={panelState.viewMode}
                         layoutDir={panelState.layoutDir}
                         onSelect={handleTreeSelect}
+                        readyThumbs={panelState.readyThumbs}
                     />
                 {/each}
             {/if}
@@ -366,7 +427,7 @@
                 <svg width="36" height="36" viewBox="0 0 16 16" fill="currentColor">
                     <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.56 2.311 1.184C7.985 3.648 8.48 4 9 4h4.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9z"/>
                 </svg>
-                <p>No folder open</p>
+                <p>{t('filesPanel.empty.noFolderOpen')}</p>
             </div>
         {/if}
     </div>
@@ -504,6 +565,12 @@
             width: auto;
             height: 100%;
         }
+    }
+
+    // Square placeholder shown until the low thumbnail is ready (no full-original load).
+    .icon-thumb--placeholder {
+        aspect-ratio: 1;
+        background: var(--hover-bg);
     }
 
     .icon-overlay {

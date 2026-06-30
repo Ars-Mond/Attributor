@@ -1,0 +1,93 @@
+name: Build and Pre-release
+
+# Pre-release builds. Fires on pre-release tags (a SemVer tag with a suffix, e.g. v1.0.0-rc.1,
+# v1.0.0-beta.2), and can be triggered manually for a chosen tag. Stable tags (v1.0.0) are handled by
+# build.yml. The produced GitHub Release is marked as a pre-release.
+on:
+  push:
+    tags:
+      - 'v*-*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Pre-release tag to create (e.g. v1.0.0-rc.1)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+            args: ''
+          - os: windows-latest
+            target: win-x64
+            args: ''
+          - os: macos-latest
+            target: osx-arm64
+            args: '--target aarch64-apple-darwin'
+          - os: macos-latest
+            target: osx-x64
+            args: '--target x86_64-apple-darwin'
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Build and pre-release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ inputs.tag || github.ref_name }}
+          releaseName: 'Attributor ${{ inputs.tag || github.ref_name }} (pre-release)'
+          releaseBody: 'Pre-release build — for testing. See the assets to download and install.'
+          releaseDraft: false
+          prerelease: true
+          uploadPlainBinary: true
+          assetNamePattern: 'Attributor-[version]-[platform]-[arch][setup][ext]'
+          args: ${{ matrix.args }}

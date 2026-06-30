@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.0.0] - 2026-06-30
+
+First stable release.
+
+### Added
+- **AI auto-attribution (Ollama)** — generate title, description, keywords, categories, and content flags (editorial / mature content / illustration) from a local Ollama vision model; single-photo and batch modes with a cancelable, blocking progress overlay; installed/local/cloud model picker, per-model profiles (prompt + parameters), a configurable response-format heading, and one-click Ollama install / model pull
+- **Local SQLite metadata store** — metadata is kept in an app database as you work (new "in app" file status); **Save** writes it into the image file, **Reset** reverts the photo to the file; external file changes are detected via a content fingerprint (size + mtime + xxHash) and resolved with a keep-app-or-file prompt (single and batch apply-to-all)
+- **Russian UI localization** — full English / Russian interface, switchable in settings and auto-detected from the OS on first run
+- **Appearance settings** — Light / Dark / System theme and adjustable interface font size
+- **Configurable keyboard shortcuts** — view and rebind shortcuts, including the file-navigation arrows
+- **Attribution flags** — Editorial / Mature content / Illustration, filled by AI attribution and kept in the app store
+- **Configurable photo & thumbnail caching** — per-view caching options with optional lazy generation
+- **Single-instance** — launching the app a second time focuses the existing window instead of opening a new one
+- Stock keyword presets moved into an on-demand popup opened from an icon button next to the keyword input
+
+### Changed
+- Metadata now flows through the local store: edits and AI results are saved to the app database first and committed to the image file on **Save** (previously every edit wrote the file directly)
+- The footer Cancel control is now **Reset** (reverts the photo to the file) and asks for confirmation
+- Frontend logging is routed through the Tauri log plugin (no `console.*`)
+
 ## [0.3.0] - 2026-03-28
 
 ### Added

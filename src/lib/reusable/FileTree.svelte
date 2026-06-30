@@ -1,6 +1,7 @@
 <script lang="ts">
     import {untrack} from "svelte";
     import {convertFileSrc} from "@tauri-apps/api/core";
+    import {settings} from "$lib/settings";
     import FileTree from "./FileTree.svelte";
     import type {FileNode} from "$lib/types";
 
@@ -12,6 +13,7 @@
         viewMode = 'table' as 'table' | 'content',
         layoutDir = 'vertical' as 'vertical' | 'horizontal',
         onSelect,
+        readyThumbs,
     }: {
         node: FileNode;
         depth?: number;
@@ -20,6 +22,7 @@
         viewMode?: 'table' | 'content';
         layoutDir?: 'vertical' | 'horizontal';
         onSelect: (path: string, e: MouseEvent) => void;
+        readyThumbs: Set<string>;
     } = $props();
 
     // untrack: depth is a static prop per node instance; we only need its
@@ -31,9 +34,20 @@
         /\.(jpg|jpeg|png|webp)$/i.test(node.name)
     );
 
-    const showThumb = $derived(viewMode === 'content' && isImage);
+    const cacheSmall = $derived(settings.subscribe<boolean>('cache.smallThumbnails')());
+    const nestedFolders = $derived(settings.subscribe<boolean>('general.nestedFolders')());
+    const contentImage = $derived(viewMode === 'content' && isImage);
+    const lowReady = $derived(!!node.thumb_low && readyThumbs.has(node.path));
+    // A photo is in cache scope at the top level always, and inside nested folders only when "Read
+    // nested folders" is on; out-of-scope subfolder photos are not cached and show the original.
+    const inScope = $derived(nestedFolders || depth === 0);
+    // In Content view, only descend into subfolders when "Read nested folders" is on. Table view is
+    // unaffected (it always shows the full tree).
+    const showChildren = $derived(viewMode !== 'content' || nestedFolders);
 </script>
 
+<!-- Hide folder rows entirely in Content view when "Read nested folders" is off (files only). -->
+{#if !node.is_dir || showChildren}
 <div class="tree-node" class:tree-node--h={layoutDir === 'horizontal'}>
     {#if node.is_dir}
         <!-- Folder row -->
@@ -54,7 +68,7 @@
             <span class="name">{node.name}</span>
         </button>
 
-        {#if expanded}
+        {#if expanded && showChildren}
             {#each node.children as child (child.path)}
                 <FileTree
                     node={child}
@@ -64,6 +78,7 @@
                     {viewMode}
                     {layoutDir}
                     {onSelect}
+                    {readyThumbs}
                 />
             {/each}
         {/if}
@@ -80,7 +95,11 @@
             data-path={node.path}
             onclick={(e) => onSelect(node.path, e)}
         >
-            {#if showThumb}
+            {#if contentImage && cacheSmall && inScope && lowReady}
+                <img class="thumb" src={convertFileSrc(node.thumb_low!)} alt="" loading="lazy" />
+            {:else if contentImage && cacheSmall && inScope}
+                <div class="thumb thumb--placeholder"></div>
+            {:else if contentImage}
                 <img class="thumb" src={convertFileSrc(node.path)} alt="" loading="lazy" />
             {:else if isImage}
                 <!-- Image file icon -->
@@ -98,6 +117,7 @@
         </button>
     {/if}
 </div>
+{/if}
 
 <style lang="scss">
     @use 'styles/mixins' as *;
@@ -157,6 +177,10 @@
         border-radius: $radius-sm;
         flex-shrink: 0;
         display: block;
+    }
+
+    .thumb--placeholder {
+        background: var(--hover-bg);
     }
 
     .chevron {

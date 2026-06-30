@@ -1,0 +1,154 @@
+@startuml application-architecture
+title Attributor — Application Architecture\nTauri 2 + SvelteKit desktop app for stock-photo metadata (XMP/EXIF/IPTC)
+
+' ── Global look & feel ───────────────────────────────────────────────
+skinparam linetype ortho
+skinparam nodesep 50
+skinparam ranksep 65
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam ArrowColor #3A3A3A
+skinparam ArrowThickness 1.2
+skinparam rectangle {
+  BorderColor #3A3A3A
+  FontColor #1A1A1A
+  roundCorner 12
+}
+skinparam database {
+  BorderColor #3A3A3A
+  FontColor #1A1A1A
+}
+skinparam queue {
+  BorderColor #3A3A3A
+  FontColor #1A1A1A
+}
+skinparam package {
+  BorderColor #9E9E9E
+  FontColor #555555
+}
+
+' Layer colours:
+'  UI shell #B3E5FC · Panels #BBDEFB · State #D1C4E9 · IPC #FFE0B2
+'  Backend #C8E6C9 · Metadata engine #A5D6A7 · Storage #E1BEE7 · Disk #FFF9C4
+
+' ── Frontend ─────────────────────────────────────────────────────────
+package "Frontend — SvelteKit 2 / Svelte 5 runes / SCSS tokens" {
+  rectangle "+page.svelte\nroot orchestrator\n(wires panels, events, shortcuts)" as PAGE #B3E5FC
+
+  package "UI shell (Eagle-inspired)" {
+    rectangle "DockLayout\n(docking/)" as DOCK #B3E5FC
+    rectangle "MenuBar\n(menu/)" as MENU #B3E5FC
+    rectangle "dialogs\nConfirm/About/Help/Unsaved" as DLG #B3E5FC
+    rectangle "reusable\nFileTree/KeywordSuggestions" as REUSE #B3E5FC
+  }
+
+  package "Panels" {
+    rectangle "FilesPanel\ngallery + folder-changed rescan" as FP #BBDEFB
+    rectangle "MetadataPanel\nedit form + autosave" as MP #BBDEFB
+    rectangle "ImageViewerPanel\npreview + gone-toast" as IV #BBDEFB
+  }
+
+  package "Frontend state (runes)" {
+    rectangle "folderLoader +\nmetadataStore (gallery/)" as GAL #D1C4E9
+    rectangle "settings · shortcuts\nstore.ts · themes.ts" as CFG #D1C4E9
+  }
+}
+
+' ── Tauri IPC surface ────────────────────────────────────────────────
+package "Tauri IPC — typed commands + events (Principle VI)" {
+  rectangle "read_folder" as C_RF #FFE0B2
+  rectangle "save_metadata_cached(_batch)\nget_cached_metadata" as C_SAVE #FFE0B2
+  rectangle "read_metadata" as C_RM #FFE0B2
+  rectangle "open_folder / open_folder_path\nscan_folder" as C_FOLDER #FFE0B2
+  rectangle "search_keywords" as C_KW #FFE0B2
+  queue "events:\nmetadata-status · thumbnail-ready · folder-changed" as EV #FFE0B2
+}
+
+' ── Backend ──────────────────────────────────────────────────────────
+package "Backend — Rust (Pure-Rust, no native deps)" {
+  rectangle "lib.rs\nentry · AppState · command handlers" as LIB #C8E6C9
+  rectangle "filetree\nscan_dir + notify watcher" as FT #C8E6C9
+  rectangle "folder_processor\nrayon fan-out · workers" as FPR #C8E6C9
+  rectangle "photo_processor\nclassify (cache) + thumbnails" as PP #C8E6C9
+  rectangle "hash\nstat (Stage-1) · SHA-256 (Stage-2)" as HASH #C8E6C9
+  rectangle "events\nAppEvent emit helper" as EVT #C8E6C9
+  rectangle "keywords\nnucleo fuzzy search" as KW #C8E6C9
+  rectangle "conflicts\nPendingConflict registry" as CONF #C8E6C9
+}
+
+package "Metadata engine" {
+  rectangle "metadata\nread/write XMP·EXIF·IPTC\nquick-xml + little_exif (fork)" as MD #A5D6A7
+}
+
+' ── Storage + disk ───────────────────────────────────────────────────
+database "CacheStore\nSQLite (bundled, WAL)\nphoto_cache + schema_meta" as DB #E1BEE7
+database "tauri-plugin-store\nui-state.json (window, dock, theme)" as PSTORE #E1BEE7
+rectangle "Photo files\nJPEG / PNG / WebP" as DISK #FFF9C4
+rectangle "Thumbnail sidecars\n{key}.paths / {key}_360.jpg" as THUMB #FFF9C4
+
+' ── Frontend wiring ──────────────────────────────────────────────────
+PAGE --> DOCK
+PAGE --> MENU
+PAGE --> DLG
+PAGE --> FP
+PAGE --> MP
+PAGE --> IV
+PAGE --> GAL
+PAGE --> CFG
+FP --> REUSE
+MP --> REUSE
+
+' ── Frontend → IPC ───────────────────────────────────────────────────
+GAL --> C_RF
+MP --> C_SAVE
+MP --> C_RM
+MP --> C_KW
+FP --> C_FOLDER
+CFG ..> PSTORE : persist UI state
+EV --> GAL : metadata-status
+EV --> FP : thumbnail-ready / folder-changed
+EV --> IV : folder-changed (gone)
+
+' ── IPC → Backend ────────────────────────────────────────────────────
+C_RF --> LIB
+C_SAVE --> LIB
+C_RM --> LIB
+C_FOLDER --> LIB
+C_KW --> LIB
+LIB --> FPR
+LIB --> FT
+LIB --> DB
+FT --> EVT : folder-changed
+FPR --> PP
+PP --> HASH
+PP --> MD
+PP --> DB
+PP --> EVT : metadata-status
+PP --> THUMB : thumbnail cache
+FPR --> EVT : thumbnail-ready
+LIB --> KW
+LIB --> CONF
+EVT --> EV
+
+' ── Backend → disk ───────────────────────────────────────────────────
+HASH ..> DISK : stat / hash
+MD ..> DISK : read (write = export only)
+FT ..> DISK : scan + watch
+
+legend right
+  | Colour | Layer |
+  |<#B3E5FC>   | UI shell + root |
+  |<#BBDEFB>   | Panels |
+  |<#D1C4E9>   | Frontend state |
+  |<#FFE0B2>   | Tauri IPC |
+  |<#C8E6C9>   | Backend Rust |
+  |<#A5D6A7>   | Metadata engine |
+  |<#E1BEE7>   | Persistent stores |
+  |<#FFF9C4>   | Filesystem |
+  ----
+  Solid = call / data flow
+  Dotted = filesystem / persistence I/O
+endlegend
+
+@enduml

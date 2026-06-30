@@ -3,7 +3,8 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'
+      # Stable releases only (e.g. v1.0.0). Pre-release tags (v1.0.0-rc.1) are handled by prerelease.yml.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
   build:
