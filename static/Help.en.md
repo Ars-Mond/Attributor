@@ -134,7 +134,7 @@ Open **File → Settings → CSV Export** and create a preset for each stock:
 - **Name** — the label shown in settings.
 - **Stock identifier** — used as the CSV file name (`<identifier>.csv`); must be unique and valid as a file name.
 - **Column delimiter** — comma, semicolon, or tab (default comma).
-- **Fields** — the ordered list of columns. For each field set the **CSV column** header and the **value** it draws from: none (a constant **default value**), file name, title, description, keywords, category, or the editorial / mature-content / illustration flags (with a **yes/no** vs **true/false** format). Reorder fields with the up/down arrows. A preset must have at least one field.
+- **Fields** — the ordered list of columns. For each field set the **CSV column** header and the **value** it draws from: none (a constant **default value**), file name, title, description, keywords, category, release filename, or the editorial / mature-content / illustration flags (with a **yes/no** vs **true/false** format). Reorder fields with the up/down arrows. A preset must have at least one field.
 
 ### Run the export
 

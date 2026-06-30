@@ -288,6 +288,7 @@ export interface Messages {
     'settings.csv.valueType.description': string;
     'settings.csv.valueType.keywords': string;
     'settings.csv.valueType.category': string;
+    'settings.csv.valueType.releaseFilename': string;
     'settings.csv.valueType.editorial': string;
     'settings.csv.valueType.matureContent': string;
     'settings.csv.valueType.illustration': string;

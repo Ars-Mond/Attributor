@@ -8,6 +8,7 @@ export type AppValueType =
     | 'description'
     | 'keywords'
     | 'category'
+    | 'releaseFilename'
     | 'editorial'
     | 'matureContent'
     | 'illustration';
@@ -41,7 +42,7 @@ export interface ExportSummary {
 
 // The fixed value-type set in display order (FR-023).
 export const VALUE_TYPES: AppValueType[] = [
-    'none', 'fileName', 'title', 'description', 'keywords', 'category', 'editorial', 'matureContent', 'illustration',
+    'none', 'fileName', 'title', 'description', 'keywords', 'category', 'releaseFilename', 'editorial', 'matureContent', 'illustration',
 ];
 
 export const DELIMITERS: Delimiter[] = ['comma', 'semicolon', 'tab'];

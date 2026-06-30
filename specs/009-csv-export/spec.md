@@ -122,7 +122,7 @@ When the user has selected one or more photos, exporting covers only that select
 - **FR-020**: The stock identifier MUST be usable as a file name; identifiers with illegal file-name characters MUST be rejected with an explanation.
 - **FR-021**: A preset MUST hold an ordered list of fields; users MUST be able to add and remove fields.
 - **FR-022**: Each field MUST have a CSV column identifier and an app value type.
-- **FR-023**: The available app value types MUST be exactly: none, file name, title, description, keywords, category, editorial, mature content, illustration.
+- **FR-023**: The available app value types MUST be exactly: none, file name, title, description, keywords, category, release filename, editorial, mature content, illustration.
 - **FR-024**: A default-value (string) input MUST be available **only** for fields of type "none" and MUST be hidden for all other types.
 - **FR-025**: A bool-format choice (yes/no vs true/false) MUST be available **only** for the bool types (editorial, mature content, illustration) and MUST be hidden for all other types.
 - **FR-026**: Users MUST be able to reorder a preset's fields, by arrow controls and/or drag-and-drop.
@@ -169,6 +169,6 @@ When the user has selected one or more photos, exporting covers only that select
 - **Overwrite behavior**: Existing files named `<identifier>.csv` in the destination folder are overwritten.
 - **File-name value**: The "file name" type emits the photo's file name including its extension (the submitted asset name).
 - **Category source**: "category" maps to the app's stored category data (the comma-joined `categories` value from the metadata store).
-- **Value-type set**: Exactly the nine types the user enumerated; release-filename and other store fields are intentionally not offered as column types in this version.
+- **Value-type set**: The nine types the user enumerated plus release filename (added on request); other store fields are not offered as column types.
 - **Reuse of existing UI**: The CSV settings category reuses the established Settings patterns (mirroring the Ollama-models category) and existing dialog/confirmation primitives.
 - **Data source**: The SQLite metadata store from feature 008 is the single source of truth for exported values.

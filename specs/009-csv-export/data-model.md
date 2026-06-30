@@ -55,7 +55,7 @@ One column within a preset.
 
 Fixed set (FR-023). Serialized as camelCase strings.
 
-`none` | `fileName` | `title` | `description` | `keywords` | `category` | `editorial` | `matureContent` | `illustration`
+`none` | `fileName` | `title` | `description` | `keywords` | `category` | `releaseFilename` | `editorial` | `matureContent` | `illustration`
 
 Bool types = `editorial`, `matureContent`, `illustration`.
 
@@ -64,7 +64,7 @@ Rust:
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum AppValueType {
-    None, FileName, Title, Description, Keywords, Category,
+    None, FileName, Title, Description, Keywords, Category, ReleaseFilename,
     Editorial, MatureContent, Illustration,
 }
 ```
@@ -111,7 +111,7 @@ Read-only source for cell values. Frontend type `src/lib/types.ts`; Rust `store/
 | `editorial` | bool | editorial |
 | `matureContent` | bool | matureContent |
 | `illustration` | bool | illustration |
-| `releaseFilename` | string | (not exposed as a value type in this version) |
+| `releaseFilename` | string | releaseFilename (emitted as-is) |
 
 The photo's **file name** (for `fileName`) comes from the photo path, not from `StoredMetadata`.
 

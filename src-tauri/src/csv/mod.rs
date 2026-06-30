@@ -22,6 +22,7 @@ pub enum AppValueType {
     Description,
     Keywords,
     Category,
+    ReleaseFilename,
     Editorial,
     MatureContent,
     Illustration,

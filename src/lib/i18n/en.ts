@@ -259,6 +259,7 @@ export const en: Messages = {
     'settings.csv.valueType.description': 'Description',
     'settings.csv.valueType.keywords': 'Keywords',
     'settings.csv.valueType.category': 'Category',
+    'settings.csv.valueType.releaseFilename': 'Release filename',
     'settings.csv.valueType.editorial': 'Editorial',
     'settings.csv.valueType.matureContent': 'Mature content',
     'settings.csv.valueType.illustration': 'Illustration',

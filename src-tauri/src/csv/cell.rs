@@ -16,6 +16,7 @@ pub fn cell(field: &CsvField, path: &str, meta: &StoredMetadata) -> String {
         AppValueType::Description => meta.description.clone(),
         AppValueType::Keywords => meta.keywords.join(","),
         AppValueType::Category => normalize_category(&meta.categories),
+        AppValueType::ReleaseFilename => meta.release_filename.clone(),
         AppValueType::Editorial => field.bool_format.render(meta.editorial).to_string(),
         AppValueType::MatureContent => field.bool_format.render(meta.mature_content).to_string(),
         AppValueType::Illustration => field.bool_format.render(meta.illustration).to_string(),
@@ -72,6 +73,7 @@ mod tests {
         let m = meta();
         assert_eq!(cell(&field(AppValueType::Title), "x", &m), "T");
         assert_eq!(cell(&field(AppValueType::Description), "x", &m), "D");
+        assert_eq!(cell(&field(AppValueType::ReleaseFilename), "x", &m), "r.pdf");
     }
 
     #[test]

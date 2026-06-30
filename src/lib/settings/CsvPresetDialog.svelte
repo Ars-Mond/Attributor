@@ -23,6 +23,7 @@
         description: 'settings.csv.valueType.description',
         keywords: 'settings.csv.valueType.keywords',
         category: 'settings.csv.valueType.category',
+        releaseFilename: 'settings.csv.valueType.releaseFilename',
         editorial: 'settings.csv.valueType.editorial',
         matureContent: 'settings.csv.valueType.matureContent',
         illustration: 'settings.csv.valueType.illustration',
@@ -285,7 +286,7 @@
     }
 
     .cf-extra {
-        flex: 1 1 0;
+        flex: 0 0 130px;
         min-width: 0;
 
         &--empty {

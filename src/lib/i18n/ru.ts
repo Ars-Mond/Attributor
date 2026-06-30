@@ -261,6 +261,7 @@ export const ru: Messages = {
     'settings.csv.valueType.description': 'Описание',
     'settings.csv.valueType.keywords': 'Ключевые слова',
     'settings.csv.valueType.category': 'Категория',
+    'settings.csv.valueType.releaseFilename': 'Файл релиза',
     'settings.csv.valueType.editorial': 'Редакционное',
     'settings.csv.valueType.matureContent': 'Контент 18+',
     'settings.csv.valueType.illustration': 'Иллюстрация',

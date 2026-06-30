@@ -89,6 +89,7 @@ All unknowns from the Technical Context resolved below. Codebase facts were gath
 | description | `StoredMetadata.description` | as-is |
 | keywords | `StoredMetadata.keywords: Vec<String>` | joined with `,` (in-cell comma, quoted by the writer when needed) |
 | category | `StoredMetadata.categories: String` | normalized: split on commas, trim each, drop empties, re-join with `,` |
+| releaseFilename | `StoredMetadata.release_filename: String` | as-is |
 | editorial | `StoredMetadata.editorial: bool` | per field `boolFormat`: `yes`/`no` or `true`/`false` |
 | matureContent | `StoredMetadata.mature_content: bool` | per field `boolFormat` |
 | illustration | `StoredMetadata.illustration: bool` | per field `boolFormat` |
