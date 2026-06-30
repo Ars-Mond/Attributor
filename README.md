@@ -2,7 +2,7 @@
 
 # Attributor
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-green)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-orange)
@@ -16,6 +16,7 @@ Desktop application for editing photo metadata (EXIF/XMP) before submitting to s
 - **Metadata editing** — title, description, keywords, categories, and release filename, written into the image as XMP/EXIF/IPTC without re-encoding
 - **AI auto-attribution** — generate title, description, keywords, categories, and content flags (editorial / mature / illustration) from a local Ollama vision model, for a single photo or a whole batch
 - **Local metadata store** — edits and AI results are kept in an app database as you work (status “in app”) and written into the file on **Save**; **Reset** reverts to the file, and external file changes are detected with a keep-app-or-file prompt
+- **CSV export** — export the stored metadata to CSV spreadsheets, one file per photo-stock, into a chosen folder; configurable per-stock presets (columns, value types, per-preset delimiter) with ready-made presets for Shutterstock, iStock, Adobe Stock, and Envato
 - **Multilingual UI** — English and Russian, switchable in settings and auto-detected from the OS on first run
 - **Batch mode** — select multiple files and edit shared metadata at once; keywords show which files contain them, with per-keyword promote/remove controls
 - **Keyword autocomplete** — fuzzy search over 1 000+ stock photography terms with drag-and-drop reordering, clipboard copy/paste, and comma-separated bulk input
