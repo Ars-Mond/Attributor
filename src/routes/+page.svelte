@@ -26,6 +26,11 @@
     import {settings} from "$lib/settings";
     import {shortcuts} from "$lib/shortcuts";
     import {t, initLocale} from "$lib/i18n";
+    import ConfirmDialog, {type DialogIcon} from "$lib/dialog/ConfirmDialog.svelte";
+    import {pickExportDir, exportCsv} from "$lib/csv/export";
+    import type {CsvPreset} from "$lib/csv/csv";
+    import {panelState} from "$lib/panel/filesPanelStore.svelte";
+    import {error as logError} from "@tauri-apps/plugin-log";
 
     // --- Docking ---
     // $derived so dock tab titles re-render on a language switch.
@@ -218,6 +223,58 @@
         showInViewer(path);
     }
 
+    // --- CSV export ---
+    let exportDialog = $state<{title: string; body: string; icon: DialogIcon} | null>(null);
+
+    function isImageName(name: string): boolean {
+        return /\.(jpg|jpeg|png|webp)$/i.test(name);
+    }
+
+    /** Resolve the export scope: selected photos, else every photo in the current folder (non-recursive). */
+    function resolveExportScope(): string[] {
+        const tree = panelState.fileTree;
+        const folderPhotos = tree ? tree.children.filter(c => !c.is_dir && isImageName(c.name)).map(c => c.path) : [];
+        const selected = panelState.selectedPaths;
+        if (selected.size > 0) {
+            const inFolder = folderPhotos.filter(p => selected.has(p));
+            return inFolder.length > 0 ? inFolder : [...selected];
+        }
+        return folderPhotos;
+    }
+
+    /** File -> Export to CSV: validate, pick a destination folder, write one CSV per preset. */
+    async function runCsvExport() {
+        const presets = settings.get<CsvPreset[]>('csv.presets') ?? [];
+        if (presets.length === 0) {
+            exportDialog = {title: t('dialog.exportCsv.title'), body: t('dialog.exportCsv.noPresets'), icon: 'warning'};
+            return;
+        }
+        const paths = resolveExportScope();
+        if (paths.length === 0) {
+            exportDialog = {title: t('dialog.exportCsv.title'), body: t('dialog.exportCsv.empty'), icon: 'warning'};
+            return;
+        }
+        let dir: string | null;
+        try {
+            dir = await pickExportDir();
+        } catch (e) {
+            logError(`CSV export: folder picker failed: ${e}`);
+            return;
+        }
+        if (!dir) return; // cancelled
+        try {
+            const summary = await exportCsv(dir, paths, presets);
+            exportDialog = {
+                title: t('dialog.exportCsv.title'),
+                body: t('dialog.exportCsv.resultBody', {files: summary.filesWritten, exported: summary.photosExported, skipped: summary.skipped}),
+                icon: 'info',
+            };
+        } catch (e) {
+            logError(`CSV export failed: ${e}`);
+            exportDialog = {title: t('dialog.exportCsv.title'), body: String(e), icon: 'error'};
+        }
+    }
+
     // --- Dialog actions ---
 
     async function handleDialogDiscard() {
@@ -349,6 +406,7 @@
     <MenuBar>
         <MenuTab label={t('menu.file.label')}>
             <MenuItem label={t('menu.file.openDirectory')} shortcut={shortcuts.getEffectiveBinding('file.open_folder') ?? undefined} onClick={() => filesPanel?.openFolderDialog()} />
+            <MenuItem label={t('menu.file.exportCsv')} onClick={runCsvExport} />
             <MenuSeparator />
             <MenuItem label={t('menu.file.settings')} shortcut={shortcuts.getEffectiveBinding('file.settings') ?? undefined} onClick={() => {showSettings = true;}} />
         </MenuTab>
@@ -416,6 +474,16 @@
 {/if}
 
 <SettingsDialog open={showSettings} onClose={() => {showSettings = false;}} />
+
+{#if exportDialog}
+    <ConfirmDialog
+        title={exportDialog.title}
+        body={exportDialog.body}
+        icon={exportDialog.icon}
+        buttons={[{label: t('common.close'), onClick: () => (exportDialog = null)}]}
+        onClose={() => (exportDialog = null)}
+    />
+{/if}
 
 {#if showDialog}
     <UnsavedChangesDialog

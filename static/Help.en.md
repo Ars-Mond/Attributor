@@ -123,6 +123,25 @@ Click **Save N Files** to apply all changes. Each file is updated individually: 
 
 ---
 
+## Export to CSV
+
+Export the metadata stored in the app to CSV spreadsheets — one file per photo-stock — ready to upload to agencies. The data comes from the app's metadata store, not re-read from the photo files, so review and save your photos first.
+
+### Configure stock presets
+
+Attributor ships ready-made presets for **Shutterstock**, **iStock**, **Adobe Stock**, and **Envato**. Open **File → Settings → CSV Export** to use them as-is, edit them, or create your own. Each preset has:
+
+- **Name** — the label shown in settings.
+- **Stock identifier** — used as the CSV file name (`<identifier>.csv`); must be unique and valid as a file name.
+- **Column delimiter** — comma, semicolon, or tab (default comma).
+- **Fields** — the ordered list of columns. For each field set the **CSV column** header and the **value** it draws from: none (a constant **default value**), file name, title, description, keywords, category, release filename, or the editorial / mature-content / illustration flags (with a **yes/no** vs **true/false** format). Reorder fields with the up/down arrows. A preset must have at least one field.
+
+### Run the export
+
+Choose **File → Export to CSV** and pick a **destination folder**. The app writes one `<identifier>.csv` per preset there (overwriting existing files of the same name). The scope is your current selection, or — if nothing is selected — every photo in the current folder, excluding sub-folders. Photos with no saved metadata in the app are skipped; the result message reports how many files were written, how many photos were exported, and how many were skipped.
+
+---
+
 ## Docking System
 
 Attributor has three panels that can be freely rearranged:
@@ -212,6 +231,7 @@ Open **File → Settings** (or press `Ctrl+,`).
 | **Caching** | Photo and thumbnail caching options. |
 | **Ollama** | AI connection: base URL, active model, response format. |
 | **Ollama Models** | Per-model attribution profiles (prompt and parameters). |
+| **CSV Export** | Per-stock CSV presets: name, identifier, column delimiter, and the ordered field list. |
 | **Shortcuts** | View and rebind keyboard shortcuts, including the file-navigation arrows. |
 
 ---

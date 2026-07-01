@@ -254,6 +254,50 @@ export interface Messages {
     'ollama.model.cloud': string;
     'settings.ollamaModel.duplicateModel': string;
     'settings.ollamaModel.modelId.hint': string;
+
+    // CSV export (feature 009)
+    'menu.file.exportCsv': string;
+    'dialog.exportCsv.title': string;
+    'dialog.exportCsv.resultBody': string;
+    'dialog.exportCsv.noPresets': string;
+    'dialog.exportCsv.empty': string;
+    'settings.section.csv': string;
+    'settings.csv.empty': string;
+    'settings.csv.createTitle': string;
+    'settings.csv.editTitle': string;
+    'settings.csv.name': string;
+    'settings.csv.identifier': string;
+    'settings.csv.identifier.hint': string;
+    'settings.csv.delimiter': string;
+    'settings.csv.delimiter.comma': string;
+    'settings.csv.delimiter.semicolon': string;
+    'settings.csv.delimiter.tab': string;
+    'settings.csv.fields': string;
+    'settings.csv.addField': string;
+    'settings.csv.field.column': string;
+    'settings.csv.field.column.placeholder': string;
+    'settings.csv.field.valueType': string;
+    'settings.csv.field.defaultValue': string;
+    'settings.csv.field.boolFormat': string;
+    'settings.csv.field.moveUp': string;
+    'settings.csv.field.moveDown': string;
+    'settings.csv.field.remove': string;
+    'settings.csv.valueType.none': string;
+    'settings.csv.valueType.fileName': string;
+    'settings.csv.valueType.title': string;
+    'settings.csv.valueType.description': string;
+    'settings.csv.valueType.keywords': string;
+    'settings.csv.valueType.category': string;
+    'settings.csv.valueType.releaseFilename': string;
+    'settings.csv.valueType.editorial': string;
+    'settings.csv.valueType.matureContent': string;
+    'settings.csv.valueType.illustration': string;
+    'settings.csv.boolFormat.yesNo': string;
+    'settings.csv.boolFormat.trueFalse': string;
+    'settings.csv.nameRequired': string;
+    'settings.csv.duplicateIdentifier': string;
+    'settings.csv.invalidIdentifier': string;
+    'settings.csv.fieldsRequired': string;
 }
 
 // Keys whose value is a plain string (usable with t()).
