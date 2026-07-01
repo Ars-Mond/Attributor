@@ -136,6 +136,15 @@ settings.register('general',
         description: 'settings.general.nestedFolders.description'
     }
 );
+settings.register('general',
+    {
+        key: 'general.checkUpdatesOnStartup',
+        type: 'boolean',
+        default: true,
+        label: 'settings.general.checkUpdates.label',
+        description: 'settings.general.checkUpdates.description'
+    }
+);
 
 settings.register('editor',
     {

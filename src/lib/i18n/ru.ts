@@ -20,6 +20,7 @@ export const ru: Messages = {
     'menu.windows.showControl': 'Показать панель управления',
     'menu.windows.showHierarchy': 'Показать иерархию',
     'menu.help.label': 'Справка',
+    'menu.help.checkUpdates': 'Проверить обновления...',
     'menu.help.help': 'Справка',
     'menu.help.about': 'О программе',
 
@@ -50,6 +51,11 @@ export const ru: Messages = {
     'dialog.about.identifierLabel': 'Идентификатор',
     'dialog.about.licenseLabel': 'Лицензия',
     'dialog.help.loadError': '_Не удалось загрузить справку._',
+    'dialog.update.title': 'Обновления',
+    'dialog.update.available': 'Доступна версия {version}. Открыть страницу релизов для загрузки?',
+    'dialog.update.upToDate': 'У вас последняя версия ({version}).',
+    'dialog.update.error': 'Не удалось проверить обновления. Попробуйте позже.',
+    'dialog.update.open': 'Открыть релизы',
 
     'metadata.title': 'Метаданные',
     'metadata.fileStatus.none': 'нет',
@@ -168,6 +174,8 @@ export const ru: Messages = {
     'settings.general.language.label': 'Язык',
     'settings.general.nestedFolders.label': 'Читать вложенные папки',
     'settings.general.nestedFolders.description': 'Показывать вложенные папки в режиме «Содержимое» и включать их при генерации миниатюр. Не влияет на режим «Таблица».',
+    'settings.general.checkUpdates.label': 'Проверять обновления при запуске',
+    'settings.general.checkUpdates.description': 'При запуске незаметно проверять на GitHub наличие новой версии и уведомлять, если она есть. Ничего не скачивается и не устанавливается автоматически.',
     'settings.editor.autosave.label': 'Автосохранение',
     'settings.editor.autosaveDelay.label': 'Задержка автосохранения (мс)',
     'settings.appearance.theme.label': 'Тема',

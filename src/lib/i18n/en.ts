@@ -20,6 +20,7 @@ export const en: Messages = {
     'menu.windows.showControl': 'Show Control',
     'menu.windows.showHierarchy': 'Show Hierarchy',
     'menu.help.label': 'Help',
+    'menu.help.checkUpdates': 'Check for updates...',
     'menu.help.help': 'Help',
     'menu.help.about': 'About',
 
@@ -50,6 +51,11 @@ export const en: Messages = {
     'dialog.about.identifierLabel': 'Identifier',
     'dialog.about.licenseLabel': 'License',
     'dialog.help.loadError': '_Failed to load help content._',
+    'dialog.update.title': 'Updates',
+    'dialog.update.available': 'Version {version} is available. Open the releases page to download it?',
+    'dialog.update.upToDate': 'You are on the latest version ({version}).',
+    'dialog.update.error': 'Could not check for updates. Please try again later.',
+    'dialog.update.open': 'Open releases',
 
     'metadata.title': 'Metadata',
     'metadata.fileStatus.none': 'none',
@@ -166,6 +172,8 @@ export const en: Messages = {
     'settings.general.language.label': 'Language',
     'settings.general.nestedFolders.label': 'Read nested folders',
     'settings.general.nestedFolders.description': 'Show nested folders in the Content view and include them when generating thumbnails. Does not affect the Table view.',
+    'settings.general.checkUpdates.label': 'Check for updates on startup',
+    'settings.general.checkUpdates.description': 'On launch, quietly check GitHub for a newer version and notify you if one is available. Nothing is downloaded or installed automatically.',
     'settings.editor.autosave.label': 'Auto-save',
     'settings.editor.autosaveDelay.label': 'Auto-save delay (ms)',
     'settings.appearance.theme.label': 'Theme',
