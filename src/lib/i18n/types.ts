@@ -46,6 +46,7 @@ export interface Messages {
     'menu.windows.showControl': string;
     'menu.windows.showHierarchy': string;
     'menu.help.label': string;
+    'menu.help.checkUpdates': string;
     'menu.help.help': string;
     'menu.help.about': string;
 
@@ -80,6 +81,11 @@ export interface Messages {
     'dialog.about.identifierLabel': string;
     'dialog.about.licenseLabel': string;
     'dialog.help.loadError': string;
+    'dialog.update.title': string;
+    'dialog.update.available': string;
+    'dialog.update.upToDate': string;
+    'dialog.update.error': string;
+    'dialog.update.open': string;
 
     // Metadata / editor panel
     'metadata.title': string;
@@ -193,6 +199,8 @@ export interface Messages {
     'settings.general.language.label': string;
     'settings.general.nestedFolders.label': string;
     'settings.general.nestedFolders.description': string;
+    'settings.general.checkUpdates.label': string;
+    'settings.general.checkUpdates.description': string;
     'settings.editor.autosave.label': string;
     'settings.editor.autosaveDelay.label': string;
     'settings.appearance.theme.label': string;

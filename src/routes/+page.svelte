@@ -31,6 +31,8 @@
     import type {CsvPreset} from "$lib/csv/csv";
     import {panelState} from "$lib/panel/filesPanelStore.svelte";
     import {error as logError} from "@tauri-apps/plugin-log";
+    import {checkForUpdate, type UpdateInfo} from "$lib/update";
+    import {openUrl} from "@tauri-apps/plugin-opener";
 
     // --- Docking ---
     // $derived so dock tab titles re-render on a language switch.
@@ -275,6 +277,38 @@
         }
     }
 
+    // --- Update check (notify-only) ---
+    let updateDialog = $state<{title: string; body: string; icon: DialogIcon; url: string | null} | null>(null);
+
+    /** Query GitHub for a newer version. `manual` also reports "up to date" / errors; startup checks stay silent unless an update exists. */
+    async function runUpdateCheck(manual: boolean) {
+        let info: UpdateInfo;
+        try {
+            info = await checkForUpdate();
+        } catch (e) {
+            logError(`update check failed: ${e}`);
+            if (manual) updateDialog = {title: t('dialog.update.title'), body: t('dialog.update.error'), icon: 'error', url: null};
+            return;
+        }
+        if (info.available) {
+            updateDialog = {title: t('dialog.update.title'), body: t('dialog.update.available', {version: info.latestVersion}), icon: 'info', url: info.url};
+        } else if (manual) {
+            updateDialog = {title: t('dialog.update.title'), body: t('dialog.update.upToDate', {version: info.currentVersion}), icon: 'info', url: null};
+        }
+    }
+
+    async function openReleases() {
+        const url = updateDialog?.url;
+        updateDialog = null;
+        if (url) {
+            try {
+                await openUrl(url);
+            } catch (e) {
+                logError(`open releases page failed: ${e}`);
+            }
+        }
+    }
+
     // --- Dialog actions ---
 
     async function handleDialogDiscard() {
@@ -352,6 +386,11 @@
         // Prefetch Ollama status + installed models so settings show suggestions with no wait.
         void ollama.init();
 
+        // Quietly check for a newer version on startup (notify-only; gated by a setting).
+        if (settings.get<boolean>('general.checkUpdatesOnStartup')) {
+            void runUpdateCheck(false);
+        }
+
         // 3. Restore last folder, then last file
         if (state.lastFolder) {
             const ok = await filesPanel?.openFolderByPath(state.lastFolder);
@@ -423,6 +462,8 @@
             />
         </MenuTab>
         <MenuTab label={t('menu.help.label')}>
+            <MenuItem label={t('menu.help.checkUpdates')} onClick={() => runUpdateCheck(true)} />
+            <MenuSeparator />
             <MenuItem label={t('menu.help.help')} onClick={() => { showHelp = true; }} />
             <MenuItem label={t('menu.help.about')} onClick={() => { showAbout = true; }} />
         </MenuTab>
@@ -482,6 +523,18 @@
         icon={exportDialog.icon}
         buttons={[{label: t('common.close'), onClick: () => (exportDialog = null)}]}
         onClose={() => (exportDialog = null)}
+    />
+{/if}
+
+{#if updateDialog}
+    <ConfirmDialog
+        title={updateDialog.title}
+        body={updateDialog.body}
+        icon={updateDialog.icon}
+        buttons={updateDialog.url
+            ? [{label: t('dialog.update.open'), onClick: openReleases}, {label: t('common.close'), onClick: () => (updateDialog = null)}]
+            : [{label: t('common.close'), onClick: () => (updateDialog = null)}]}
+        onClose={() => (updateDialog = null)}
     />
 {/if}
 

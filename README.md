@@ -2,10 +2,13 @@
 
 # Attributor
 
-![Version](https://img.shields.io/badge/version-1.1.0-blue)
+[![Русский](https://img.shields.io/badge/README-Русский-blue)](README.ru.md)
+
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-green)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-orange)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/ars_mond)
 
 Desktop application for editing photo metadata (EXIF/XMP) before submitting to stock photo agencies. Fill in title, description, keywords, and categories by hand or generate them with a local AI vision model, then write them into the image file without re-encoding. Edits are kept in a local database as you work and committed to the file when you save.
 
@@ -66,6 +69,12 @@ cargo tauri build
 # Regenerate app icon from source image
 cargo tauri icon src-tauri/icons/logo.png
 ```
+
+## Support
+
+If Attributor is useful to you, consider supporting its development on Ko-fi:
+
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/ars_mond)
 
 ## Copyright
 

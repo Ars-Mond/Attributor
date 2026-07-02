@@ -7,6 +7,7 @@ mod ollama;
 mod photo;
 mod store;
 mod types;
+mod update;
 
 // Re-exports required by integration tests (tests/metadata_test.rs)
 pub use types::{ReadResult, SaveRequest};
@@ -254,6 +255,7 @@ pub fn run() {
             store::apply_metadata_source,
             csv::pick_export_dir,
             csv::export_csv,
+            update::check_for_update,
             cache_thumbnail,
             thumbnail_dir_exists,
             open_folder,
