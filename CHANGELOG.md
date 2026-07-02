@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.2.0] - 2026-07-02
+
+### Added
+- **Update check** — check GitHub for a newer version from **Help → Check for updates**, and (optionally) quietly on startup via the new **"Check for updates on startup"** setting; the app notifies you when a newer release is available and links to the download page. It never downloads or installs automatically, and pre-release suffixes (e.g. `-beta.2`) are ignored when comparing versions.
+
 ## [1.1.0] - 2026-07-01
 
 ### Added
