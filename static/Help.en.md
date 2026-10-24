@@ -54,7 +54,7 @@ Attributor keeps a local **metadata database** as a working copy of every photo'
 
 - **Editing** a field or running **AI attribution** is saved to the database immediately, **without changing the image file**. The status shows 🟣 **in app**.
 - **Save Changes** writes the metadata into the actual image file; the status becomes 🟢 **open**.
-- **Reset** (the button between *Attribute* and *Save Changes*) discards the changes kept only in the app and restores this photo's metadata from the file. A confirmation is shown first.
+- **Reset** (the button between *Attribute via …* and *Save Changes*) discards the changes kept only in the app and restores this photo's metadata from the file. A confirmation is shown first.
 - **Auto-save** writes changes into the image file automatically after 1 second of inactivity.
 
 The status indicator in the panel header shows:
@@ -70,16 +70,35 @@ If a photo's file is changed by another program, Attributor detects it when you 
 
 ## AI Auto-Attribution
 
-Attributor can fill metadata automatically using a vision model. Choose the provider in **Settings → AI attribution**:
+Attributor can fill metadata automatically using a vision model. Choose the provider in **Settings → AI attribution**; each provider keeps its own address, key and active model, so you can switch providers freely.
 
-- **Local (the photo never leaves your computer):** **Ollama** (installed and started on demand), **llama.cpp** (`llama-server`), **LM Studio** (started on demand through its `lms` CLI), **Jan**, **vLLM** and **Unsloth** (Studio / Desktop). For the OpenAI-compatible servers, set the base URL (including `/v1`), load a vision model in the server, and add an API key only if the server requires one.
-- **Cloud:** **OpenAI API** and **Claude API** (paste an API key), or **ChatGPT** — click **Continue with ChatGPT** to use your ChatGPT Plus or Pro plan through OpenAI's *Sign in with ChatGPT*; requests count against the plan's usage limits (**Manage usage** opens them), and **Use another account** signs in with a different ChatGPT account or workspace. Cloud providers receive a copy of the photo downscaled to 1568 px.
-- Keys are stored in the operating system's credential store, never in the settings file. Each provider keeps its own address, key and active model, so you can switch providers freely.
+### Providers
 
-- Click **Attribute via …** (the button names the active provider) in the Control panel footer to analyze the open photo and fill Title, Description, Keywords, Categories and the attribution flags (Editorial / Mature content / Illustration).
-- In **Batch mode**, the Attribute button processes every selected photo in turn. A blocking progress bar with a **Cancel** button is shown while the model runs.
-- The button is available once the provider is set up (Ollama installed, an API key saved, or signed in to ChatGPT) and a model is selected. Set this up in **Settings → AI attribution** (provider, base URL, key or sign-in, active model, response format) and **Settings → Model profiles** (per-provider, per-model prompt, thinking mode and run options; a profile with the model id `base` is the provider's fallback). Profiles of the **Base (all providers)** provider apply to every provider; the most specific profile is used: the provider's profile for the model, a Base profile for the model, the provider's `base` profile, then Base's `base` profile.
-- Results are saved to the app database (status 🟣 **in app**). Review them, then click **Save Changes** to write them into the files.
+- **Ollama** runs models on this computer. If it is not installed, click **Install Ollama**; then pick a vision model under **Download a model** and click **Download**. Ollama is started automatically when it is needed. Cloud models (tagged `:cloud`) and a remote **Base URL** send the photo to that server.
+- **Local servers** — **llama.cpp** (`llama-server`), **LM Studio**, **Jan**, **vLLM** and **Unsloth** (Studio / Desktop) — are used through their OpenAI-compatible API. Set the **Base URL** to the server's address including `/v1` (it starts with the server's default address), make sure the server offers a vision model, and paste an **API key (optional)** only if the server requires one (Unsloth requires a key by default). LM Studio is started on demand through its `lms` CLI. vLLM does not run natively on Windows: point the base URL at WSL2, Docker or another machine. The photo is sent to the server at the base URL — usually this computer.
+- **OpenAI API** and **Claude API** — paste an **API key** (**Get a key** opens the provider's key page).
+- **ChatGPT** — click **Continue with ChatGPT** to use your ChatGPT Plus or Pro plan through OpenAI's *Sign in with ChatGPT*; the sign-in page opens in the browser. **Use another account** signs in with a different ChatGPT account or workspace. Requests count against the plan's usage limits: **Manage usage** opens the page where you can see and cap them. **Sign out** forgets the sign-in.
+- Ollama receives the original photo file. Every other provider receives a JPEG copy downscaled to 1568 px; for the cloud providers (OpenAI API, ChatGPT, Claude API) that copy is uploaded to the provider for analysis.
+- API keys are stored in the operating system's credential store, never in the settings file; the ChatGPT sign-in is kept in a file encrypted with a key from that store.
+- **Status** shows whether the provider is ready (**Check** tests it again). Pick or type the model in **Active model**; **Refresh** reloads the models the provider reports. **Answer-format heading** is placed before the JSON schema appended to every prompt, and **JSON response format** is that schema (for debugging only).
+
+### Attributing Photos
+
+- Click **Attribute via …** in the Control panel footer — the button names the active provider, e.g. *Attribute via LM Studio*. It analyzes the open photo and fills Title, Description, Keywords, Categories and the attribution flags (Editorial / Mature content / Illustration): Title, Description, Categories and the flags are replaced, and the suggested keywords are added to the existing ones.
+- The button is available once a model is selected in **Active model** and the provider is set up: Ollama installed, an API key saved for OpenAI API or Claude API, or signed in to ChatGPT. Local servers are contacted when you click the button.
+- A blocking progress bar with a **Cancel** button is shown while the model runs; **Cancel** stops the request.
+- In **Batch mode**, the button processes every selected photo in turn. A photo that fails is skipped and the batch goes on; **Cancel** stops the batch, and photos already processed keep their results.
+- Results are saved to the app database (status 🟣 **in app**), not to the files. Review them, then click **Save Changes** (**Save N Files** in Batch mode) to write them into the files.
+
+### Model Profiles
+
+**Settings → Model profiles** holds the prompt, thinking mode and run options used for attribution. Each profile has a **Provider** and a **Model id**.
+
+- The most specific profile is used: the active provider's profile for the active model, a **Base (all providers)** profile for the model, the provider's profile with the model id `base` (its fallback for any model without its own profile), then Base's `base` profile. With no matching profile, or an empty prompt, the built-in stock-metadata prompt is used.
+- The **Thinking mode** values and the **Run options (JSON)** depend on the profile's provider: the dialog offers that provider's thinking values and describes the run options it accepts. Choosing another provider clears a thinking value it does not offer. Run options of a Base profile are sent as-is to whichever provider runs the request.
+- **Keep alive** is an Ollama setting: it is shown for Ollama and Base profiles and used only when Ollama runs the request.
+- **Create** adds a profile; **Edit** and **Delete** change or remove it. **Duplicate** opens a copy of a profile as a new one with a numbered name (*Base* → *Base 2*); save it after choosing another provider or model id, since each provider and model id pair can have only one profile. Drag the grip to the left of a profile's name to change the order of the list.
+- **Reset to defaults** replaces the list with the default profiles: **Base**, **Base Ollama**, **Qwen2.5 VL 3b** and **Gemma4 Cloud**.
 
 ---
 
@@ -233,8 +252,8 @@ Open **File → Settings** (or press `Ctrl+,`).
 | **Editor** | Auto-save on/off and its delay. |
 | **Appearance** | Theme — **System / Light / Dark** — and the interface font size. |
 | **Caching** | Photo and thumbnail caching options. |
-| **AI attribution** | AI provider and its connection: base URL, API key or ChatGPT sign-in, active model, response format. |
-| **Model profiles** | Attribution profiles per provider and model (prompt, thinking mode and run options); **Base** profiles apply to every provider. |
+| **AI attribution** | AI provider and its connection: status, base URL, API key or ChatGPT sign-in, active model (and, for Ollama, install and model download), answer-format heading and JSON response format. |
+| **Model profiles** | Attribution profiles per provider and model (prompt, thinking mode, run options and, for Ollama, keep alive); **Base (all providers)** profiles apply to every provider. Create, duplicate, edit, delete, and drag to reorder. |
 | **CSV Export** | Per-stock CSV presets: name, identifier, column delimiter, and the ordered field list. |
 | **Shortcuts** | View and rebind keyboard shortcuts, including the file-navigation arrows. |
 

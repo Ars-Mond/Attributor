@@ -10,7 +10,7 @@
 ![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-orange)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/ars_mond)
 
-Desktop application for editing photo metadata (EXIF/XMP) before submitting to stock photo agencies. Fill in title, description, keywords, and categories by hand or generate them with a local AI vision model, then write them into the image file without re-encoding. Edits are kept in a local database as you work and committed to the file when you save.
+Desktop application for editing photo metadata (EXIF/XMP) before submitting to stock photo agencies. Fill in title, description, keywords, and categories by hand or generate them with an AI vision model running on your computer or in the cloud, then write them into the image file without re-encoding. Edits are kept in a local database as you work and committed to the file when you save.
 
 **Supported formats:** JPEG · PNG · WebP
 
@@ -18,6 +18,8 @@ Desktop application for editing photo metadata (EXIF/XMP) before submitting to s
 
 - **Metadata editing** — title, description, keywords, categories, and release filename, written into the image as XMP/EXIF/IPTC without re-encoding
 - **AI auto-attribution** — generate title, description, keywords, categories, and content flags (editorial / mature / illustration) with a vision model — locally via Ollama, llama.cpp, LM Studio, Jan, vLLM or Unsloth, or in the cloud via the OpenAI API, your ChatGPT plan (Sign in with ChatGPT) or the Claude API — for a single photo or a whole batch
+- **AI privacy** — local providers send the photo only to the server at their base URL, usually on your computer (Ollama `:cloud` models send it to Ollama's cloud); cloud providers (OpenAI API, ChatGPT, Claude API) receive a copy of the photo; Ollama gets the original file, every other provider a JPEG downscaled to 1568 px; API keys are kept in the OS credential store, never in the settings file
+- **Model profiles** — prompt, thinking mode, and run options per provider and model, with a `base` fallback profile; profiles of **Base (all providers)** apply to every provider, and the most specific profile wins; profiles can be duplicated and reordered by drag-and-drop
 - **Local metadata store** — edits and AI results are kept in an app database as you work (status “in app”) and written into the file on **Save**; **Reset** reverts to the file, and external file changes are detected with a keep-app-or-file prompt
 - **CSV export** — export the stored metadata to CSV spreadsheets, one file per photo-stock, into a chosen folder; configurable per-stock presets (columns, value types, per-preset delimiter) with ready-made presets for Shutterstock, iStock, Adobe Stock, and Envato
 - **Multilingual UI** — English and Russian, switchable in settings and auto-detected from the OS on first run
@@ -32,6 +34,8 @@ Desktop application for editing photo metadata (EXIF/XMP) before submitting to s
 ## Usage
 
 See the full **[User Guide](static/Help.en.md)** for detailed instructions. A Russian version is available from the app's Help menu.
+
+AI attribution is set up in **Settings → AI attribution** — choose the provider, set its base URL, paste an API key or click **Continue with ChatGPT**, and pick the active model — and tuned in **Settings → Model profiles**. The OpenAI API and Claude API need an API key; ChatGPT uses your ChatGPT Plus or Pro plan, and requests count against its usage limits. The attribute button in the Control panel names the active provider (**Attribute via …**).
 
 ## Platforms
 
@@ -49,6 +53,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 - Icons view mode displays only the root-level files of the opened folder (no subdirectory traversal)
 - TIFF and RAW formats are not supported
 - Auto-save is disabled in batch mode to prevent accidental overwrites
+- vLLM does not run natively on Windows: run it in WSL2, Docker, or on another machine and enter that server's address as vLLM's base URL
 
 ## For Developers
 

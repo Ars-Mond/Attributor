@@ -7,6 +7,7 @@
 - API keys are stored in the operating system's credential store (never in the settings file); ChatGPT tokens are kept in a file encrypted with a key from that store.
 - LM Studio is started on demand through its `lms` CLI, like Ollama.
 - Model profiles now belong to a provider, so each provider can have its own prompt, thinking mode and run options (and its own `base` fallback profile). Profiles of the **Base** pseudo-provider apply to every provider; the most specific profile wins (the provider's profile for the model, a Base profile for the model, the provider's `base`, then Base's `base`).
+- **Duplicate** a model profile (the copy opens as a new profile with a numbered name, e.g. *Base 2*) and **reorder** profiles by dragging the grip to the left of the name.
 
 ### Changed
 - **Settings → Ollama** is now **Settings → AI attribution** (with a provider selector at the top), and **Ollama Models** is now **Model profiles**. Existing Ollama settings and profiles are carried over unchanged.
