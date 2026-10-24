@@ -3,12 +3,12 @@
     import ModelCombobox from '$lib/ai/ModelCombobox.svelte';
     import {ai} from '$lib/ai/availability.svelte';
     import {profileProvider, type ModelProfile} from '$lib/ai/ai';
-    import {PROVIDERS, providerInfo, type ProviderId} from '$lib/ai/providers';
+    import {PROFILE_PROVIDERS, PROVIDERS, profileProviderInfo, type ProfileProviderId} from '$lib/ai/providers';
 
     let {profile, isNew, takenModels = [], closeOnBackdrop = false, onSave, onCancel}: {
         profile: ModelProfile;
         isNew: boolean;
-        takenModels?: {provider: ProviderId; modelId: string}[];   // used by OTHER profiles — disallow duplicates
+        takenModels?: {provider: ProfileProviderId; modelId: string}[];   // used by OTHER profiles — disallow duplicates
         closeOnBackdrop?: boolean;   // whether clicking the empty backdrop dismisses the dialog
         onSave: (p: ModelProfile) => void;
         onCancel: () => void;
@@ -18,7 +18,7 @@
     // Read inside a closure so it's a deliberate one-time snapshot, not a reactive dependency.
     const seed = (() => profile)();
     let name = $state(seed.name);
-    let provider = $state<ProviderId>(profileProvider(seed));
+    let provider = $state<ProfileProviderId>(profileProvider(seed));
     let modelId = $state(seed.modelId);
     let prompt = $state(seed.prompt);
     let think = $state(seed.think == null ? '' : String(seed.think));
@@ -27,22 +27,26 @@
     let optionsError = $state<string | null>(null);
     let modelError = $state<string | null>(null);
 
-    const info = $derived(providerInfo(provider));
+    const info = $derived(profileProviderInfo(provider));
 
     // Model suggestions come from the selected provider; fetch its list on first use (the active provider is prefetched).
-    const fetched = new Set<ProviderId>();
+    // A Base profile suggests the models already listed by any provider.
+    const fetched = new Set<ProfileProviderId>();
     $effect(() => {
         const id = provider;
-        if (!fetched.has(id) && ai.modelsOf(id).length === 0) {
+        if (id !== 'base' && !fetched.has(id) && ai.modelsOf(id).length === 0) {
             fetched.add(id);
             void ai.refreshModels(id);
         }
     });
+    const listedModels = $derived(provider === 'base' ? [...new Set(PROVIDERS.flatMap(p => ai.modelsOf(p.id)))] : ai.modelsOf(provider));
+    // Keep alive is an Ollama setting; a Base profile carries it for when Ollama runs the request.
+    const showKeepAlive = $derived(provider === 'ollama' || provider === 'base');
 
     // Thinking values differ per provider; a value the new provider does not offer is cleared.
-    function changeProvider(id: ProviderId) {
+    function changeProvider(id: ProfileProviderId) {
         provider = id;
-        if (think && !providerInfo(id).thinkOptions.includes(think)) think = '';
+        if (think && !profileProviderInfo(id).thinkOptions.includes(think)) think = '';
         modelError = null;
     }
 
@@ -83,7 +87,7 @@
             modelId: modelId.trim(),
             prompt,
             think: parseThink(think),
-            keepAlive: provider === 'ollama' ? keepAlive.trim() || null : null,
+            keepAlive: showKeepAlive ? keepAlive.trim() || null : null,
             options
         });
     }
@@ -109,9 +113,12 @@
             </label>
             <label class="md-field">
                 <span class="md-label">{t('settings.modelProfile.provider')}</span>
-                <select class="md-input" value={provider} onchange={(e) => changeProvider(e.currentTarget.value as ProviderId)}>
-                    {#each PROVIDERS as p (p.id)}<option value={p.id}>{p.label}</option>{/each}
+                <select class="md-input" value={provider} onchange={(e) => changeProvider(e.currentTarget.value as ProfileProviderId)}>
+                    {#each PROFILE_PROVIDERS as p (p.id)}
+                        <option value={p.id}>{p.id === 'base' ? t('settings.modelProfile.provider.base') : p.label}</option>
+                    {/each}
                 </select>
+                <p class="md-desc">{t('settings.modelProfile.provider.hint')}</p>
             </label>
             <div class="md-field">
                 <span class="md-label">{t('settings.modelProfile.modelId')}</span>
@@ -119,7 +126,7 @@
                     <ModelCombobox
                         value={modelId}
                         known={info.known}
-                        installed={ai.modelsOf(provider)}
+                        installed={listedModels}
                         installedLabel={provider === 'ollama' ? 'ai.model.installed' : 'ai.model.available'}
                         includeBase={true}
                         placeholder={info.known[0]?.id ?? 'base'}
@@ -140,10 +147,11 @@
                     {#each info.thinkOptions as v (v)}<option value={v}>{v}</option>{/each}
                 </select>
             </label>
-            {#if provider === 'ollama'}
+            {#if showKeepAlive}
                 <label class="md-field">
                     <span class="md-label">{t('settings.modelProfile.keepAlive')}</span>
                     <input class="md-input" type="text" bind:value={keepAlive} placeholder="5m" />
+                    {#if provider === 'base'}<p class="md-desc">{t('settings.modelProfile.keepAlive.baseHint')}</p>{/if}
                 </label>
             {/if}
             <label class="md-field">

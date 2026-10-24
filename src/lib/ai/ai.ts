@@ -3,7 +3,7 @@ import {invoke, Channel} from '@tauri-apps/api/core';
 import {settings} from '$lib/settings';
 import type {BatchProgress, ItemStatus, PullProgress} from '$lib/events';
 import {DEFAULT_PROMPT} from './defaults';
-import {activeModelKey, baseUrlKey, DEFAULT_PROVIDER, providerInfo, type ProviderId} from './providers';
+import {activeModelKey, baseUrlKey, DEFAULT_PROVIDER, providerInfo, type ProfileProviderId, type ProviderId} from './providers';
 
 export interface ProviderStatus {
     installed: boolean;
@@ -42,11 +42,12 @@ export interface AttributionConfig {
     format: unknown;
 }
 
-/** A per-model attribution profile, persisted in `ai.modelProfiles`. Profiles saved before providers existed have no `provider` and belong to Ollama. */
+/** A per-model attribution profile, persisted in `ai.modelProfiles`. Profiles saved before providers existed have no `provider` and belong to Ollama.
+ *  A profile of the `base` pseudo-provider applies to every provider. */
 export interface ModelProfile {
     id: string;
     name: string;
-    provider?: ProviderId;
+    provider?: ProfileProviderId;
     modelId: string;
     prompt: string;
     think?: boolean | string | null;
@@ -54,9 +55,9 @@ export interface ModelProfile {
     options: Record<string, number | string | boolean>;
 }
 
-/** The provider a profile belongs to. */
-export function profileProvider(p: ModelProfile): ProviderId {
-    return providerInfo(p.provider ?? DEFAULT_PROVIDER).id;
+/** The provider a profile belongs to (`base` for a profile that applies to every provider). */
+export function profileProvider(p: ModelProfile): ProfileProviderId {
+    return p.provider === 'base' ? 'base' : providerInfo(p.provider ?? DEFAULT_PROVIDER).id;
 }
 
 /** The provider selected for attribution. */
@@ -141,10 +142,11 @@ function appendAnswerFormat(prompt: string, schemaText: string): string {
     return `${prompt}\n\n${lead}\`\`\`json\n${schema}\n\`\`\``;
 }
 
-/** The profile for `model` on `provider`: its own profile, else the provider's "base" profile. */
+/** The profile for `model` on `provider`, most specific first: the provider's profile for the model, a Base (all providers) profile for the model, the provider's "base" fallback, then the Base provider's "base" fallback. */
 export function profileFor(provider: ProviderId, model: string): ModelProfile | undefined {
-    const own = (settings.get<ModelProfile[]>('ai.modelProfiles') ?? []).filter(p => profileProvider(p) === provider);
-    return own.find(p => p.modelId === model) ?? own.find(p => p.modelId === 'base');
+    const profiles = settings.get<ModelProfile[]>('ai.modelProfiles') ?? [];
+    const find = (owner: ProfileProviderId, modelId: string) => profiles.find(p => profileProvider(p) === owner && p.modelId === modelId);
+    return find(provider, model) ?? find('base', model) ?? find(provider, 'base') ?? find('base', 'base');
 }
 
 /** Assemble the per-request config from settings + the profile matching the active provider and model. */

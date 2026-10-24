@@ -4,7 +4,7 @@
     import ModelProfileDialog from './ModelProfileDialog.svelte';
     import {ai} from '$lib/ai/availability.svelte';
     import {profileProvider, type ModelProfile} from '$lib/ai/ai';
-    import {providerInfo} from '$lib/ai/providers';
+    import {profileProviderInfo} from '$lib/ai/providers';
     import type {SettingSectionProps} from './SettingsSection';
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -55,7 +55,7 @@
             {#each profiles as p (p.id)}
                 <li class="mp-row">
                     <span class="mp-name">{p.name || p.modelId || '—'}</span>
-                    <span class="mp-provider">{providerInfo(profileProvider(p)).label}</span>
+                    <span class="mp-provider">{profileProviderInfo(profileProvider(p)).label}</span>
                     <span class="mp-model">{p.modelId}</span>
                     <button class="mp-btn" onclick={() => edit(p)}>{t('common.edit')}</button>
                     <button class="mp-btn mp-btn--danger" onclick={() => remove(p)}>{t('common.delete')}</button>

@@ -76,6 +76,34 @@ export function providerInfo(id: string | null | undefined): ProviderInfo {
     return PROVIDERS.find(p => p.id === id) ?? PROVIDERS[0];
 }
 
+/** Owner of a model profile: a real provider, or `base` — a pseudo-provider whose profiles apply to every provider. */
+export type ProfileProviderId = ProviderId | 'base';
+
+/** What the profile dialog needs to know about a profile owner. */
+export interface ProfileProviderInfo {
+    id: ProfileProviderId;
+    label: string;
+    thinkOptions: string[];
+    optionsHint: MessageKey;
+    known: KnownModel[];
+}
+
+/** The `base` pseudo-provider: thinking values every provider understands and the curated models of all providers. */
+export const BASE_PROFILE_PROVIDER: ProfileProviderInfo = {
+    id: 'base',
+    label: 'Base',
+    thinkOptions: ['false', 'true', 'low', 'medium', 'high'],
+    optionsHint: 'settings.modelProfile.options.description.base',
+    known: [...new Map(PROVIDERS.flatMap(p => p.known).map(m => [m.id, m])).values()]
+};
+
+/** Profile owners offered in the profile dialog: Base first, then every provider. */
+export const PROFILE_PROVIDERS: ProfileProviderInfo[] = [BASE_PROFILE_PROVIDER, ...PROVIDERS];
+
+export function profileProviderInfo(id: ProfileProviderId): ProfileProviderInfo {
+    return id === 'base' ? BASE_PROFILE_PROVIDER : providerInfo(id);
+}
+
 /** Settings key of the provider's base URL, or null when it has none. */
 export function baseUrlKey(id: ProviderId): string | null {
     return providerInfo(id).defaultBaseUrl === null ? null : `${id}.baseUrl`;

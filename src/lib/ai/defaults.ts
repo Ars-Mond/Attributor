@@ -58,8 +58,18 @@ mature_content — true if the photo contains nudity, sexual themes, or violence
 
 illustration — true if the image is digitally created, hand-drawn, or heavily edited with non-photographic artistic elements. false if it is a straightforward photograph.`;
 
-// Profiles seeded on first run / restored on reset: Ollama's "base" fallback plus two concrete Ollama models.
+// Profiles seeded on first run / restored on reset: the Base (all providers) fallback with the default prompt, Ollama's "base" fallback with its run options, and two concrete Ollama models.
 export const DEFAULT_MODEL_PROFILES: ModelProfile[] = [
+    {
+        id: 'default-any-base',
+        name: 'Base',
+        provider: 'base',
+        modelId: 'base',
+        prompt: DEFAULT_PROMPT,
+        think: null,
+        keepAlive: null,
+        options: {}
+    },
     {
         id: 'default-base',
         name: 'Base',

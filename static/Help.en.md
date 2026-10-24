@@ -78,7 +78,7 @@ Attributor can fill metadata automatically using a vision model. Choose the prov
 
 - Click **Attribute via …** (the button names the active provider) in the Control panel footer to analyze the open photo and fill Title, Description, Keywords, Categories and the attribution flags (Editorial / Mature content / Illustration).
 - In **Batch mode**, the Attribute button processes every selected photo in turn. A blocking progress bar with a **Cancel** button is shown while the model runs.
-- The button is available once the provider is set up (Ollama installed, an API key saved, or signed in to ChatGPT) and a model is selected. Set this up in **Settings → AI attribution** (provider, base URL, key or sign-in, active model, response format) and **Settings → Model profiles** (per-provider, per-model prompt, thinking mode and run options; a profile with the model id `base` is the provider's fallback).
+- The button is available once the provider is set up (Ollama installed, an API key saved, or signed in to ChatGPT) and a model is selected. Set this up in **Settings → AI attribution** (provider, base URL, key or sign-in, active model, response format) and **Settings → Model profiles** (per-provider, per-model prompt, thinking mode and run options; a profile with the model id `base` is the provider's fallback). Profiles of the **Base (all providers)** provider apply to every provider; the most specific profile is used: the provider's profile for the model, a Base profile for the model, the provider's `base` profile, then Base's `base` profile.
 - Results are saved to the app database (status 🟣 **in app**). Review them, then click **Save Changes** to write them into the files.
 
 ---
@@ -234,7 +234,7 @@ Open **File → Settings** (or press `Ctrl+,`).
 | **Appearance** | Theme — **System / Light / Dark** — and the interface font size. |
 | **Caching** | Photo and thumbnail caching options. |
 | **AI attribution** | AI provider and its connection: base URL, API key or ChatGPT sign-in, active model, response format. |
-| **Model profiles** | Attribution profiles per provider and model (prompt, thinking mode and run options). |
+| **Model profiles** | Attribution profiles per provider and model (prompt, thinking mode and run options); **Base** profiles apply to every provider. |
 | **CSV Export** | Per-stock CSV presets: name, identifier, column delimiter, and the ordered field list. |
 | **Shortcuts** | View and rebind keyboard shortcuts, including the file-navigation arrows. |
 

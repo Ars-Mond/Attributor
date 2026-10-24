@@ -6,7 +6,7 @@
 - **More AI providers** — besides Ollama, auto-attribution now works with the local servers **llama.cpp** (`llama-server`), **LM Studio**, **Jan**, **vLLM** and **Unsloth** (Studio / Desktop) through their OpenAI-compatible APIs, and with the cloud **OpenAI API**, **ChatGPT** (your Plus/Pro plan via the official *Sign in with ChatGPT*) and **Claude API**. Pick the provider in **Settings → AI attribution**; each provider keeps its own address, key and active model.
 - API keys are stored in the operating system's credential store (never in the settings file); ChatGPT tokens are kept in a file encrypted with a key from that store.
 - LM Studio is started on demand through its `lms` CLI, like Ollama.
-- Model profiles now belong to a provider, so each provider can have its own prompt, thinking mode and run options (and its own `base` fallback profile).
+- Model profiles now belong to a provider, so each provider can have its own prompt, thinking mode and run options (and its own `base` fallback profile). Profiles of the **Base** pseudo-provider apply to every provider; the most specific profile wins (the provider's profile for the model, a Base profile for the model, the provider's `base`, then Base's `base`).
 
 ### Changed
 - **Settings → Ollama** is now **Settings → AI attribution** (with a provider selector at the top), and **Ollama Models** is now **Model profiles**. Existing Ollama settings and profiles are carried over unchanged.
