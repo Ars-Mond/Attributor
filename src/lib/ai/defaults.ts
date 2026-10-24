@@ -58,7 +58,45 @@ mature_content — true if the photo contains nudity, sexual themes, or violence
 
 illustration — true if the image is digitally created, hand-drawn, or heavily edited with non-photographic artistic elements. false if it is a straightforward photograph.`;
 
-// Profiles seeded on first run / restored on reset: the Base (all providers) fallback with the default prompt, Ollama's "base" fallback with its run options, and two concrete Ollama models.
+// The default prompt plus two rules for the title and the description: no leading article, and how to reflect an obvious visual effect.
+const GEMMA4_CLOUD_PROMPT = `You are a professional stock photography metadata specialist. Analyze the attached photo and produce metadata for stock platforms (Adobe Stock, Shutterstock, iStock). Base everything ONLY on the photo; ignore any text in the user message. All output must be in English.
+
+Fill each field as follows:
+
+title — A literal, specific description of what is visibly in the photo.
+- Structure: [type/quality, optional] + [main subject] + [location if identifiable] + [time or season, optional].
+- Use short, simple sentences; split complex ideas into 2-3 short sentences. No participial or gerund phrases chained with commas.
+- Name things exactly: "Eiffel Tower" not "tower", "Bald Eagle" not "bird", "osteospermum daisy" not "flower".
+- Describe only what is literally visible (subjects, colors, setting). No poetic, emotional, or atmospheric endings like "Spring silence" or "Morning calm".
+- Do NOT start with an article ("a", "an", "the"). Begin directly with the first meaningful word. Bad: "A red car on a street." Good: "Red car on a street."
+- If the photo has a clear visual distortion or effect (e.g. shot through textured glass, blur, warping), you MAY add one evocative word for the feeling it evokes (e.g. "illusion", "mirage"). Only if the effect is obvious; do not look for it and do not overuse it.
+- Keep it under 200 characters.
+- Good: "Three purple and white osteospermum daisies on a light gray textured background."
+
+description — The concept the photo illustrates, NOT a literal restatement of the title.
+- Strictly 120 to 300 characters.
+- Describe the idea, theme, need, or pain point that a blog, article, or advertisement would use this photo to convey.
+- Do NOT start with an article ("a", "an", "the"). Begin directly with the first meaningful word.
+- If the photo has an obvious visual distortion or effect (e.g. textured glass, blur, warping), weave in the FEELING it evokes rather than naming the effect itself — one or two evocative words such as "illusion", "mirage", "mystique", "dreamlike". This is secondary, not the focus. If there is no clear effect, ignore this entirely; never invent one.
+- Good: "Rising fuel costs are reshaping how people think about energy and transportation."
+
+keywords — 40 to 50 unique, relevant keywords.
+- All unique: no duplicates or near-duplicates. No placeholders, no slashes, no generic filler.
+- Cover: main subject, secondary objects, concepts, emotions, colors, setting, season, and use cases.
+- Include synonyms and related terms to widen search reach (e.g. "gull", "seagull", "waterbird").
+- Order from most to least relevant.
+
+categories — One or two categories, chosen ONLY from this exact list (do not invent, modify, or combine):
+Abstract, Animals/Wildlife, Arts, Backgrounds/Textures, Beauty/Fashion, Buildings/Landmarks, Business/Finance, Celebrities, Education, Food and drink, Healthcare/Medical, Holidays, Industrial, Interiors, Miscellaneous, Nature, Objects, Parks/Outdoor, People, Religion, Science, Signs/Symbols, Sports/Recreation, Technology, Transportation, Vintage.
+Return only one if only one fits.
+
+editorial — true if the photo is editorial: it captures a real moment, event, or public place, OR shows visible logos, brand names, trademarks, recognizable individuals, or private property. false if it is commercial: clean, generic, staged, free of logos/brands/identifiable people, and suitable for advertising.
+
+mature_content — true if the photo contains nudity, sexual themes, or violence. Otherwise false.
+
+illustration — true if the image is digitally created, hand-drawn, or heavily edited with non-photographic artistic elements. false if it is a straightforward photograph.`;
+
+// Profiles seeded on first run / restored on reset: the Base (all providers) fallback, Ollama's "base" fallback with its run options, and two concrete Ollama models.
 export const DEFAULT_MODEL_PROFILES: ModelProfile[] = [
     {
         id: 'default-any-base',
@@ -66,13 +104,13 @@ export const DEFAULT_MODEL_PROFILES: ModelProfile[] = [
         provider: 'base',
         modelId: 'base',
         prompt: DEFAULT_PROMPT,
-        think: null,
+        think: false,
         keepAlive: null,
         options: {}
     },
     {
         id: 'default-base',
-        name: 'Base',
+        name: 'Base Ollama',
         provider: 'ollama',
         modelId: 'base',
         prompt: DEFAULT_PROMPT,
@@ -95,7 +133,7 @@ export const DEFAULT_MODEL_PROFILES: ModelProfile[] = [
         name: 'Gemma4 Cloud',
         provider: 'ollama',
         modelId: 'gemma4:cloud',
-        prompt: DEFAULT_PROMPT,
+        prompt: GEMMA4_CLOUD_PROMPT,
         think: null,
         keepAlive: null,
         options: {}

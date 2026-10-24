@@ -13,6 +13,7 @@
 - The attribute button names the active provider (e.g. *Attribute via LM Studio*).
 - Providers other than Ollama receive the photo as a JPEG downscaled to 1568 px with the EXIF orientation applied; Ollama still receives the original file.
 - When no profile matches the active model, the built-in stock-metadata prompt is used instead of a short placeholder.
+- New default model profiles (first run and **Reset to defaults**): **Base** for all providers with thinking off, Ollama's fallback renamed **Base Ollama**, and the **Gemma4 Cloud** prompt gains two title/description rules (no leading article; how to reflect an obvious visual effect).
 
 ## [1.2.0] - 2026-07-02
 
