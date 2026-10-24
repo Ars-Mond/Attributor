@@ -267,6 +267,9 @@ export interface Messages {
     'settings.ai.account.manageUsage': string;
     'settings.ai.account.description': string;
     'settings.ai.account.failed': string;
+    'settings.ai.account.copyLink': string;
+    'settings.ai.account.linkCopied': string;
+    'settings.ai.account.copyLinkHint': string;
     'settings.ai.activeModel': string;
     'settings.ai.activeModel.none': string;
     'settings.ai.refresh': string;

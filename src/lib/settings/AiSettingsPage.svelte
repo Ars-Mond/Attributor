@@ -1,6 +1,7 @@
 <script lang="ts">
     import {onMount} from 'svelte';
     import {openUrl} from '@tauri-apps/plugin-opener';
+    import {writeText} from '@tauri-apps/plugin-clipboard-manager';
     import {settings} from './index';
     import {t} from '$lib/i18n';
     import type {MessageKey} from '$lib/i18n/types';
@@ -106,8 +107,20 @@
             cancelable: true,
             onCancel: () => {cancelAi();}
         });
+        // The browser opens on its own; the link can also be copied to sign in from another browser.
+        const onLink = (url: string) => {
+            const copy = async () => {
+                try {
+                    await writeText(url);
+                    handle.update({action: {label: t('settings.ai.account.linkCopied'), run: copy}});
+                } catch (e) {
+                    handle.update({detail: message(e)});
+                }
+            };
+            handle.update({detail: t('settings.ai.account.copyLinkHint'), action: {label: t('settings.ai.account.copyLink'), run: copy}});
+        };
         try {
-            await chatgptLogin(newAccount);
+            await chatgptLogin(newAccount, onLink);
             await ai.refreshAccount();
             await check();
         } catch (e) {
