@@ -29,7 +29,7 @@
     import ConfirmDialog, {type DialogIcon} from "$lib/dialog/ConfirmDialog.svelte";
     import {pickExportDir, exportCsv} from "$lib/csv/export";
     import type {CsvPreset} from "$lib/csv/csv";
-    import {panelState} from "$lib/panel/filesPanelStore.svelte";
+    import {panelState, restoreFilesView} from "$lib/panel/filesPanelStore.svelte";
     import {error as logError} from "@tauri-apps/plugin-log";
     import {checkForUpdate, type UpdateInfo} from "$lib/update";
     import {openUrl} from "@tauri-apps/plugin-opener";
@@ -371,6 +371,9 @@
                 if (Array.isArray(parsed)) hiddenWindows = parsed;
             } catch { /* ignore */ }
         }
+
+        // Restore the Hierarchy panel's view mode and layout direction before the last folder opens in it.
+        restoreFilesView(state);
 
         // Load settings before restoring the folder so the cache config (cacheGenConfig) and the
         // viewer reflect the user's saved settings instead of the defaults.

@@ -224,7 +224,7 @@ Drag a panel's title bar and drop it onto a **drop zone** (highlighted edges) of
 
 ## Hierarchy Panel View Modes
 
-Use the toolbar in the Hierarchy panel to switch how files are displayed.
+Use the toolbar in the Hierarchy panel to switch how files are displayed. The chosen view mode and layout direction are remembered between launches.
 
 ### View Modes
 

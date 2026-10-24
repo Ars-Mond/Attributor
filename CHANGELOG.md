@@ -20,6 +20,7 @@
 - New default model profiles (first run and **Reset to defaults**): **Base** for all providers with thinking off, Ollama's fallback renamed **Base Ollama**, and the **Gemma4 Cloud** prompt gains two title/description rules (no leading article; how to reflect an obvious visual effect).
 
 ### Fixed
+- The Hierarchy panel's view mode (Table / Content / Icons) and layout direction are remembered between launches instead of returning to the defaults.
 - Saving a photo whose name contains a dot (e.g. `IMG_1.edit.jpg`), alone or in a batch, no longer renames the file by cutting its name at the last dot; only an image extension typed into the file name is dropped.
 - Opening a photo for the first time no longer overwrites metadata stored for it at the same moment by another operation.
 
