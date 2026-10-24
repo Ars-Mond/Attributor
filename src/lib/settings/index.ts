@@ -4,6 +4,7 @@ import ShortcutsPage from '$lib/shortcuts/ShortcutsPage.svelte';
 import AiSettingsPage from './AiSettingsPage.svelte';
 import ModelProfilesPage from './ModelProfilesPage.svelte';
 import CsvPresetsPage from './CsvPresetsPage.svelte';
+import McpSettingsPage from './McpSettingsPage.svelte';
 import type {ModelProfile} from '$lib/ai/ai';
 import {DEFAULT_MODEL_PROFILES, DEFAULT_RESPONSE_FORMAT} from '$lib/ai/defaults';
 import {activeModelKey, baseUrlKey, DEFAULT_PROVIDER, PROVIDERS} from '$lib/ai/providers';
@@ -197,6 +198,14 @@ settings.register('csv', {
     type: 'custom',
     default: DEFAULT_CSV_PRESETS,
     label: 'settings.section.csv'
+});
+
+// MCP server: its settings live in the backend (mcp.json), so the page registers no keys and the settings tools cannot reach them.
+settings.registerSection({
+    id: 'mcp',
+    label: 'settings.section.mcp',
+    order: 7,
+    component: McpSettingsPage
 });
 
 settings.registerSection({

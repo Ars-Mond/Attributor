@@ -355,6 +355,49 @@ export interface Messages {
     'settings.csv.duplicateIdentifier': string;
     'settings.csv.invalidIdentifier': string;
     'settings.csv.fieldsRequired': string;
+
+    // MCP
+    'settings.section.mcp': string;
+    'settings.mcp.intro': string;
+    'settings.mcp.server': string;
+    'settings.mcp.enable': string;
+    'settings.mcp.status.running': string;
+    'settings.mcp.status.stopped': string;
+    'settings.mcp.status.error': string;
+    'settings.mcp.appOpen': string;
+    'settings.mcp.address': string;
+    'settings.mcp.port.description': string;
+    'settings.mcp.port.invalid': string;
+    'settings.mcp.copied': string;
+    'settings.mcp.token': string;
+    'settings.mcp.token.show': string;
+    'settings.mcp.token.hide': string;
+    'settings.mcp.token.regenerate': string;
+    'settings.mcp.token.description': string;
+    'settings.mcp.permissions': string;
+    'settings.mcp.allowAi': string;
+    'settings.mcp.allowAi.description': string;
+    'settings.mcp.clients': string;
+    'settings.mcp.clients.description': string;
+    'settings.mcp.client.state.unknown': string;
+    'settings.mcp.client.state.notFound': string;
+    'settings.mcp.client.state.found': string;
+    'settings.mcp.client.state.installed': string;
+    'settings.mcp.client.state.outdated': string;
+    'settings.mcp.client.state.error': string;
+    'settings.mcp.client.install': string;
+    'settings.mcp.client.update': string;
+    'settings.mcp.client.remove': string;
+    'settings.mcp.client.copy': string;
+    'settings.mcp.client.open': string;
+    'settings.mcp.client.hint.claudeDesktop': string;
+    'settings.mcp.client.hint.claudeCode': string;
+    'settings.mcp.client.hint.codex': string;
+    'settings.mcp.client.needsServer': string;
+    'settings.mcp.activity': string;
+    'settings.mcp.activity.empty': string;
+    'settings.mcp.activity.clear': string;
+    'settings.mcp.activity.duration': string;
 }
 
 // Keys whose value is a plain string (usable with t()).

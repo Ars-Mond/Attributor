@@ -7,7 +7,7 @@
     import {onMount, onDestroy, untrack} from "svelte";
     import FileTree from "$reusable/FileTree.svelte";
     import type {FileNode} from "$lib/types";
-    import {panelState} from './filesPanelStore.svelte';
+    import {panelState, cacheGenConfig} from './filesPanelStore.svelte';
     import type {ViewMode, LayoutDir} from './filesPanelStore.svelte';
     import {progress} from "$lib/progress.svelte";
 
@@ -39,18 +39,6 @@
     // ── Cache settings ─────────────────────────────────────────────────────
 
     const cacheSmall = $derived(settings.subscribe<boolean>('cache.smallThumbnails')());
-
-    /** Eager-generation config sent to the backend, derived from the cache + folder settings.
-     *  Small (low) thumbnails are always generated up front; only the large (high) thumbnail is
-     *  deferred by lazy caching. `recursive` follows the general "Read nested folders" setting. */
-    function cacheGenConfig() {
-        const lazy = settings.get<boolean>('cache.lazy');
-        return {
-            low: settings.get<boolean>('cache.smallThumbnails'),
-            high: !lazy && settings.get<boolean>('cache.photo'),
-            recursive: settings.get<boolean>('general.nestedFolders'),
-        };
-    }
 
     // When switching to a thumbnail view, verify the `_thumbnail` cache folder still exists (it may
     // have been deleted on disk); if it is gone, drop the stale ready flags and rebuild the low
@@ -215,7 +203,7 @@
         unlisten = await listenEvent(EVENT.folderChanged, () => {
             // Skip the rescan while a batch metadata save runs — its writes are already known and
             // would otherwise trigger a wasteful full rescan / thumbnail-pipeline restart (FR-008).
-            if (panelState.batchInProgress) return;
+            if (panelState.batchInProgress || panelState.mcpWriting) return;
             // Debounce: rapid fs events collapse into one refresh
             if (refreshTimer) clearTimeout(refreshTimer);
             refreshTimer = setTimeout(async () => {

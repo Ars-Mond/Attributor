@@ -94,6 +94,52 @@ impl DbState {
         }
     }
 
+    /// Store an attribution result as app-only (file untouched): keywords merged with the record's, the release file name kept. Blocking.
+    pub fn attribute(&self, path: &str, model: &StoredMetadata) -> Result<SyncState, String> {
+        let conn = self.handle().ok_or("the metadata store is unavailable")?;
+        attribute_app_only(&conn, path, model)
+    }
+
+    /// Whether the database is open; without it nothing is persisted and reads come straight from the files.
+    pub fn is_available(&self) -> bool {
+        self.conn.is_some()
+    }
+
+    /// Resolve a photo's metadata store-first (read-flow), or read the file when the store is unavailable. Blocking.
+    pub fn resolve(&self, path: &str) -> Result<MetadataResolution, String> {
+        match self.handle() {
+            Some(conn) => resolve_open(&conn, path),
+            None => Ok(MetadataResolution::Resolved { metadata: read_file_metadata(path)?, sync_state: SyncState::Synced }),
+        }
+    }
+
+    /// Persist the working fields as app-only (file untouched); returns `Synced` without writing when the store is unavailable. Blocking.
+    pub fn persist(&self, path: &str, fields: &StoredMetadata) -> Result<SyncState, String> {
+        match self.handle() {
+            Some(conn) => persist_app_only(&conn, path, fields),
+            None => {
+                log::warn!("store_metadata skipped (store unavailable): {path}");
+                Ok(SyncState::Synced)
+            }
+        }
+    }
+
+    /// Reset / revert-to-file: restore the record from the file, clearing the store-only fields; a plain file read when the store is unavailable. Blocking.
+    pub fn revert(&self, path: &str) -> Result<StoredMetadata, String> {
+        match self.handle() {
+            Some(conn) => revert(&conn, path),
+            None => read_file_metadata(path),
+        }
+    }
+
+    /// Finalize a conflict (FR-012) from the store (`from_file` false) or the file; a plain file read when the store is unavailable. Blocking.
+    pub fn apply_source(&self, path: &str, from_file: bool) -> Result<MetadataResolution, String> {
+        match self.handle() {
+            Some(conn) => apply_source(&conn, path, from_file),
+            None => Ok(MetadataResolution::Resolved { metadata: read_file_metadata(path)?, sync_state: SyncState::Synced }),
+        }
+    }
+
     /// Pure read for CSV export (FR-009): return the stored metadata for `path` without any mutation
     /// (no fingerprint/mtime refresh). `None` if the store is unavailable or the path has no record.
     pub fn fetch(&self, path: &str) -> Option<StoredMetadata> {
@@ -220,40 +266,45 @@ fn resolve_open(conn: &Mutex<Connection>, path: &str) -> Result<MetadataResoluti
         read_record(&c, path)?
     };
 
-    match existing {
+    let rec = match existing {
+        Some(rec) => rec,
         None => {
             let meta = read_file_metadata(path)?;
             let fp = fingerprint::compute(Path::new(path))?;
             let c = conn.lock().unwrap_or_else(|e| e.into_inner());
-            upsert_record(&c, path, &meta, &fp, true)?;
-            log::info!("store: created record for {path}");
-            Ok(MetadataResolution::Resolved { metadata: meta, sync_state: SyncState::Synced })
-        }
-        Some(rec) => {
-            let fp = fingerprint::compute(Path::new(path))?;
-            match decide(rec.fp.hash, rec.synced, fp.hash) {
-                Decision::Unchanged => {
-                    // Content unchanged (hash authoritative). Silently refresh mtime/size if drifted.
-                    if fp.mtime != rec.fp.mtime || fp.size != rec.fp.size {
-                        let c = conn.lock().unwrap_or_else(|e| e.into_inner());
-                        let _ = c.execute(
-                            "UPDATE photo_metadata SET mtime=?1, size=?2 WHERE path=?3",
-                            params![fp.mtime, fp.size as i64, path],
-                        );
-                    }
-                    let sync_state = if rec.synced { SyncState::Synced } else { SyncState::AppOnly };
-                    Ok(MetadataResolution::Resolved { metadata: rec.meta, sync_state })
-                }
-                Decision::StoreWins => {
-                    log::info!("store: hash changed but record app-only → store wins for {path}");
-                    Ok(MetadataResolution::Resolved { metadata: rec.meta, sync_state: SyncState::AppOnly })
-                }
-                Decision::Conflict => {
-                    log::info!("store: external content change for {path} → conflict");
-                    let file = read_file_metadata(path)?;
-                    Ok(MetadataResolution::Conflict { store: rec.meta, file })
+            // The file is read without the lock, so another writer (an edit, an attribution) may have created the record meanwhile; that record wins.
+            match read_record(&c, path)? {
+                Some(rec) => rec,
+                None => {
+                    upsert_record(&c, path, &meta, &fp, true)?;
+                    log::info!("store: created record for {path}");
+                    return Ok(MetadataResolution::Resolved { metadata: meta, sync_state: SyncState::Synced });
                 }
             }
+        }
+    };
+    let fp = fingerprint::compute(Path::new(path))?;
+    match decide(rec.fp.hash, rec.synced, fp.hash) {
+        Decision::Unchanged => {
+            // Content unchanged (hash authoritative). Silently refresh mtime/size if drifted.
+            if fp.mtime != rec.fp.mtime || fp.size != rec.fp.size {
+                let c = conn.lock().unwrap_or_else(|e| e.into_inner());
+                let _ = c.execute(
+                    "UPDATE photo_metadata SET mtime=?1, size=?2 WHERE path=?3",
+                    params![fp.mtime, fp.size as i64, path],
+                );
+            }
+            let sync_state = if rec.synced { SyncState::Synced } else { SyncState::AppOnly };
+            Ok(MetadataResolution::Resolved { metadata: rec.meta, sync_state })
+        }
+        Decision::StoreWins => {
+            log::info!("store: hash changed but record app-only → store wins for {path}");
+            Ok(MetadataResolution::Resolved { metadata: rec.meta, sync_state: SyncState::AppOnly })
+        }
+        Decision::Conflict => {
+            log::info!("store: external content change for {path} → conflict");
+            let file = read_file_metadata(path)?;
+            Ok(MetadataResolution::Conflict { store: rec.meta, file })
         }
     }
 }
@@ -385,17 +436,10 @@ pub async fn open_metadata(
     path: String,
     state: tauri::State<'_, DbState>,
 ) -> Result<MetadataResolution, String> {
-    match state.handle() {
-        Some(conn) => tokio::task::spawn_blocking(move || resolve_open(&conn, &path))
-            .await
-            .map_err(|e| e.to_string())?,
-        None => {
-            let meta = tokio::task::spawn_blocking(move || read_file_metadata(&path))
-                .await
-                .map_err(|e| e.to_string())??;
-            Ok(MetadataResolution::Resolved { metadata: meta, sync_state: SyncState::Synced })
-        }
-    }
+    let db = state.share();
+    tokio::task::spawn_blocking(move || db.resolve(&path))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Persist the working fields to the store as app-only (file untouched). No-op (returns `Synced`)
@@ -406,15 +450,10 @@ pub async fn store_metadata(
     fields: StoredMetadata,
     state: tauri::State<'_, DbState>,
 ) -> Result<SyncState, String> {
-    match state.handle() {
-        Some(conn) => tokio::task::spawn_blocking(move || persist_app_only(&conn, &path, &fields))
-            .await
-            .map_err(|e| e.to_string())?,
-        None => {
-            log::warn!("store_metadata skipped (store unavailable): {path}");
-            Ok(SyncState::Synced)
-        }
-    }
+    let db = state.share();
+    tokio::task::spawn_blocking(move || db.persist(&path, &fields))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Reset / revert-to-file: restore the record (and the returned fields) from the file, CLEARING the
@@ -425,14 +464,10 @@ pub async fn revert_to_file(
     path: String,
     state: tauri::State<'_, DbState>,
 ) -> Result<StoredMetadata, String> {
-    match state.handle() {
-        Some(conn) => tokio::task::spawn_blocking(move || revert(&conn, &path))
-            .await
-            .map_err(|e| e.to_string())?,
-        None => tokio::task::spawn_blocking(move || read_file_metadata(&path))
-            .await
-            .map_err(|e| e.to_string())?,
-    }
+    let db = state.share();
+    tokio::task::spawn_blocking(move || db.revert(&path))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Finalize a conflict from `open_metadata` (FR-012). `source` is "store" (keep the store version) or
@@ -444,17 +479,10 @@ pub async fn apply_metadata_source(
     state: tauri::State<'_, DbState>,
 ) -> Result<MetadataResolution, String> {
     let from_file = source != "store";
-    match state.handle() {
-        Some(conn) => tokio::task::spawn_blocking(move || apply_source(&conn, &path, from_file))
-            .await
-            .map_err(|e| e.to_string())?,
-        None => {
-            let meta = tokio::task::spawn_blocking(move || read_file_metadata(&path))
-                .await
-                .map_err(|e| e.to_string())??;
-            Ok(MetadataResolution::Resolved { metadata: meta, sync_state: SyncState::Synced })
-        }
-    }
+    let db = state.share();
+    tokio::task::spawn_blocking(move || db.apply_source(&path, from_file))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[cfg(test)]

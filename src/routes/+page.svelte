@@ -33,6 +33,7 @@
     import {error as logError} from "@tauri-apps/plugin-log";
     import {checkForUpdate, type UpdateInfo} from "$lib/update";
     import {openUrl} from "@tauri-apps/plugin-opener";
+    import {startMcpBridge} from "$lib/mcp/bridge";
 
     // --- Docking ---
     // $derived so dock tab titles re-render on a language switch.
@@ -335,6 +336,7 @@
     // --- Session restore & window state ---
 
     let unlistenResize: (() => void) | null = null;
+    let unlistenMcp: (() => void) | null = null;
     let winResizeTimer: ReturnType<typeof setTimeout> | null = null;
 
     function handleGlobalKeyDown(e: KeyboardEvent) {
@@ -419,6 +421,22 @@
         // 6. Show window after full UI init
         await win.show();
 
+        // Answer MCP tool requests; the backend waits for this before it asks the window anything.
+        try {
+            unlistenMcp = await startMcpBridge({
+                editor: () => metaPanel,
+                currentPath: () => currentPath,
+                batchPaths: () => batchPaths,
+                isDirty: () => isDirty,
+                openFile,
+                folderOpened: handleFolderOpen,
+                selectionChanged: handleSelectionChange,
+                pathChanged: handlePathChange,
+            });
+        } catch (e) {
+            logError(`MCP bridge failed to start: ${e}`);
+        }
+
         // 6. Save window size whenever it changes (debounced)
         unlistenResize = await win.onResized(async () => {
             if (winResizeTimer) clearTimeout(winResizeTimer);
@@ -437,6 +455,7 @@
     onDestroy(() => {
         window.removeEventListener('keydown', handleGlobalKeyDown);
         unlistenResize?.();
+        unlistenMcp?.();
         if (winResizeTimer) clearTimeout(winResizeTimer);
     });
 </script>

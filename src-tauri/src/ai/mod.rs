@@ -5,7 +5,7 @@ mod anthropic;
 pub mod attribute;
 mod chatgpt;
 mod http;
-mod image;
+pub(crate) mod image;
 mod lmstudio;
 mod ollama;
 mod openai;
@@ -33,6 +33,20 @@ impl AiState {
     /// Sets where sealed credentials are stored (the app's local data directory, so they do not roam with the profile).
     pub fn set_storage_dir(&self, dir: std::path::PathBuf) {
         self.chatgpt.set_storage_dir(dir);
+    }
+
+    /// Attributes one photo under the caller's own cancel flag, leaving the shared one (and so the UI's operation) alone. Used by MCP jobs.
+    ///
+    /// # Errors
+    ///
+    /// Returns the provider's or the parser's error message, or `cancelled`.
+    pub(crate) async fn attribute_detached(
+        &self,
+        path: &str,
+        config: &AttributionConfig,
+        cancel: &Arc<AtomicBool>,
+    ) -> Result<AttributionResult, String> {
+        attribute::attribute_one(path, config, cancel, &self.chatgpt).await
     }
 }
 

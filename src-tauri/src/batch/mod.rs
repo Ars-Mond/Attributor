@@ -31,6 +31,20 @@ fn swap_cancel(state: &BatchState) -> Arc<AtomicBool> {
     new_flag
 }
 
+/// The stem a save asks for: `filename` without directories and without an image extension (other dots belong to the name, as in `IMG_1.edit`).
+/// A name equal to the current stem is kept as it is, so an unchanged name never renames the file.
+fn requested_stem(filename: &str, current: &str) -> String {
+    let name = filename.trim();
+    if name == current {
+        return name.to_string();
+    }
+    let name = Path::new(name).file_name().and_then(|s| s.to_str()).unwrap_or(name);
+    match name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() && matches!(ext.to_ascii_lowercase().as_str(), "jpg" | "jpeg" | "png" | "webp") => stem.to_string(),
+        _ => name.to_string(),
+    }
+}
+
 /// Write one photo's metadata, renaming the file if its stem changed. Shared by the
 /// single-file `save_metadata` command and every batch item (guarantees identical results).
 pub(crate) fn save_one(item: SaveRequest) -> Result<String, String> {
@@ -48,10 +62,7 @@ pub(crate) fn save_one(item: SaveRequest) -> Result<String, String> {
 
     // ── Determine target path (rename if the stem changed) ──
     let orig_stem = orig_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-    let new_stem = {
-        let s = filename.trim();
-        Path::new(s).file_stem().and_then(|s| s.to_str()).unwrap_or(s).to_string()
-    };
+    let new_stem = requested_stem(&filename, orig_stem);
 
     let final_path = if !new_stem.is_empty() && new_stem != orig_stem {
         let ext = orig_path.extension().and_then(|e| e.to_str()).unwrap_or("");
@@ -203,5 +214,46 @@ pub fn cancel_batch(state: tauri::State<'_, BatchState>) {
     let guard = state.cancel.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(flag) = guard.as_ref() {
         flag.store(true, Ordering::Relaxed);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn requested_stem_strips_only_image_extensions() {
+        assert_eq!(requested_stem("IMG_1.edit", "IMG_1.edit"), "IMG_1.edit");
+        assert_eq!(requested_stem("IMG_1.edit", "other"), "IMG_1.edit");
+        assert_eq!(requested_stem(" beach.JPG ", "x"), "beach");
+        assert_eq!(requested_stem("photo.jpg", "photo.jpg"), "photo.jpg");
+        assert_eq!(requested_stem("dir/name.webp", "x"), "name");
+        assert_eq!(requested_stem(".jpg", "x"), ".jpg");
+    }
+
+    #[test]
+    fn saving_a_dotted_name_keeps_the_file() {
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../test_images/test_img_exif.jpg");
+        let dir = std::env::temp_dir().join(format!("attributor-dotted-save-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("IMG_1.edit.jpg");
+        std::fs::copy(&src, &path).unwrap();
+        let saved = save_one(SaveRequest {
+            filepath: path.to_string_lossy().into_owned(),
+            filename: "IMG_1.edit".into(),
+            title: "T".into(),
+            description: "D".into(),
+            keywords: vec!["k".into()],
+            categories: String::new(),
+            release_filename: String::new(),
+            editorial: false,
+            mature_content: false,
+            illustration: false,
+        })
+        .unwrap();
+        assert_eq!(Path::new(&saved), path);
+        assert!(path.is_file());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

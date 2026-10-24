@@ -93,7 +93,13 @@
             onCancel: () => {cancelAi();}
         });
         try {
+            const seq = loadSeq;
             const r = await attributePhoto(filepath);
+            // Another file was opened (or the form cleared) while the model ran: the result belongs to the previous file.
+            if (seq !== loadSeq) {
+                warn('attribution result dropped: another file was opened meanwhile');
+                return;
+            }
             title = r.title;
             description = r.description;
             categories = r.categories.join(', ');
@@ -181,6 +187,10 @@
     }
 
     let snapshot = $state<Snapshot | null>(null);
+    // Counts file loads and clears, so a single-file attribution that finishes after another file was opened is dropped.
+    let loadSeq = 0;
+    // Set when an MCP refresh arrives while loadFile is still reading the store.
+    let refreshAfterLoad = false;
 
     function captureSnapshot(): Snapshot {
         return {filename, title, description, keywords: [...keywords], categories, releaseFilename, editorial, matureContent, illustration};
@@ -343,7 +353,15 @@
 
     let batchLoadId = 0;
 
-    async function loadBatchData(paths: string[]) {
+    // The batch form as last loaded; a different current state means the user has unsaved batch edits.
+    let batchBaseline: string | null = null;
+
+    function batchFormState(): string {
+        return JSON.stringify([batchTitle, applyTitle, batchDescription, applyDescription, batchCategories, applyCategories, batchKeywordStates]);
+    }
+
+    /** Load the batch view. `keepForm` re-reads only the per-file data (what Save batch merges into) and leaves the form, with the user's unsaved batch edits, as it is. */
+    async function loadBatchData(paths: string[], keepForm = false) {
         const myId = ++batchLoadId;
         batchLoading = true;
 
@@ -366,7 +384,14 @@
 
         const valid = results.filter((r): r is StoredMetadata => r !== null);
 
-        if (valid.length === 0) {
+        if (valid.length === 0 && !keepForm) {
+            batchLoading = false;
+            batchBaseline = batchFormState();
+            return;
+        }
+
+        if (keepForm) {
+            collectFileData(paths, results);
             batchLoading = false;
             return;
         }
@@ -398,7 +423,13 @@
             state: kwSets.every(s => s.has(word)) ? 'all' : 'some',
         }));
 
-        // Map keyword → basenames of files that contain it, and cache each file's metadata.
+        collectFileData(paths, results);
+        batchBaseline = batchFormState();
+        batchLoading = false;
+    }
+
+    // Map keyword → basenames of files that contain it, and cache each file's metadata.
+    function collectFileData(paths: string[], results: (StoredMetadata | null)[]) {
         const fileMap = new Map<string, string[]>();
         const metaMap = new Map<string, StoredMetadata>();
         for (let i = 0; i < paths.length; i++) {
@@ -414,8 +445,6 @@
         }
         kwFileMap = fileMap;
         batchFileMeta = metaMap;
-
-        batchLoading = false;
     }
 
     $effect(() => {
@@ -582,6 +611,8 @@
 
     /** Load a file: reset fields, resolve metadata store-first (feature 008), then take snapshot. */
     export async function loadFile(path: string): Promise<void> {
+        loadSeq++;
+        refreshAfterLoad = false;
         filepath = path;
         filename = extractStem(path);
         title = '';
@@ -626,10 +657,16 @@
         }
 
         snapshot = captureSnapshot();
+        // An MCP change arrived while the store was being read; read it again.
+        if (refreshAfterLoad && filepath === path) {
+            refreshAfterLoad = false;
+            await refresh(path);
+        }
     }
 
     /** Clear everything — called when the open file is deleted externally. */
     export function clear(): void {
+        loadSeq++;
         filepath = '';
         filename = '';
         title = '';
@@ -663,6 +700,87 @@
         saveAttempted = false;
     }
 
+    /** The file open in the single-file editor, or null (nothing open, or batch mode). */
+    export function openPath(): string | null {
+        return isBatch || !filepath ? null : filepath;
+    }
+
+    /** Keep the open file's pending edits now instead of after the debounce, since MCP tools read and change the store. With autosave on they go to the file, as the autosave timer would have done; a pending rename leaves that to the timer. */
+    export async function flush(): Promise<void> {
+        if (autoSave && !hasErrors && metadataDirty && !hasPendingRename()) {
+            try {
+                await doSave();
+                return;
+            } catch (e) {
+                warn(`autosave before an MCP change failed: ${e}`);
+            }
+        }
+        await flushStore();
+    }
+
+    /** Whether the open file's name was edited but not saved. */
+    export function hasPendingRename(): boolean {
+        return !isBatch && snapshot !== null && filename !== snapshot.filename;
+    }
+
+    /** Reload the open file's fields from the store after a change made outside the editor (MCP). Fields the user edited since the last load or store keep the user's value and stay pending; a pending file-name edit stays too. */
+    export async function refresh(path: string): Promise<void> {
+        if (isBatch || filepath !== path) return;
+        if (snapshot === null) {
+            // The file is still loading; loadFile reads the store again when it finishes.
+            refreshAfterLoad = true;
+            return;
+        }
+        let res: Awaited<ReturnType<typeof openMetadata>>;
+        try {
+            res = await openMetadata(path);
+        } catch (e) {
+            warn(`openMetadata failed: ${e}`);
+            return;
+        }
+        if (filepath !== path || snapshot === null) return;
+        const meta = res.kind === 'resolved' ? res.metadata : res.store;
+        const snap = snapshot;
+        if (title === snap.title) title = meta.title;
+        if (description === snap.description) description = meta.description;
+        if (keywords.length === snap.keywords.length && keywords.every((k, i) => k === snap.keywords[i])) keywords = meta.keywords;
+        if (categories === snap.categories) categories = meta.categories;
+        if (releaseFilename === snap.releaseFilename) releaseFilename = meta.releaseFilename;
+        if (editorial === snap.editorial) editorial = meta.editorial;
+        if (matureContent === snap.matureContent) matureContent = meta.matureContent;
+        if (illustration === snap.illustration) illustration = meta.illustration;
+        syncState = res.kind === 'resolved' ? res.syncState : 'synced';
+        conflictPath = res.kind === 'resolved' ? null : path;
+        snapshot = {
+            filename: snap.filename,
+            title: meta.title,
+            description: meta.description,
+            keywords: [...meta.keywords],
+            categories: meta.categories,
+            releaseFilename: meta.releaseFilename,
+            editorial: meta.editorial,
+            matureContent: meta.matureContent,
+            illustration: meta.illustration
+        };
+    }
+
+    /** Follow a rename made outside the editor (an MCP save); a pending file-name edit stays. */
+    export function followRename(from: string, to: string): void {
+        if (isBatch || filepath !== from || snapshot === null) return;
+        const edited = filename !== snapshot.filename;
+        const stem = extractStem(to);
+        filepath = to;
+        snapshot = {...snapshot, filename: stem};
+        if (!edited) filename = stem;
+    }
+
+    /** Reload the batch view when a change made outside the editor (MCP) touched one of its files; unsaved batch edits stay in the form. */
+    export function reloadBatch(paths: string[]): void {
+        if (!isBatch || !paths.some(p => batchPaths.includes(p))) return;
+        const edited = batchBaseline !== null && batchFormState() !== batchBaseline;
+        loadBatchData(batchPaths, edited);
+    }
+
     /**
      * Save metadata (and rename if filename changed).
      * Throws if validation fails. Returns the final file path.
@@ -682,9 +800,12 @@
     }
 
     async function doSave(): Promise<string> {
+        // Only an image extension is dropped from the typed name (other dots belong to it); the unchanged name is sent as it is.
+        const name = filename.trim();
+        const stem = name === extractStem(filepath) ? name : name.replace(/\.(jpe?g|png|webp)$/i, '');
         const metadata: Metadata = {
             filepath,
-            filename: filename.trim().replace(/\.[^/.]+$/, ''),
+            filename: stem,
             title,
             description,
             keywords,

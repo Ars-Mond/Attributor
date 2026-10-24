@@ -92,6 +92,11 @@ class SettingsRegistry {
         return [...this.#sections.values()].sort((a, b) => a.order - b.order);
     }
 
+    /** Every setting that stores a value, with the id of its section, in section order. */
+    entries(): {section: string; descriptor: SettingDescriptor}[] {
+        return this.getAllSections().flatMap(s => s.fields.filter(d => d.key).map(descriptor => ({section: s.id, descriptor})));
+    }
+
     async load(): Promise<void> {
         try {
             const s = await getStore();
