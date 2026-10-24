@@ -3,6 +3,7 @@
 
 export type FolderChanged = { path: string, };
 export type ThumbnailReady = { path: string, };
+export type McpRequest = { id: number, op: string, params: unknown, };
 export type ItemStatus = { "kind": "ok", path: string, } | { "kind": "failed", error: string, } | { "kind": "cancelled" };
 export type BatchProgress = { 
 /**

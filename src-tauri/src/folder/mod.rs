@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use notify::RecommendedWatcher;
 use serde::{Deserialize, Serialize};
 
+pub(crate) use scan::is_supported_image;
 pub use scan::scan_dir;
 
 /// A node in the folder tree sent to the frontend.

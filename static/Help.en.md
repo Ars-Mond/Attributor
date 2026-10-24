@@ -165,6 +165,39 @@ Choose **File → Export to CSV** and pick a **destination folder**. The app wri
 
 ---
 
+## AI Assistants (MCP)
+
+Attributor has a built-in MCP (Model Context Protocol) server, so AI assistants — **Claude Desktop**, **Claude Code** and **ChatGPT / Codex** — can work with your photos. Attributor must stay open while they work.
+
+### Setting Up
+
+1. Open **Settings → MCP** and turn on **Enable the MCP server**. The status shows the address, `http://127.0.0.1:47821/mcp` by default.
+2. Under **Clients**, click **Install** next to the assistant you use, then restart it:
+   - **Claude Desktop** starts Attributor as a local bridge (`attributor --mcp`). Quit Claude completely, also from the system tray, and start it again.
+   - **Claude Code** connects over HTTP with the access token, in all your projects. Start a new session or run `/mcp` to reconnect.
+   - **ChatGPT / Codex** — the Codex CLI, its IDE extension and the ChatGPT desktop app share one configuration file. Restart them after installing; in the ChatGPT app the tools are available in the **Codex** and **Work** tabs. ChatGPT in the browser cannot connect to programs on your computer.
+3. **Update** rewrites an outdated entry, **Remove** deletes Attributor's entry, **Show file** opens the folder of the client's configuration file, and **Copy config** copies the entry for setting a client up by hand. Other servers and settings in those files are kept, and the previous version of each file is saved next to it as `.attributor-backup`.
+
+### What Assistants Can Do
+
+- See what is open: the folder, the photo in the editor, the selection and the AI provider and model.
+- Open a folder, list its images, and select images for you to see: one photo opens in the editor, several start Batch mode.
+- Read the metadata of any photo and look at small or large previews.
+- Change the fields the editor offers, for one photo or many at once. The changes are kept in the app database (🟣 **in app**) until the assistant saves them; saving writes them into the files exactly like **Save Changes**, after the same checks (a title, a description and at least one keyword are required) and can rename a single file.
+- Revert photos to the metadata in their files and resolve "changed outside the app" conflicts.
+- Run AI attribution with the provider, model and profile set in Attributor: new keywords are added, the other fields are replaced, and the results stay in the app until saved. Long saves and attributions run as jobs the assistant can follow and cancel.
+- Read and change settings. AI settings (provider, addresses, models, model profiles, response format) change only if you turn on **Allow AI settings changes**. MCP settings, API keys and the ChatGPT sign-in are never available to assistants.
+
+When an assistant changes the photo open in the editor, the form shows the change right away; edits you typed but did not save are kept in the app database first.
+
+### Security and Activity
+
+- The server accepts connections only from this computer and only with the **Access token**; requests from web pages are refused.
+- **New token** replaces the token. Installed Claude Code and ChatGPT / Codex entries are updated automatically, and Claude Desktop reads the token by itself; clients you set up by hand need the new token. Changing the port updates the installed entries too.
+- **Recent calls** lists the latest tool calls with the client, duration and error, if any.
+
+---
+
 ## Docking System
 
 Attributor has three panels that can be freely rearranged:
@@ -255,6 +288,7 @@ Open **File → Settings** (or press `Ctrl+,`).
 | **AI attribution** | AI provider and its connection: status, base URL, API key or ChatGPT sign-in, active model (and, for Ollama, install and model download), answer-format heading and JSON response format. |
 | **Model profiles** | Attribution profiles per provider and model (prompt, thinking mode, run options and, for Ollama, keep alive); **Base (all providers)** profiles apply to every provider. Create, duplicate, edit, delete, and drag to reorder. |
 | **CSV Export** | Per-stock CSV presets: name, identifier, column delimiter, and the ordered field list. |
+| **MCP** | The MCP server for AI assistants: on/off, address and port, access token, permission to change AI settings, one-click setup of Claude Desktop, Claude Code and ChatGPT / Codex, and the recent calls. |
 | **Shortcuts** | View and rebind keyboard shortcuts, including the file-navigation arrows. |
 
 ---

@@ -168,6 +168,20 @@ pub async fn attribute_one(
     Ok(result)
 }
 
+/// The store record of an attribution result; categories become the editor's comma-separated string. `release_filename` is empty, and `DbState::store_attribution` keeps the stored one.
+pub(crate) fn stored_metadata(result: AttributionResult) -> StoredMetadata {
+    StoredMetadata {
+        title: result.title,
+        description: result.description,
+        keywords: result.keywords,
+        categories: result.categories.join(", "),
+        release_filename: String::new(),
+        editorial: result.editorial,
+        mature_content: result.mature_content,
+        illustration: result.illustration,
+    }
+}
+
 /// Attribute one file and store the result in the metadata store as app-only (feature 008 — the file
 /// is NOT modified). Keyword merge + release_filename preservation happen inside `store_attribution`.
 /// Returns the (unchanged) path.
@@ -178,17 +192,7 @@ async fn attribute_and_store(
     db: &DbState,
     session: &chatgpt::Session,
 ) -> Result<String, String> {
-    let result = attribute_one(path, cfg, cancel, session).await?;
-    let model = StoredMetadata {
-        title: result.title,
-        description: result.description,
-        keywords: result.keywords,
-        categories: result.categories.join(", "),
-        release_filename: String::new(),
-        editorial: result.editorial,
-        mature_content: result.mature_content,
-        illustration: result.illustration,
-    };
+    let model = stored_metadata(attribute_one(path, cfg, cancel, session).await?);
     // Run the SQLite write off the async runtime (no mutex/SQLite work on a tokio worker thread).
     let dbh = db.share();
     let p = path.to_string();

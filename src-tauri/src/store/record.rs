@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// The editable metadata fields the store holds — mirrors what the editor edits. `release_filename`
 /// lives only in the store (the file pipeline does not carry it).
-#[derive(Serialize, Deserialize, Default, Clone, Debug)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct StoredMetadata {
     pub title: String,

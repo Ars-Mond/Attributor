@@ -12,6 +12,8 @@ use serde::Serialize;
 pub const FOLDER_CHANGED: &str = "folder-changed";
 /// Emitted when a thumbnail finishes generating (payload: [`ThumbnailReady`]).
 pub const THUMBNAIL_READY: &str = "thumbnail-ready";
+/// Sent to the main window when an MCP tool needs it (payload: [`McpRequest`]); the window answers with the `mcp_ui_reply` command.
+pub const MCP_REQUEST: &str = "mcp-request";
 
 // ── Broadcast payloads ────────────────────────────────────────────────────────
 
@@ -29,6 +31,18 @@ pub struct FolderChanged {
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct ThumbnailReady {
     pub path: String,
+}
+
+/// Payload of the `mcp-request` event: operation `op` with its `params`, answered by `id`.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct McpRequest {
+    #[cfg_attr(test, ts(type = "number"))]
+    pub id: u64,
+    pub op: String,
+    #[cfg_attr(test, ts(type = "unknown"))]
+    pub params: serde_json::Value,
 }
 
 // ── Batch save progress (per-call tauri::ipc::Channel) ────────────────────────
@@ -89,6 +103,7 @@ mod tests {
         for decl in [
             FolderChanged::decl(),
             ThumbnailReady::decl(),
+            McpRequest::decl(),
             ItemStatus::decl(),
             BatchProgress::decl(),
             PullProgress::decl(),

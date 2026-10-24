@@ -4,6 +4,7 @@ mod csv;
 pub mod events;
 pub mod folder;
 mod keywords;
+mod mcp;
 mod photo;
 mod store;
 mod types;
@@ -85,6 +86,11 @@ fn save_metadata(
     metadata: SaveRequest,
     state: tauri::State<'_, store::DbState>,
 ) -> Result<String, String> {
+    save_metadata_impl(metadata, &state)
+}
+
+/// The Save button's path, shared with the MCP `save_metadata` tool: write the file (renaming it if the stem changed), then sync the store record. Returns the final path.
+pub(crate) fn save_metadata_impl(metadata: SaveRequest, state: &store::DbState) -> Result<String, String> {
     // Single-file save delegates to the same per-file path used by every batch item,
     // so the result is identical whether saved alone or as part of a batch.
     let old_path = metadata.filepath.clone();
@@ -165,6 +171,11 @@ async fn open_folder(
 
 // ── App entry ─────────────────────────────────────────────────────────────
 
+/// Runs the MCP stdio bridge (`attributor --mcp`) instead of the app and returns the exit code.
+pub fn run_mcp_bridge() -> i32 {
+    mcp::run_bridge()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -180,6 +191,7 @@ pub fn run() {
         .manage(FolderState::default())
         .manage(BatchState::default())
         .manage(ai::AiState::default())
+        .manage(mcp::McpState::default())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(if cfg!(debug_assertions) {
@@ -247,6 +259,8 @@ pub fn run() {
                 Ok(dir) => app.state::<ai::AiState>().set_storage_dir(dir.join("secrets")),
                 Err(e) => log::error!("app_local_data_dir unavailable: {e}; ChatGPT sign-in disabled"),
             }
+            // After the metadata store: MCP tools use it as soon as the server accepts connections.
+            mcp::init(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -280,6 +294,17 @@ pub fn run() {
             ai::install_ollama,
             ai::attribute_photo,
             ai::attribute_batch,
+            mcp::mcp_get_config,
+            mcp::mcp_set_config,
+            mcp::mcp_regenerate_token,
+            mcp::mcp_activity,
+            mcp::mcp_clear_activity,
+            mcp::mcp_ui_ready,
+            mcp::mcp_ui_reply,
+            mcp::mcp_clients,
+            mcp::mcp_install_client,
+            mcp::mcp_uninstall_client,
+            mcp::mcp_client_snippet,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
