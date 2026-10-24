@@ -17,7 +17,7 @@ Desktop application for editing photo metadata (EXIF/XMP) before submitting to s
 ## Features
 
 - **Metadata editing** — title, description, keywords, categories, and release filename, written into the image as XMP/EXIF/IPTC without re-encoding
-- **AI auto-attribution** — generate title, description, keywords, categories, and content flags (editorial / mature / illustration) from a local Ollama vision model, for a single photo or a whole batch
+- **AI auto-attribution** — generate title, description, keywords, categories, and content flags (editorial / mature / illustration) with a vision model — locally via Ollama, llama.cpp, LM Studio, Jan, vLLM or Unsloth, or in the cloud via the OpenAI API, your ChatGPT plan (Sign in with ChatGPT) or the Claude API — for a single photo or a whole batch
 - **Local metadata store** — edits and AI results are kept in an app database as you work (status “in app”) and written into the file on **Save**; **Reset** reverts to the file, and external file changes are detected with a keep-app-or-file prompt
 - **CSV export** — export the stored metadata to CSV spreadsheets, one file per photo-stock, into a chosen folder; configurable per-stock presets (columns, value types, per-preset delimiter) with ready-made presets for Shutterstock, iStock, Adobe Stock, and Envato
 - **Multilingual UI** — English and Russian, switchable in settings and auto-detected from the OS on first run

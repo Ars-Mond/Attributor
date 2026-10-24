@@ -68,13 +68,17 @@ If a photo's file is changed by another program, Attributor detects it when you 
 
 ---
 
-## AI Auto-Attribution (Ollama)
+## AI Auto-Attribution
 
-Attributor can fill metadata automatically using a local **Ollama** vision model — no cloud upload required.
+Attributor can fill metadata automatically using a vision model. Choose the provider in **Settings → AI attribution**:
 
-- Click **Attribute via Ollama** in the Control panel footer to analyze the open photo and fill Title, Description, Keywords, Categories and the attribution flags (Editorial / Mature content / Illustration).
+- **Local (the photo never leaves your computer):** **Ollama** (installed and started on demand), **llama.cpp** (`llama-server`), **LM Studio** (started on demand through its `lms` CLI), **Jan**, **vLLM** and **Unsloth** (Studio / Desktop). For the OpenAI-compatible servers, set the base URL (including `/v1`), load a vision model in the server, and add an API key only if the server requires one.
+- **Cloud:** **OpenAI API** and **Claude API** (paste an API key), or **ChatGPT** — click **Continue with ChatGPT** to use your ChatGPT Plus or Pro plan through OpenAI's *Sign in with ChatGPT*; requests count against the plan's usage limits (**Manage usage** opens them), and **Use another account** signs in with a different ChatGPT account or workspace. Cloud providers receive a copy of the photo downscaled to 1568 px.
+- Keys are stored in the operating system's credential store, never in the settings file. Each provider keeps its own address, key and active model, so you can switch providers freely.
+
+- Click **Attribute via …** (the button names the active provider) in the Control panel footer to analyze the open photo and fill Title, Description, Keywords, Categories and the attribution flags (Editorial / Mature content / Illustration).
 - In **Batch mode**, the Attribute button processes every selected photo in turn. A blocking progress bar with a **Cancel** button is shown while the model runs.
-- The button is available only when Ollama is installed and a model is selected. Set this up in **Settings → Ollama** (base URL, active model, response format) and **Settings → Ollama Models** (per-model prompt and parameters).
+- The button is available once the provider is set up (Ollama installed, an API key saved, or signed in to ChatGPT) and a model is selected. Set this up in **Settings → AI attribution** (provider, base URL, key or sign-in, active model, response format) and **Settings → Model profiles** (per-provider, per-model prompt, thinking mode and run options; a profile with the model id `base` is the provider's fallback).
 - Results are saved to the app database (status 🟣 **in app**). Review them, then click **Save Changes** to write them into the files.
 
 ---
@@ -229,8 +233,8 @@ Open **File → Settings** (or press `Ctrl+,`).
 | **Editor** | Auto-save on/off and its delay. |
 | **Appearance** | Theme — **System / Light / Dark** — and the interface font size. |
 | **Caching** | Photo and thumbnail caching options. |
-| **Ollama** | AI connection: base URL, active model, response format. |
-| **Ollama Models** | Per-model attribution profiles (prompt and parameters). |
+| **AI attribution** | AI provider and its connection: base URL, API key or ChatGPT sign-in, active model, response format. |
+| **Model profiles** | Attribution profiles per provider and model (prompt, thinking mode and run options). |
 | **CSV Export** | Per-stock CSV presets: name, identifier, column delimiter, and the ordered field list. |
 | **Shortcuts** | View and rebind keyboard shortcuts, including the file-navigation arrows. |
 
