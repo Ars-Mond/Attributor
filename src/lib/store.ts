@@ -21,6 +21,8 @@ export interface AppState {
     theme: string;
     dockLayout: string;
     dockHiddenWindows: string;
+    filesViewMode: string;
+    filesLayoutDir: string;
 }
 
 export async function loadAppState(): Promise<Partial<AppState>> {
@@ -32,6 +34,7 @@ export async function loadAppState(): Promise<Partial<AppState>> {
             'windowMaximized', 'windowWidth', 'windowHeight',
             'descriptionHeight', 'optionalOpen', 'theme',
             'dockLayout', 'dockHiddenWindows',
+            'filesViewMode', 'filesLayoutDir',
         ];
         const values = await Promise.all(keys.map(k => s.get(k)));
         return Object.fromEntries(

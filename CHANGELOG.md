@@ -1,6 +1,18 @@
 # Changelog
 
-## [Unreleased]
+## [1.4.0] - 2026-10-25
+
+### Added
+- **MCP server for AI assistants** — while Attributor is open, Claude Desktop, Claude Code and ChatGPT / Codex can work with it through the Model Context Protocol: see what is open, open a folder, show images to you, read metadata and previews, change metadata of one photo or a batch, save it into the files exactly like the **Save** button (with the same checks), revert photos or resolve conflicts, run AI attribution with the configured provider, and read or change settings. Long saves and attributions run as jobs the assistant can follow and cancel.
+- New **Settings → MCP** page: turn the server on, see its address (`http://127.0.0.1:47821/mcp` by default) and access token, change the port, issue a new token, allow or forbid AI-settings changes, install Attributor into Claude Desktop, Claude Code and ChatGPT / Codex with one click (or copy the entry for manual setup), and follow the recent calls.
+- The server accepts connections only from this computer and only with the access token, and refuses requests from web pages. MCP settings, API keys and the ChatGPT sign-in are never available to assistants, and AI settings change only after you allow it. Claude Desktop connects through the app itself started as a local bridge (`attributor --mcp`). Installing merges Attributor's entry into the client's configuration file, keeps everything else and saves the previous file as `.attributor-backup`.
+
+### Fixed
+- The Hierarchy panel's view mode (Table / Content / Icons) and layout direction are remembered between launches instead of returning to the defaults.
+- Saving a photo whose name contains a dot (e.g. `IMG_1.edit.jpg`), alone or in a batch, no longer renames the file by cutting its name at the last dot; only an image extension typed into the file name is dropped.
+- Opening a photo for the first time no longer overwrites metadata stored for it at the same moment by another operation.
+
+## [1.3.0] - 2026-10-24
 
 ### Added
 - **More AI providers** — besides Ollama, auto-attribution now works with the local servers **llama.cpp** (`llama-server`), **LM Studio**, **Jan**, **vLLM** and **Unsloth** (Studio / Desktop) through their OpenAI-compatible APIs, and with the cloud **OpenAI API**, **ChatGPT** (your Plus/Pro plan via the official *Sign in with ChatGPT*) and **Claude API**. Pick the provider in **Settings → AI attribution**; each provider keeps its own address, key and active model.
@@ -8,9 +20,6 @@
 - LM Studio is started on demand through its `lms` CLI, like Ollama.
 - Model profiles now belong to a provider, so each provider can have its own prompt, thinking mode and run options (and its own `base` fallback profile). Profiles of the **Base** pseudo-provider apply to every provider; the most specific profile wins (the provider's profile for the model, a Base profile for the model, the provider's `base`, then Base's `base`).
 - **Duplicate** a model profile (the copy opens as a new profile with a numbered name, e.g. *Base 2*) and **reorder** profiles by dragging the grip to the left of the name.
-- **MCP server for AI assistants** — while Attributor is open, Claude Desktop, Claude Code and ChatGPT / Codex can work with it through the Model Context Protocol: see what is open, open a folder, show images to you, read metadata and previews, change metadata of one photo or a batch, save it into the files exactly like the **Save** button (with the same checks), revert photos or resolve conflicts, run AI attribution with the configured provider, and read or change settings. Long saves and attributions run as jobs the assistant can follow and cancel.
-- New **Settings → MCP** page: turn the server on, see its address (`http://127.0.0.1:47821/mcp` by default) and access token, change the port, issue a new token, allow or forbid AI-settings changes, install Attributor into Claude Desktop, Claude Code and ChatGPT / Codex with one click (or copy the entry for manual setup), and follow the recent calls.
-- The server accepts connections only from this computer and only with the access token, and refuses requests from web pages. MCP settings, API keys and the ChatGPT sign-in are never available to assistants, and AI settings change only after you allow it. Claude Desktop connects through the app itself started as a local bridge (`attributor --mcp`). Installing merges Attributor's entry into the client's configuration file, keeps everything else and saves the previous file as `.attributor-backup`.
 
 ### Changed
 - **Settings → Ollama** is now **Settings → AI attribution** (with a provider selector at the top), and **Ollama Models** is now **Model profiles**. Existing Ollama settings and profiles are carried over unchanged.
@@ -18,10 +27,6 @@
 - Providers other than Ollama receive the photo as a JPEG downscaled to 1568 px with the EXIF orientation applied; Ollama still receives the original file.
 - When no profile matches the active model, the built-in stock-metadata prompt is used instead of a short placeholder.
 - New default model profiles (first run and **Reset to defaults**): **Base** for all providers with thinking off, Ollama's fallback renamed **Base Ollama**, and the **Gemma4 Cloud** prompt gains two title/description rules (no leading article; how to reflect an obvious visual effect).
-
-### Fixed
-- Saving a photo whose name contains a dot (e.g. `IMG_1.edit.jpg`), alone or in a batch, no longer renames the file by cutting its name at the last dot; only an image extension typed into the file name is dropped.
-- Opening a photo for the first time no longer overwrites metadata stored for it at the same moment by another operation.
 
 ## [1.2.0] - 2026-07-02
 

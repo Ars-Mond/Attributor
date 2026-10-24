@@ -7,7 +7,7 @@
     import {onMount, onDestroy, untrack} from "svelte";
     import FileTree from "$reusable/FileTree.svelte";
     import type {FileNode} from "$lib/types";
-    import {panelState, cacheGenConfig} from './filesPanelStore.svelte';
+    import {panelState, cacheGenConfig, setViewMode, setLayoutDir} from './filesPanelStore.svelte';
     import type {ViewMode, LayoutDir} from './filesPanelStore.svelte';
     import {progress} from "$lib/progress.svelte";
 
@@ -290,7 +290,7 @@
                 <button
                     class="view-btn"
                     class:active={panelState.viewMode === 'table'}
-                    onclick={() => panelState.viewMode = 'table'}
+                    onclick={() => setViewMode('table')}
                     title={t('filesPanel.viewMode.table')}
                 >
                     <!-- Table: three horizontal lines -->
@@ -303,7 +303,7 @@
                 <button
                     class="view-btn"
                     class:active={panelState.viewMode === 'content'}
-                    onclick={() => panelState.viewMode = 'content'}
+                    onclick={() => setViewMode('content')}
                     title={t('filesPanel.viewMode.content')}
                 >
                     <!-- Content: thumbnail + text row, twice -->
@@ -319,7 +319,7 @@
                 <button
                     class="view-btn"
                     class:active={panelState.viewMode === 'icons'}
-                    onclick={() => panelState.viewMode = 'icons'}
+                    onclick={() => setViewMode('icons')}
                     title={t('filesPanel.viewMode.icons')}
                 >
                     <!-- Icons: 2x2 grid -->
@@ -338,7 +338,7 @@
                     <button
                         class="view-btn"
                         class:active={panelState.layoutDir === 'vertical'}
-                        onclick={() => panelState.layoutDir = 'vertical'}
+                        onclick={() => setLayoutDir('vertical')}
                         title={t('filesPanel.layoutDir.vertical')}
                     >
                         <!-- Vertical: three horizontal bars (stack top-down) -->
@@ -351,7 +351,7 @@
                     <button
                         class="view-btn"
                         class:active={panelState.layoutDir === 'horizontal'}
-                        onclick={() => panelState.layoutDir = 'horizontal'}
+                        onclick={() => setLayoutDir('horizontal')}
                         title={t('filesPanel.layoutDir.horizontal')}
                     >
                         <!-- Horizontal: three vertical bars (stack left-right) -->

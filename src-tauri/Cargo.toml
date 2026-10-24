@@ -1,6 +1,6 @@
 [package]
 name = "attributor"
-version = "1.3.0"
+version = "1.4.0"
 description = ""
 authors = ["Ars_Mond"]
 edition = "2021"
