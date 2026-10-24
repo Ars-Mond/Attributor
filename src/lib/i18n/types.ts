@@ -216,6 +216,7 @@ export interface Messages {
     'common.create': string;
     'common.edit': string;
     'common.delete': string;
+    'common.duplicate': string;
     'settings.section.ai': string;
     'settings.section.modelProfiles': string;
     'settings.ai.provider': string;
@@ -279,6 +280,7 @@ export interface Messages {
     'settings.ai.answerFormatLabel': string;
     'settings.ai.answerFormatLabel.description': string;
     'settings.modelProfiles.empty': string;
+    'settings.modelProfiles.reorder': string;
     'settings.modelProfile.createTitle': string;
     'settings.modelProfile.editTitle': string;
     'settings.modelProfile.name': string;
