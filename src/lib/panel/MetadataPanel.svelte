@@ -7,8 +7,8 @@
     import {loadAppState, saveAppState} from "$lib/store";
     import {settings} from "$lib/settings";
     import {t, tn, type MessageKey} from "$lib/i18n";
-    import {attributePhoto, attributeBatch, cancelOllama} from "$lib/ollama/ollama";
-    import {ollama} from "$lib/ollama/availability.svelte";
+    import {attributePhoto, attributeBatch, cancelAi} from "$lib/ai/ai";
+    import {ai} from "$lib/ai/availability.svelte";
     import {progress} from "$lib/progress.svelte";
     import {openMetadata, storeMetadata, revertToFile, applyMetadataSource} from "$lib/store/metadata";
     import {warn, error} from "@tauri-apps/plugin-log";
@@ -41,7 +41,7 @@
     let keywords = $state<string[]>([]);
     let categories = $state('');
     let releaseFilename = $state('');
-    // Attribution-only flags (filled by Ollama, shown as checkboxes; not written to file metadata).
+    // Attribution-only flags (filled by the AI model, shown as checkboxes; not written to file metadata).
     let editorial = $state(false);
     let matureContent = $state(false);
     let illustration = $state(false);
@@ -75,22 +75,22 @@
         }
         if (s.optionalOpen !== undefined) optionalOpen = s.optionalOpen;
         uiLoaded = true;
-        void ollama.refresh();
+        void ai.refresh();
     });
 
-    // ── Ollama attribution ─────────────────────────────────────────────────
+    // ── AI attribution ─────────────────────────────────────────────────────
 
     /** Single-photo attribution: fill the form from the model (overwrite text, append+dedupe keywords). */
     async function handleAttribute() {
-        if (!ollama.available || !filepath) return;
+        if (!ai.available || !filepath) return;
         attributeError = null;
         // Blocking overlay with a cancel button — freezes the whole app until the inference finishes
         // or the user cancels (which aborts the backend request).
         const handle = progress.run({
-            label: t('ollama.attribute.progress'),
+            label: t('ai.attribute.progress'),
             blocking: true,
             cancelable: true,
-            onCancel: () => {cancelOllama();}
+            onCancel: () => {cancelAi();}
         });
         try {
             const r = await attributePhoto(filepath);
@@ -108,7 +108,7 @@
             const msg = e instanceof Error ? e.message : String(e);
             // A user-initiated cancel surfaces as "cancelled" from the backend — not a real error.
             if (msg !== 'cancelled') {
-                attributeError = t('ollama.attribute.failed', {error: msg});
+                attributeError = t('ai.attribute.failed', {error: msg});
             }
         } finally {
             handle.done();
@@ -117,14 +117,14 @@
 
     /** Batch attribution: attribute + always save every selected photo, via the blocking overlay. */
     async function handleBatchAttribute() {
-        if (!ollama.available || isSaving || batchLoading) return;
+        if (!ai.available || isSaving || batchLoading) return;
         const paths = [...batchPaths];
         const handle = progress.run({
-            label: t('ollama.attribute.batch.progress'),
+            label: t('ai.attribute.batch.progress'),
             total: paths.length,
             blocking: true,
             cancelable: true,
-            onCancel: () => {cancelOllama();}
+            onCancel: () => {cancelAi();}
         });
         if (batchGuardTimer) {clearTimeout(batchGuardTimer); batchGuardTimer = null;}
         panelState.batchInProgress = true;
@@ -1603,9 +1603,9 @@
                     <button
                         class="btn-ghost"
                         onclick={handleBatchAttribute}
-                        disabled={!ollama.available || isSaving || batchLoading}
-                        title={ollama.available ? t('ollama.attribute.tooltip') : t('ollama.unavailable.tooltip')}
-                    >{t('ollama.attribute')}</button>
+                        disabled={!ai.available || isSaving || batchLoading}
+                        title={ai.available ? t('ai.attribute.tooltip', {provider: ai.label}) : t('ai.unavailable.tooltip', {provider: ai.label})}
+                    >{t('ai.attribute', {provider: ai.label})}</button>
                     <button
                         class="btn-primary save-btn"
                         onclick={handleBatchSave}
@@ -1627,9 +1627,9 @@
                     <button
                         class="btn-ghost"
                         onclick={handleAttribute}
-                        disabled={!ollama.available || !filepath}
-                        title={ollama.available ? t('ollama.attribute.tooltip') : t('ollama.unavailable.tooltip')}
-                    >{t('ollama.attribute')}</button>
+                        disabled={!ai.available || !filepath}
+                        title={ai.available ? t('ai.attribute.tooltip', {provider: ai.label}) : t('ai.unavailable.tooltip', {provider: ai.label})}
+                    >{t('ai.attribute', {provider: ai.label})}</button>
                     <button
                         class="btn-ghost"
                         onclick={() => { showRevertConfirm = true; }}
@@ -2055,7 +2055,7 @@
         input[type="checkbox"] { accent-color: $accent; cursor: pointer; }
     }
 
-    // Ollama attribute + Save grouped together on the right of the footer.
+    // AI attribute + Save grouped together on the right of the footer.
     .footer-actions {
         @include flex(row, flex-end, center);
         gap: 8px;

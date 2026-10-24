@@ -6,7 +6,6 @@
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
 
 // Releases live on GitHub (the release workflows publish there). Include pre-releases so a beta of a
 // higher version is seen; the `-beta` suffix is stripped when comparing (see `version_core`).

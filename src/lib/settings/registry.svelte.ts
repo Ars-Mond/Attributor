@@ -13,7 +13,15 @@ class SettingsRegistry {
     #descriptors = new Map<string, SettingDescriptor>();
     #values = $state<Record<string, unknown>>({});
     #loadedKeys = new Set<string>();
+    #migrations: {from: string; to: string; transform?: (value: unknown) => unknown}[] = [];
+    // Persisted values of migrated (retired) keys, written back unchanged so an older app version still finds its settings.
+    #retired: Record<string, unknown> = {};
     #saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** Carries a value persisted under a retired key `from` over to the registered key `to` at load time, unless `to` was persisted itself. */
+    registerMigration(from: string, to: string, transform?: (value: unknown) => unknown): void {
+        this.#migrations.push({from, to, transform});
+    }
 
     registerSection(config: SettingsSectionConfig): void {
         if (!this.#sections.has(config.id)) {
@@ -87,8 +95,19 @@ class SettingsRegistry {
     async load(): Promise<void> {
         try {
             const s = await getStore();
-            const stored = await s.get<Record<string, unknown>>('settings');
-            if (stored && typeof stored === 'object') {
+            const persisted = await s.get<Record<string, unknown>>('settings');
+            if (persisted && typeof persisted === 'object') {
+                const stored = {...persisted};
+                let migrated = false;
+                for (const m of this.#migrations) {
+                    if (m.from in stored) this.#retired[m.from] = stored[m.from];
+                    if (m.from in stored && !(m.to in stored) && this.#descriptors.has(m.to)) {
+                        stored[m.to] = m.transform ? m.transform(stored[m.from]) : stored[m.from];
+                        migrated = true;
+                    }
+                }
+                // Persist the migrated keys right away (the retired ones are kept alongside, unchanged).
+                if (migrated) this.#scheduleSave();
                 for (const [k, v] of Object.entries(stored)) {
                     if (k && this.#descriptors.has(k)) {
                         this.#values[k] = v;
@@ -116,7 +135,7 @@ class SettingsRegistry {
     async #doSave(): Promise<void> {
         try {
             const s = await getStore();
-            const data: Record<string, unknown> = {};
+            const data: Record<string, unknown> = {...this.#retired};
             for (const k of this.#descriptors.keys()) {
                 if (k) data[k] = this.#values[k];
             }
