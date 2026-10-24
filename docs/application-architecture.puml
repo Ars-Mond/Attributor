@@ -65,6 +65,11 @@ package "Frontend — SvelteKit 2 / Svelte 5 runes / SCSS tokens" {
     rectangle "ai availability store\n(availability.svelte.ts)\nstatus · models · key\nChatGPT account" as AIAV #D1C4E9
     rectangle "ai.ts\ninvoke wrappers\nprofile lookup →\nAttributionConfig" as AIAPI #D1C4E9
   }
+
+  package "MCP (lib/mcp/ · settings/)" {
+    rectangle "Settings → MCP\n(McpSettingsPage)\nserver · port · token\nAI-settings permission\nclient install · recent calls" as MCPSET #B3E5FC
+    rectangle "MCP window bridge\n(mcp/bridge.ts)\nstatus · folder · selection\nsettings · AI config\nkeep / refresh editor edits" as MCPBR #D1C4E9
+  }
 }
 
 ' ── Tauri IPC surface ────────────────────────────────────────────────
@@ -80,6 +85,11 @@ package "Tauri IPC — typed commands + events (Principle VI)" {
     rectangle "ai_status · ai_list_models\nai_set_api_key · ai_has_api_key\nchatgpt_login · chatgpt_logout\nchatgpt_account\nollama_pull_model · install_ollama" as C_AI #FFE0B2
     rectangle "attribute_photo\nattribute_batch\nai_cancel" as C_ATTR #FFE0B2
     queue "channels:\npull progress\nbatch progress" as AI_CH #FFE0B2
+  }
+
+  package "MCP commands (mcp::)" {
+    rectangle "mcp_get_config · mcp_set_config\nmcp_regenerate_token · mcp_activity\nmcp_clients · mcp_install_client\nmcp_uninstall_client · mcp_client_snippet" as C_MCP #FFE0B2
+    queue "event: mcp-request\nreply: mcp_ui_reply\nready: mcp_ui_ready" as MCP_EV #FFE0B2
   }
 }
 
@@ -114,6 +124,14 @@ package "AI attribution — ai/ (vision auto-attribution)" {
   }
 }
 
+package "MCP server — mcp/ (AI assistants)" {
+  rectangle "http\nloopback Streamable HTTP\n127.0.0.1:47821/mcp\nHost · Origin · bearer token" as MCP_HTTP #C8E6C9
+  rectangle "protocol + catalog\n2026-07-28 stateless\n+ legacy initialize\n16 tools" as MCP_PROTO #C8E6C9
+  rectangle "tools · jobs\nsame paths as the UI commands\n(Save button: save_metadata_impl)\njob ids for long work" as MCP_TOOLS #C8E6C9
+  rectangle "bridge\nattributor --mcp (stdio)\nfor Claude Desktop" as MCP_BRIDGE #C8E6C9
+  rectangle "install\nclient config merge\n+ .attributor-backup" as MCP_INST #C8E6C9
+}
+
 ' ── Storage + disk ───────────────────────────────────────────────────
 database "CacheStore\nSQLite (bundled, WAL)\nphoto_cache + schema_meta" as DB #E1BEE7
 database "tauri-plugin-store\nui-state.json (window, dock, theme)" as PSTORE #E1BEE7
@@ -121,10 +139,13 @@ rectangle "Photo files\nJPEG / PNG / WebP" as DISK #FFF9C4
 rectangle "Thumbnail sidecars\n{key}.paths / {key}_360.jpg" as THUMB #FFF9C4
 database "OS credential store\nCredential Manager ·\nKeychain · Secret Service" as KEYRING #E1BEE7
 rectangle "Sealed ChatGPT tokens\nsecrets/chatgpt.bin" as VAULT #FFF9C4
+database "mcp.json\nenabled · port · token\nallowAiSettings" as MCPCFG #E1BEE7
+rectangle "Client configs\nclaude_desktop_config.json\n~/.claude.json · ~/.codex/config.toml" as CCFG #FFF9C4
 
 ' ── AI services ──────────────────────────────────────────────────────
 rectangle "Local LLM servers\nOllama :11434 · llama.cpp\nLM Studio · Jan · vLLM\nUnsloth" as LLM_LOCAL #CFD8DC
 cloud "Cloud AI APIs\nOpenAI API · Claude API\nChatGPT plan (auth.openai.com)\nOllama Cloud (:cloud models)" as LLM_CLOUD #CFD8DC
+rectangle "AI assistants\nClaude Desktop · Claude Code\nChatGPT / Codex" as ASSIST #CFD8DC
 
 ' ── Frontend wiring ──────────────────────────────────────────────────
 PAGE --> DOCK
@@ -207,6 +228,28 @@ AI_OAI --> LLM_CLOUD : HTTPS + API key
 AI_ANT --> LLM_CLOUD : HTTPS + API key
 AI_GPT --> LLM_CLOUD : OAuth + plan token
 LLM_LOCAL --> LLM_CLOUD : Ollama :cloud models
+
+' ── MCP ──────────────────────────────────────────────────────────────
+PAGE --> MCPBR : start after the window shows
+MCPSET --> C_MCP
+C_MCP --> MCP_HTTP : start · stop · settings
+C_MCP --> MCP_INST : install · remove
+LIB --> MCP_HTTP : manage McpState
+ASSIST --> MCP_HTTP : HTTP + token\n(Claude Code, Codex)
+ASSIST --> MCP_BRIDGE : stdio\n(Claude Desktop)
+MCP_BRIDGE --> MCP_HTTP : forward tools/call
+MCP_HTTP --> MCP_PROTO
+MCP_PROTO --> MCP_TOOLS
+MCP_TOOLS --> MCP_EV : ask the window
+MCP_EV --> MCPBR
+MCPBR -[norank]-> MP : keep edits · refresh
+MCPBR -[norank]-> CFG : settings (AI only if allowed)
+MCP_TOOLS --> DB : metadata (app-only / synced)
+MCP_TOOLS --> MD : save like the Save button
+MCP_TOOLS --> AI_ATTR : attribution (own cancel flag)
+MCP_HTTP ..> MCPCFG : token
+MCP_BRIDGE ..> MCPCFG : port · token
+MCP_INST ..> CCFG : merge entries
 
 ' ── Backend → disk ───────────────────────────────────────────────────
 HASH ..> DISK : stat / hash
