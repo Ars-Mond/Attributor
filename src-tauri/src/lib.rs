@@ -1,9 +1,9 @@
+mod ai;
 pub mod batch;
 mod csv;
 pub mod events;
 pub mod folder;
 mod keywords;
-mod ollama;
 mod photo;
 mod store;
 mod types;
@@ -179,7 +179,7 @@ pub fn run() {
         }))
         .manage(FolderState::default())
         .manage(BatchState::default())
-        .manage(ollama::OllamaState::default())
+        .manage(ai::AiState::default())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(if cfg!(debug_assertions) {
@@ -242,6 +242,11 @@ pub fn run() {
                     app.manage(store::DbState::disabled());
                 }
             }
+            // Sealed AI credentials live in the local (non-roaming) data dir; without it ChatGPT sign-in is unavailable.
+            match app.path().app_local_data_dir() {
+                Ok(dir) => app.state::<ai::AiState>().set_storage_dir(dir.join("secrets")),
+                Err(e) => log::error!("app_local_data_dir unavailable: {e}; ChatGPT sign-in disabled"),
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -263,13 +268,18 @@ pub fn run() {
             scan_folder,
             search_keywords,
             detect_os_locale,
-            ollama::ollama_status,
-            ollama::ollama_list_models,
-            ollama::ollama_pull_model,
-            ollama::install_ollama,
-            ollama::ollama_cancel,
-            ollama::attribute_photo,
-            ollama::attribute_batch,
+            ai::ai_status,
+            ai::ai_list_models,
+            ai::ai_set_api_key,
+            ai::ai_has_api_key,
+            ai::ai_cancel,
+            ai::chatgpt_login,
+            ai::chatgpt_logout,
+            ai::chatgpt_account,
+            ai::ollama_pull_model,
+            ai::install_ollama,
+            ai::attribute_photo,
+            ai::attribute_batch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

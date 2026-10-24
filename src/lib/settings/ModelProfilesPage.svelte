@@ -1,43 +1,44 @@
 <script lang="ts">
     import {settings} from './index';
     import {t} from '$lib/i18n';
-    import OllamaModelDialog from './OllamaModelDialog.svelte';
-    import {ollama} from '$lib/ollama/availability.svelte';
-    import type {ModelProfile} from '$lib/ollama/ollama';
+    import ModelProfileDialog from './ModelProfileDialog.svelte';
+    import {ai} from '$lib/ai/availability.svelte';
+    import {profileProvider, type ModelProfile} from '$lib/ai/ai';
+    import {providerInfo} from '$lib/ai/providers';
     import type {SettingSectionProps} from './SettingsSection';
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     let {section, resetSection}: SettingSectionProps = $props();
 
-    const profiles = $derived(settings.subscribe<ModelProfile[]>('ollama.modelProfiles')() ?? []);
+    const profiles = $derived(settings.subscribe<ModelProfile[]>('ai.modelProfiles')() ?? []);
 
     let editing = $state<ModelProfile | null>(null);
     let isNew = $state(false);
 
-    // modelIds used by OTHER profiles than the one being edited — passed to the dialog for dedup.
-    const takenModelIds = $derived(editing ? profiles.filter(p => p.id !== editing!.id).map(p => p.modelId) : []);
+    // provider + modelId pairs used by OTHER profiles than the one being edited — passed to the dialog for dedup.
+    const takenModels = $derived(editing ? profiles.filter(p => p.id !== editing!.id).map(p => ({provider: profileProvider(p), modelId: p.modelId})) : []);
 
     function uid(): string {
         return 'p' + Math.random().toString(36).slice(2, 10);
     }
 
     function create() {
-        editing = {id: uid(), name: '', modelId: '', prompt: '', think: null, keepAlive: null, options: {}};
+        editing = {id: uid(), name: '', provider: ai.provider, modelId: '', prompt: '', think: null, keepAlive: null, options: {}};
         isNew = true;
     }
 
     function edit(p: ModelProfile) {
-        editing = {...p, options: {...p.options}};
+        editing = {...p, provider: profileProvider(p), options: {...p.options}};
         isNew = false;
     }
 
     function remove(p: ModelProfile) {
-        settings.set('ollama.modelProfiles', profiles.filter(x => x.id !== p.id));
+        settings.set('ai.modelProfiles', profiles.filter(x => x.id !== p.id));
     }
 
     function save(p: ModelProfile) {
         const exists = profiles.some(x => x.id === p.id);
-        settings.set('ollama.modelProfiles', exists ? profiles.map(x => (x.id === p.id ? p : x)) : [...profiles, p]);
+        settings.set('ai.modelProfiles', exists ? profiles.map(x => (x.id === p.id ? p : x)) : [...profiles, p]);
         editing = null;
     }
 </script>
@@ -48,12 +49,13 @@
     </div>
 
     {#if profiles.length === 0}
-        <p class="mp-desc">{t('settings.ollamaModels.empty')}</p>
+        <p class="mp-desc">{t('settings.modelProfiles.empty')}</p>
     {:else}
         <ul class="mp-list">
             {#each profiles as p (p.id)}
                 <li class="mp-row">
                     <span class="mp-name">{p.name || p.modelId || '—'}</span>
+                    <span class="mp-provider">{providerInfo(profileProvider(p)).label}</span>
                     <span class="mp-model">{p.modelId}</span>
                     <button class="mp-btn" onclick={() => edit(p)}>{t('common.edit')}</button>
                     <button class="mp-btn mp-btn--danger" onclick={() => remove(p)}>{t('common.delete')}</button>
@@ -64,11 +66,10 @@
 </div>
 
 {#if editing}
-    <OllamaModelDialog
+    <ModelProfileDialog
         profile={editing}
         {isNew}
-        installed={ollama.installedModels}
-        {takenModelIds}
+        {takenModels}
         onSave={save}
         onCancel={() => (editing = null)}
     />
@@ -110,6 +111,16 @@
         font-weight: 500;
         overflow: hidden;
         text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .mp-provider {
+        flex-shrink: 0;
+        padding: 1px 6px;
+        border: 1px solid $border;
+        border-radius: $radius-sm;
+        font-size: $fs-footnote2;
+        color: $text-muted;
         white-space: nowrap;
     }
 

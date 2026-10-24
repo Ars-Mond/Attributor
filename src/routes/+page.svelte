@@ -22,7 +22,7 @@
     import SettingsDialog from "$lib/settings/SettingsDialog.svelte";
     import ProgressOverlay from "$lib/reusable/ProgressOverlay.svelte";
     import {progress} from "$lib/progress.svelte";
-    import {ollama} from "$lib/ollama/availability.svelte";
+    import {ai} from "$lib/ai/availability.svelte";
     import {settings} from "$lib/settings";
     import {shortcuts} from "$lib/shortcuts";
     import {t, initLocale} from "$lib/i18n";
@@ -383,8 +383,8 @@
         // first painted frame is already localized.
         await initLocale();
 
-        // Prefetch Ollama status + installed models so settings show suggestions with no wait.
-        void ollama.init();
+        // Prefetch the active AI provider's status, credentials and models so settings show suggestions with no wait.
+        void ai.init();
 
         // Quietly check for a newer version on startup (notify-only; gated by a setting).
         if (settings.get<boolean>('general.checkUpdatesOnStartup')) {

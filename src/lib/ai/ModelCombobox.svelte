@@ -1,16 +1,20 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
-    import {KNOWN_MODELS, type ModelKind} from './models';
+    import type {KnownModel, ModelKind} from './models';
 
     let {
         value,
+        known = [],
         installed = [],
+        installedLabel = 'ai.model.installed',
         includeBase = false,
         placeholder = '',
         onChange
     }: {
         value: string;
-        installed?: string[];
+        known?: KnownModel[];        // curated suggestions for the provider
+        installed?: string[];        // models the provider reports: installed, served, or available to the account
+        installedLabel?: 'ai.model.installed' | 'ai.model.available';
         includeBase?: boolean;       // include the special "base" fallback id in suggestions
         placeholder?: string;
         onChange: (v: string) => void;
@@ -30,7 +34,7 @@
     const all = $derived.by((): Suggestion[] => {
         const map = new Map<string, Suggestion>();
         if (includeBase) map.set('base', {id: 'base', installed: false, kind: 'base'});
-        for (const m of KNOWN_MODELS) map.set(m.id, {id: m.id, installed: installed.includes(m.id), kind: m.kind});
+        for (const m of known) map.set(m.id, {id: m.id, installed: installed.includes(m.id), kind: m.kind});
         for (const id of installed) if (!map.has(id)) map.set(id, {id, installed: true, kind: 'local'});
         return [...map.values()];
     });
@@ -56,8 +60,8 @@
 
     function tagLabel(s: Suggestion): string {
         if (s.kind === 'base') return 'base';
-        if (s.installed) return t('ollama.model.installed');
-        return s.kind === 'cloud' ? t('ollama.model.cloud') : t('ollama.model.local');
+        if (s.installed) return t(installedLabel);
+        return s.kind === 'cloud' ? t('ai.model.cloud') : t('ai.model.local');
     }
 </script>
 

@@ -1,14 +1,14 @@
 //! Pure-Rust HTTP client for the local Ollama daemon (reqwest + rustls). Plain HTTP to localhost.
+//! Ollama keeps its native API (`/api/generate` with `format`, `options`, `think`, `keep_alive`) and receives the original image bytes.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use base64::Engine;
 use futures_util::StreamExt;
 use serde::Deserialize;
 
-use super::types::{AttributionConfig, OllamaModel};
+use super::types::{AttributionConfig, ModelInfo};
 
 fn http() -> reqwest::Client {
     reqwest::Client::new()
@@ -38,7 +38,7 @@ pub async fn version(base_url: &str) -> Result<String, String> {
 }
 
 /// Locally-installed models (`GET /api/tags`).
-pub async fn list_tags(base_url: &str) -> Result<Vec<OllamaModel>, String> {
+pub async fn list_tags(base_url: &str) -> Result<Vec<ModelInfo>, String> {
     #[derive(Deserialize)]
     struct Tags {
         models: Vec<Tag>,
@@ -59,7 +59,7 @@ pub async fn list_tags(base_url: &str) -> Result<Vec<OllamaModel>, String> {
         .error_for_status()
         .map_err(|e| e.to_string())?;
     let t: Tags = resp.json().await.map_err(|e| e.to_string())?;
-    Ok(t.models.into_iter().map(|m| OllamaModel { name: m.name, size: m.size }).collect())
+    Ok(t.models.into_iter().map(|m| ModelInfo { name: m.name, size: m.size }).collect())
 }
 
 /// One NDJSON progress line from `/api/pull`.
@@ -179,12 +179,6 @@ pub async fn generate(cfg: &AttributionConfig, image_b64: String) -> Result<Stri
     // Full model output, for diagnosing parse failures (non-JSON, markdown fences, reasoning text, …).
     log::debug!("ollama generate raw response: {}", g.response);
     Ok(g.response)
-}
-
-/// Read an image file and base64-encode it for the `images` array (standard engine, no data: prefix).
-pub fn image_to_base64(path: &str) -> Result<String, String> {
-    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
 }
 
 /// Candidate `ollama` executables: PATH first, then the platform's default install location — so a

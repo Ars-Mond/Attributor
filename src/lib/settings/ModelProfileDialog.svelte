@@ -1,13 +1,14 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
-    import ModelCombobox from '$lib/ollama/ModelCombobox.svelte';
-    import type {ModelProfile} from '$lib/ollama/ollama';
+    import ModelCombobox from '$lib/ai/ModelCombobox.svelte';
+    import {ai} from '$lib/ai/availability.svelte';
+    import {profileProvider, type ModelProfile} from '$lib/ai/ai';
+    import {PROVIDERS, providerInfo, type ProviderId} from '$lib/ai/providers';
 
-    let {profile, isNew, installed = [], takenModelIds = [], closeOnBackdrop = false, onSave, onCancel}: {
+    let {profile, isNew, takenModels = [], closeOnBackdrop = false, onSave, onCancel}: {
         profile: ModelProfile;
         isNew: boolean;
-        installed?: string[];
-        takenModelIds?: string[];    // modelIds used by OTHER profiles — disallow duplicates
+        takenModels?: {provider: ProviderId; modelId: string}[];   // used by OTHER profiles — disallow duplicates
         closeOnBackdrop?: boolean;   // whether clicking the empty backdrop dismisses the dialog
         onSave: (p: ModelProfile) => void;
         onCancel: () => void;
@@ -17,6 +18,7 @@
     // Read inside a closure so it's a deliberate one-time snapshot, not a reactive dependency.
     const seed = (() => profile)();
     let name = $state(seed.name);
+    let provider = $state<ProviderId>(profileProvider(seed));
     let modelId = $state(seed.modelId);
     let prompt = $state(seed.prompt);
     let think = $state(seed.think == null ? '' : String(seed.think));
@@ -24,6 +26,25 @@
     let optionsText = $state(JSON.stringify(seed.options ?? {}, null, 2));
     let optionsError = $state<string | null>(null);
     let modelError = $state<string | null>(null);
+
+    const info = $derived(providerInfo(provider));
+
+    // Model suggestions come from the selected provider; fetch its list on first use (the active provider is prefetched).
+    const fetched = new Set<ProviderId>();
+    $effect(() => {
+        const id = provider;
+        if (!fetched.has(id) && ai.modelsOf(id).length === 0) {
+            fetched.add(id);
+            void ai.refreshModels(id);
+        }
+    });
+
+    // Thinking values differ per provider; a value the new provider does not offer is cleared.
+    function changeProvider(id: ProviderId) {
+        provider = id;
+        if (think && !providerInfo(id).thinkOptions.includes(think)) think = '';
+        modelError = null;
+    }
 
     function parseThink(v: string): boolean | string | null {
         if (v === '') return null;
@@ -35,11 +56,11 @@
     function save() {
         const id = modelId.trim();
         if (!id) {
-            modelError = t('settings.ollamaModel.modelId.hint');
+            modelError = t('settings.modelProfile.modelId.hint');
             return;
         }
-        if (takenModelIds.includes(id)) {
-            modelError = t('settings.ollamaModel.duplicateModel');
+        if (takenModels.some(m => m.provider === provider && m.modelId === id)) {
+            modelError = t('settings.modelProfile.duplicateModel');
             return;
         }
         modelError = null;
@@ -58,10 +79,11 @@
         onSave({
             ...profile,
             name: name.trim(),
+            provider,
             modelId: modelId.trim(),
             prompt,
             think: parseThink(think),
-            keepAlive: keepAlive.trim() || null,
+            keepAlive: provider === 'ollama' ? keepAlive.trim() || null : null,
             options
         });
     }
@@ -77,50 +99,57 @@
 <div class="overlay" role="presentation" onclick={() => {if (closeOnBackdrop) onCancel();}} onkeydown={() => {}}>
     <div class="dialog" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
         <div class="dlg-header">
-            <span class="dlg-title">{t(isNew ? 'settings.ollamaModel.createTitle' : 'settings.ollamaModel.editTitle')}</span>
+            <span class="dlg-title">{t(isNew ? 'settings.modelProfile.createTitle' : 'settings.modelProfile.editTitle')}</span>
         </div>
 
         <div class="dlg-body">
             <label class="md-field">
-                <span class="md-label">{t('settings.ollamaModel.name')}</span>
+                <span class="md-label">{t('settings.modelProfile.name')}</span>
                 <input class="md-input" type="text" bind:value={name} />
             </label>
+            <label class="md-field">
+                <span class="md-label">{t('settings.modelProfile.provider')}</span>
+                <select class="md-input" value={provider} onchange={(e) => changeProvider(e.currentTarget.value as ProviderId)}>
+                    {#each PROVIDERS as p (p.id)}<option value={p.id}>{p.label}</option>{/each}
+                </select>
+            </label>
             <div class="md-field">
-                <span class="md-label">{t('settings.ollamaModel.modelId')}</span>
-                <ModelCombobox
-                    value={modelId}
-                    {installed}
-                    includeBase={true}
-                    placeholder="llama3.2-vision:11b"
-                    onChange={(v) => {modelId = v; modelError = null;}}
-                />
-                <p class="md-desc">{t('settings.ollamaModel.modelId.hint')}</p>
+                <span class="md-label">{t('settings.modelProfile.modelId')}</span>
+                {#key provider}
+                    <ModelCombobox
+                        value={modelId}
+                        known={info.known}
+                        installed={ai.modelsOf(provider)}
+                        installedLabel={provider === 'ollama' ? 'ai.model.installed' : 'ai.model.available'}
+                        includeBase={true}
+                        placeholder={info.known[0]?.id ?? 'base'}
+                        onChange={(v) => {modelId = v; modelError = null;}}
+                    />
+                {/key}
+                <p class="md-desc">{t('settings.modelProfile.modelId.hint')}</p>
                 {#if modelError}<p class="md-desc md-desc--err">{modelError}</p>{/if}
             </div>
             <label class="md-field">
-                <span class="md-label">{t('settings.ollamaModel.prompt')}</span>
+                <span class="md-label">{t('settings.modelProfile.prompt')}</span>
                 <textarea class="md-input md-textarea" rows={5} bind:value={prompt}></textarea>
             </label>
             <label class="md-field">
-                <span class="md-label">{t('settings.ollamaModel.think')}</span>
+                <span class="md-label">{t('settings.modelProfile.think')}</span>
                 <select class="md-input" bind:value={think}>
                     <option value="">—</option>
-                    <option value="false">false</option>
-                    <option value="true">true</option>
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                    <option value="max">max</option>
+                    {#each info.thinkOptions as v (v)}<option value={v}>{v}</option>{/each}
                 </select>
             </label>
+            {#if provider === 'ollama'}
+                <label class="md-field">
+                    <span class="md-label">{t('settings.modelProfile.keepAlive')}</span>
+                    <input class="md-input" type="text" bind:value={keepAlive} placeholder="5m" />
+                </label>
+            {/if}
             <label class="md-field">
-                <span class="md-label">{t('settings.ollamaModel.keepAlive')}</span>
-                <input class="md-input" type="text" bind:value={keepAlive} placeholder="5m" />
-            </label>
-            <label class="md-field">
-                <span class="md-label">{t('settings.ollamaModel.options')}</span>
+                <span class="md-label">{t('settings.modelProfile.options')}</span>
                 <textarea class="md-input md-textarea" rows={4} bind:value={optionsText}></textarea>
-                <p class="md-desc">{t('settings.ollamaModel.options.description')}</p>
+                <p class="md-desc">{t(info.optionsHint)}</p>
                 {#if optionsError}<p class="md-desc md-desc--err">{optionsError}</p>{/if}
             </label>
         </div>
