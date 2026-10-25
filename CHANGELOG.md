@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.4.1] - 2026-10-25
+
+### Added
+- **Copy link** in the ChatGPT sign-in window, to sign in from a browser other than the default one. The sign-in also keeps waiting when no browser could be opened, so the copied link still works.
+
 ## [1.4.0] - 2026-10-25
 
 ### Added

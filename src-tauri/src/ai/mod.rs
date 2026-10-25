@@ -191,16 +191,23 @@ pub async fn ai_has_api_key(provider: Provider) -> Result<bool, String> {
 
 /// Sign in with ChatGPT: opens the browser on OpenAI's sign-in page and waits for the redirect. Cancelable via `ai_cancel`.
 /// `new_account` registers the app again, for signing in with a different ChatGPT account or workspace.
+/// `on_link` receives the sign-in page's address, which the app offers to copy for opening in another browser.
 #[tauri::command]
 pub async fn chatgpt_login(
     app: tauri::AppHandle,
     new_account: Option<bool>,
+    on_link: tauri::ipc::Channel<String>,
     state: tauri::State<'_, AiState>,
 ) -> Result<ChatGptAccount, String> {
     let cancel = swap_cancel(state.inner());
+    let send_link = |url: &str| {
+        if let Err(e) = on_link.send(url.to_string()) {
+            log::warn!("chatgpt login: could not pass the sign-in link to the window: {e}");
+        }
+    };
     state
         .chatgpt
-        .login(&app, &cancel, new_account.unwrap_or(false))
+        .login(&app, &cancel, new_account.unwrap_or(false), send_link)
         .await
 }
 

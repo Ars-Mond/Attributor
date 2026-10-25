@@ -8,6 +8,7 @@
     <div class="progress-overlay" class:progress-overlay--blocking={progress.blocking} role="alert" aria-live="polite">
         <div class="progress-card">
             <span class="progress-label">{progress.label}</span>
+            {#if progress.detail}<span class="progress-detail">{progress.detail}</span>{/if}
 
             {#if progress.determinate}
                 <div class="progress-track">
@@ -22,8 +23,15 @@
                 </div>
             {/if}
 
-            {#if progress.cancelable}
-                <button class="progress-cancel" onclick={() => progress.cancel()}>{t('common.cancel')}</button>
+            {#if progress.cancelable || progress.action}
+                <div class="progress-actions">
+                    {#if progress.action}
+                        <button class="progress-cancel" onclick={() => progress.action?.run()}>{progress.action.label}</button>
+                    {/if}
+                    {#if progress.cancelable}
+                        <button class="progress-cancel" onclick={() => progress.cancel()}>{t('common.cancel')}</button>
+                    {/if}
+                </div>
             {/if}
         </div>
     </div>
@@ -66,6 +74,17 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+
+    .progress-detail {
+        font-size: $fs-footnote1;
+        color: $text-muted;
+        line-height: 1.5;
+    }
+
+    .progress-actions {
+        @include flex(row, flex-end, center);
+        gap: 8px;
     }
 
     .progress-track {

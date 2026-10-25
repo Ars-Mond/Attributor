@@ -94,9 +94,12 @@ export function hasApiKey(provider: ProviderId): Promise<boolean> {
 }
 
 /** Opens the browser on OpenAI's sign-in page and resolves once the sign-in completes (cancelable via `cancelAi`).
- *  `newAccount` registers the app again, for signing in with a different ChatGPT account or workspace. */
-export function chatgptLogin(newAccount = false): Promise<ChatGptAccount> {
-    return invoke('chatgpt_login', {newAccount});
+ *  `newAccount` registers the app again, for signing in with a different ChatGPT account or workspace.
+ *  `onLink` receives the sign-in page's address, for opening it in another browser. */
+export function chatgptLogin(newAccount = false, onLink: (url: string) => void = () => {}): Promise<ChatGptAccount> {
+    const channel = new Channel<string>();
+    channel.onmessage = onLink;
+    return invoke('chatgpt_login', {newAccount, onLink: channel});
 }
 
 export function chatgptLogout(): Promise<void> {

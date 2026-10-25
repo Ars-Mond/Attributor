@@ -532,15 +532,17 @@ impl Session {
     /// Signs in with ChatGPT: opens the browser on OpenAI's consent page, waits for the loopback redirect, exchanges the code and verifies the ID token. Cancelable through `cancel`.
     ///
     /// The client id issued on an earlier sign-in is reused; `new_account` registers the app again instead, for signing in with a different ChatGPT account or workspace.
+    /// `on_link` receives the sign-in page's address before the browser opens, so the app can offer it for another browser; a browser that fails to open is therefore only logged, and the sign-in keeps waiting.
     ///
     /// # Errors
     ///
-    /// Returns `"cancelled"` when canceled, or an error when the browser cannot be opened, the user declines plan usage, or any OAuth step fails.
+    /// Returns `"cancelled"` when canceled, or an error when the user declines plan usage, the sign-in times out, or any OAuth step fails.
     pub async fn login(
         &self,
         app: &tauri::AppHandle,
         cancel: &Arc<AtomicBool>,
         new_account: bool,
+        on_link: impl FnOnce(&str) + Send,
     ) -> Result<ChatGptAccount, String> {
         use tauri_plugin_opener::OpenerExt;
 
@@ -572,9 +574,10 @@ impl Session {
             &challenge,
         )?;
         log::info!("chatgpt login: waiting for the browser redirect on port {port}");
-        app.opener()
-            .open_url(url.as_str(), None::<&str>)
-            .map_err(|e| format!("could not open the browser: {e}"))?;
+        on_link(url.as_str());
+        if let Err(e) = app.opener().open_url(url.as_str(), None::<&str>) {
+            log::warn!("chatgpt login: could not open the browser ({e}); the link can be copied in the app");
+        }
 
         let callback = wait_for_callback(&listener, &state, cancel).await?;
         drop(listener);
